@@ -6,17 +6,17 @@ from ovotools import AttrDict
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/yolov3_1',
+    model_name = 'NN_results/yolov3_points',
     data = AttrDict(
+        get_points = True,
         batch_size = 10,
         mean = (0.4138001444901419, 0.4156750182887099, 0.3766904444889663),
         std = (0.2965651186330059, 0.2801510185680299, 0.2719146471588908),
-        net_hw = (416,416)
+        net_hw = (256,256)
     ),
     model = 'yolov3',
     model_params = AttrDict( {
-        'cfg': 'yolov3_1.cfg',
-        'img_size': 416
+        'cfg': 'yolov3_points1.cfg',
     }),
     # for RFB net
     #prior_box = AttrDict( {
@@ -74,7 +74,8 @@ log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = eval
                                                                 #loaders_dict = {},
                                                                 loaders_dict = {'val': val_loader1, 'val2': val_loader2},
                                                                 best_model_buffer=None, #best_model_buffer,
-                                                                params = params)
+                                                                params = params,
+                                                                duty_cycles = 5)
 trainer.add_event_handler(ignite.engine.Events.EPOCH_COMPLETED, log_training_results, event = ignite.engine.Events.EPOCH_COMPLETED)
 
 #clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, optimizer, 'train:loss', params, engine = trainer)
@@ -84,6 +85,14 @@ timer = ovotools.ignite_tools.IgniteTimes(trainer, count_iters = False, measured
     'train:time.epoch': (trainer, Events.EPOCH_STARTED, Events.EPOCH_COMPLETED),
     'val:time.epoch': (evaluator, Events.EPOCH_STARTED, Events.EPOCH_COMPLETED),
 })
+
+
+@trainer.on(ignite.engine.Events.EPOCH_COMPLETED)
+def upd_lr(engine):
+    if engine.state.epoch % 3000 == 0:
+        optimizer.param_groups[0]['lr'] /= 10
+        engine.state.metrics['lr'] = optimizer.param_groups[0]['lr']
+
 
 @trainer.on(Events.EPOCH_COMPLETED)
 def save_model(engine):

@@ -33,6 +33,9 @@ def common_aug(mode, params):
 
 
 class BrailleDataset:
+    '''
+    return annotated images as: ( img: Tensor CxHxW, np.array(Nx5 - left (0..1), top, right, bottom, class ) )
+    '''
     def __init__(self, params, data_dir, mode):
         assert mode in {'train', 'test'}
         data_dir_data = os.path.join(data_dir, 'data')
@@ -44,6 +47,7 @@ class BrailleDataset:
         self.albumentations = common_aug(mode, params)
         self.images = [None] * len(self.files)
         self.rects = [None] * len(self.files)
+        self.get_points = params.data.get('get_points', True)
 
     def __len__(self):
         return len(self.files)
@@ -60,7 +64,32 @@ class BrailleDataset:
             height = img.shape[0]
             _,_,_,cells = read_txt(fn+'.txt', binary_label = True)
             if cells is not None:
-                rects = [ (c.left/width, c.top/height, c.right/width, c.bottom/height,
+                if self.get_points:
+                    dy = 0.15
+                    dx = 0.3
+                    rects = []
+                    for cl in cells:
+                        w = int((cl.right - cl.left) * dx)
+                        h = int((cl.bottom - cl.top) * dy)
+                        for i in range(6):
+                            if cl.label[i] == '1':
+                                iy = i % 3
+                                ix = i - iy
+                                if ix == 0:
+                                    xc = cl.left
+                                else:
+                                    xc = cl.right
+                                lf, rt = xc - w, xc + w
+                                if iy == 0:
+                                    yc = cl.top
+                                elif iy == 1:
+                                    yc = (cl.top + cl.bottom) // 2
+                                else:
+                                    yc = cl.bottom
+                                tp, bt = yc - h, yc + h
+                                rects.append( (lf / width, tp / height, rt / width, bt / height, 0) ) # class is always same
+                else:
+                    rects = [ (c.left/width, c.top/height, c.right/width, c.bottom/height,
                            self.label_to_int(c.label)) for c in cells if c.label != '000000']
             else:
                 rects = []
@@ -81,38 +110,20 @@ class BrailleDataset:
         return r
 
 
-def detection_collate(batch):
-    """Custom collate fn for dealing with batches of images that have a different
-    number of associated object annotations (bounding boxes).
-
-    Arguments:
-        batch: (tuple) A tuple of tensor images and lists of annotations
-
-    Return:
-        A tuple containing:
-            1) (tensor) batch of images stacked on their 0 dim
-            2) (list of tensors) annotations for a given image are stacked on 0 dim
-    """
-    targets = []
-    imgs = []
-    for _, (img, rects) in enumerate(batch):
-        assert torch.is_tensor(img)
-        imgs.append(img)
-        assert isinstance(rects, type(np.empty(0)))
-        annos = torch.from_numpy(rects).float()
-        targets.append(annos)
-    return (torch.stack(imgs, 0), targets)
-
-
-def create_dataloaders(params):
+def create_dataloaders(params, collate_fn):
+    '''
+    :param params:
+    :param collate_fn: converts batch from BrailleDataset to format required by model
+    :return: train_loader, (val_loader1, val_loader2)
+    '''
     train_dataset = BrailleDataset(params,  r'D:\Programming\Braille\Data\DSBI', mode = 'train')
     val_dataset   = BrailleDataset(params,  r'D:\Programming\Braille\Data\DSBI', mode = 'test')
     val_dataset1 = ovotools.pytorch_tools.DataSubset(val_dataset, list(range(0, len(val_dataset)//2)))
     val_dataset2 = ovotools.pytorch_tools.DataSubset(val_dataset, list(range(len(val_dataset)//2, len(val_dataset))))
     train_loader = torch.utils.data.DataLoader(train_dataset, params.data.batch_size,
-                                                      shuffle=True, num_workers=0, collate_fn=detection_collate)
+                                                      shuffle=True, num_workers=0, collate_fn=collate_fn)
     val_loader1   = torch.utils.data.DataLoader(val_dataset1, params.data.batch_size,
-                                                      shuffle=True, num_workers=0, collate_fn=detection_collate)
+                                                      shuffle=True, num_workers=0, collate_fn=collate_fn)
     val_loader2   = torch.utils.data.DataLoader(val_dataset2, params.data.batch_size,
-                                                      shuffle=True, num_workers=0, collate_fn=detection_collate)
+                                                      shuffle=True, num_workers=0, collate_fn=collate_fn)
     return train_loader, (val_loader1, val_loader2)
