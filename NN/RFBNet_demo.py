@@ -4,8 +4,8 @@ import local_config
 
 from ovotools import AttrDict
 
-param_file = 'NN_results/yolov3_828386.param.txt'
-load_model_from = 'NN_results/yolov3_828386/models/02500.t7'
+param_file = 'NN_results/yolov3_points_fixbb_03cbf3.param.txt'
+load_model_from = 'NN_results/yolov3_points_fixbb_03cbf3/models/04000.t7'
 
 import os
 param_file = os.path.join(local_config.data_path, param_file)

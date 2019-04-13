@@ -29,7 +29,7 @@ def common_aug(mode, params):
     #                 albumentations.RandomBrightness(),
     #                 albumentations.RandomContrast(),
     #                 ]
-    return albumentations.Compose(augs_list, p=1.)
+    return albumentations.Compose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 
 
 class BrailleDataset:
@@ -103,7 +103,7 @@ class BrailleDataset:
                       b[1]>0 and b[1]<1 and
                       b[2]>0 and b[2]<1 and
                       b[3]>0 and b[3]<1]
-        return F.to_tensor(aug_img), np.asarray(aug_bboxes)
+        return F.to_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
     def label_to_int(self, label):
         v = [1,2,4,8,16,32]
         r = sum([v[i] for i in range(6) if label[i]=='1'])
