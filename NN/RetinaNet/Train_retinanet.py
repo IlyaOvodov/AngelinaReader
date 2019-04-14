@@ -23,15 +23,35 @@ params = AttrDict(
     #load_model_from = 'NN_results/RFBNet0_db0807.model/00500.t7',
     optim = 'torch.optim.Adam',
     optim_params = AttrDict(
-        lr=1e-4,# momentum=0.9,
-        #weight_decay=1e-3
+        lr=0.0001,
+        #momentum=0,
+        #weight_decay = 0, #0.001,
+        #nesterov = False,
     ),
+    lr_finder=AttrDict(
+        epochs_num=100,
+        log_lr_start=-6,
+        log_lr_end=-1,
+    ),
+    clr=AttrDict(
+        warmup_epochs=10,
+        min_lr=4e-6,
+        max_lr=7e-4,
+        period_epochs=200,
+        # scale_max_lr=0.95,
+        # scale_min_lr=1,
+    ),
+
     decimate_lr_every = 1200,
 )
 max_epochs = 10000
 tensorboard_port = 6006
 save_every = 500
 device = 'cuda:0'
+findLR = False
+
+if findLR:
+    params.model_name += '_findLR'
 
 params.save(can_overwrite = True)
 
@@ -58,19 +78,41 @@ metrics = {
 
 target_metric = 'val:loss'
 
-trainer = ovotools.ignite_tools.create_supervised_trainer(model, optimizer, loss, metrics=metrics, device = device)
+trainer_metrics = {} if findLR else metrics
+eval_loaders = {'val': val_loader1, 'val2': val_loader2}
+if findLR:
+    eval_loaders['train'] = train_loader
+eval_event = ignite.engine.Events.ITERATION_COMPLETED if findLR else ignite.engine.Events.EPOCH_COMPLETED
+eval_duty_cycle = 2 if findLR else 5
+train_epochs = params.lr_finder.epochs_num if findLR else max_epochs
+
+trainer = ovotools.ignite_tools.create_supervised_trainer(model, optimizer, loss, metrics=trainer_metrics, device = device)
 evaluator = ignite.engine.create_supervised_evaluator(model, metrics=metrics, device = device)
 
-best_model_buffer = ovotools.ignite_tools.BestModelBuffer(model, 'train:loss', params, verbose = 0)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 #loaders_dict = {},
-                                                                loaders_dict = {'val': val_loader1, 'val2': val_loader2},
-                                                                best_model_buffer=None, #best_model_buffer,
+                                                                loaders_dict = eval_loaders,
+                                                                best_model_buffer=None,
                                                                 params = params,
-                                                                duty_cycles = 5)
-trainer.add_event_handler(ignite.engine.Events.EPOCH_COMPLETED, log_training_results, event = ignite.engine.Events.EPOCH_COMPLETED)
+                                                                duty_cycles = eval_duty_cycle)
+trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
 
-#clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, optimizer, target_metric, params, engine = trainer)
+if findLR:
+    import math
+    lr_find_len = len(train_loader)*params.lr_finder.epochs_num
+    @trainer.on(Events.ITERATION_STARTED)
+    def upd_lr(engine):
+        log_lr = params.lr_finder.log_lr_start + (params.lr_finder.log_lr_end - params.lr_finder.log_lr_start) * (engine.state.iteration-1)/lr_find_len
+        lr = math.pow(10, log_lr)
+        optimizer.param_groups[0]['lr'] = lr
+        engine.state.metrics['lr'] = optimizer.param_groups[0]['lr']
+else:
+    clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, optimizer, target_metric, params,
+                                                       engine=trainer)
+    #@trainer.on(Events.EPOCH_COMPLETED)
+    #def save_model(engine):
+    #    if save_every and (engine.state.epoch % save_every) == 0:
+    #        ovotools.pytorch_tools.save_model(model, params, rel_dir = 'models', filename = '{:05}.t7'.format(engine.state.epoch))
 
 timer = ovotools.ignite_tools.IgniteTimes(trainer, count_iters = False, measured_events = {
     'train:time.iter': (trainer, Events.ITERATION_STARTED, Events.ITERATION_COMPLETED),
@@ -78,20 +120,8 @@ timer = ovotools.ignite_tools.IgniteTimes(trainer, count_iters = False, measured
     'val:time.epoch': (evaluator, Events.EPOCH_STARTED, Events.EPOCH_COMPLETED),
 })
 
+tb_logger = ovotools.ignite_tools.TensorBoardLogger(trainer,params,count_iters = findLR)
+tb_logger.start_server(tensorboard_port, start_it = False)
 
-@trainer.on(ignite.engine.Events.EPOCH_COMPLETED)
-def upd_lr(engine):
-    if engine.state.epoch % params.decimate_lr_every == 0:
-        optimizer.param_groups[0]['lr'] /= 10
-    engine.state.metrics['lr'] = optimizer.param_groups[0]['lr']
-
-@trainer.on(Events.EPOCH_COMPLETED)
-def save_model(engine):
-    if save_every and (engine.state.epoch % save_every) == 0:
-        ovotools.pytorch_tools.save_model(model, params, rel_dir = 'models', filename = '{:05}.t7'.format(engine.state.epoch))
-
-tb_logger = ovotools.ignite_tools.TensorBoardLogger(trainer,params,count_iters = False)
-#tb_logger.start_server(tensorboard_port)
-
-trainer.run(train_loader, max_epochs = max_epochs)
+trainer.run(train_loader, max_epochs = train_epochs)
 
