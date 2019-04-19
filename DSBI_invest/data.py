@@ -1,13 +1,16 @@
 import os
+import random
 import PIL
 import numpy as np
 import albumentations
+import albumentations.augmentations.transforms as T
+import albumentations.augmentations.functional as albu_f
 import torch
 import torchvision.transforms.functional as F
+import cv2
 
-from .dsbi import read_txt
+from DSBI_invest.dsbi import read_txt
 import ovotools.pytorch_tools
-
 
 def common_aug(mode, params):
     '''
@@ -15,20 +18,20 @@ def common_aug(mode, params):
     '''
     #aug_params = params.get('augm_params', dict())
     augs_list = []
-    #assert mode in {'train', 'test'}
-    #if mode == 'train':
-        #RandomScaleK = aug_params.get('random_scale', 0.2)
-        #augs_list += [albumentations.RandomCrop(int(params.data.net_hw[0] / (1-RandomScaleK))+1,
-        #                                        int(params.data.net_hw[1] / (1-RandomScaleK))+1 ),]
-        #augs_list += [albumentations.RandomScale(RandomScaleK), ]
-    augs_list += [albumentations.RandomCrop(params.data.net_hw[0], params.data.net_hw[1]),]
-    augs_list += [albumentations.Normalize(mean=params.data.mean, std=params.data.std), ]
-    #if mode == 'train':
-    #    augs_list += [albumentations.Blur(),
-    #                 albumentations.Rotate(limit=aug_params.get('random_rotate', 5)),
-    #                 albumentations.RandomBrightness(),
-    #                 albumentations.RandomContrast(),
-    #                 ]
+    assert mode  in {'train', 'debug'} # TODO #assert mode in {'train', 'test'}
+    if mode == 'train':
+        augs_list.append(albumentations.RandomCrop(params.data.net_hw[0], params.data.net_hw[1], always_apply=True))
+        augs_list.append(T.Rotate(limit=params.augmentation.rotate_limit, border_mode=cv2.BORDER_CONSTANT, always_apply=True))
+        # augs_list.append(T.OpticalDistortion(border_mode=cv2.BORDER_CONSTANT)) - can't handle boundboxes
+    elif mode == 'debug':
+        augs_list.append(albumentations.CenterCrop(params.data.net_hw[0], params.data.net_hw[1], always_apply=True))
+    augs_list.append(T.Blur(blur_limit=4))
+    augs_list.append(T.RandomBrightnessContrast())
+    augs_list.append(T.MotionBlur())
+    augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
+    #augs_list.append(T.VerticalFlip())
+    augs_list.append(T.HorizontalFlip())
+
     return albumentations.Compose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 
 
@@ -36,18 +39,27 @@ class BrailleDataset:
     '''
     return annotated images as: ( img: Tensor CxHxW, np.array(Nx5 - left (0..1), top, right, bottom, class ) )
     '''
-    def __init__(self, params, data_dir, mode):
-        assert mode in {'train', 'test'}
+    def __init__(self, params, data_dir, mode, verbose):
+        assert mode in {'train', 'test', 'debug'}
+        self.params = params
         data_dir_data = os.path.join(data_dir, 'data')
-        list_file = os.path.join(data_dir, mode + '.txt')
-        with open(list_file, 'r') as f:
-            files = f.readlines()
-        self.files = [os.path.join(data_dir_data, fn.replace('.jpg\n', '+recto')) for fn in files]
-        assert len(self.files) > 0, list_file
+        self.files = []
+        list_files = ('train', 'test') if mode == 'train' else (mode,)
+        for fn in list_files:
+            list_file = os.path.join(data_dir, fn + '.txt')
+            with open(list_file, 'r') as f:
+                files = f.readlines()
+            files_list = [os.path.join(data_dir_data, fn.replace('.jpg\n', '+recto')) for fn in files]
+            assert len(files_list) > 0, list_file
+            self.files += files_list
         self.albumentations = common_aug(mode, params)
         self.images = [None] * len(self.files)
         self.rects = [None] * len(self.files)
+        self.aug_images = [None] * len(self.files)
+        self.aug_bboxes = [None] * len(self.files)
+        self.REPEAT_PROBABILITY = 0.6
         self.get_points = params.data.get('get_points', True)
+        self.verbose = verbose
 
     def __len__(self):
         return len(self.files)
@@ -58,10 +70,10 @@ class BrailleDataset:
             img = PIL.Image.open(fn+'.jpg') #cv2.imread(fn+'.jpg') #PIL.Image.open(fn+'.jpg')
             img = np.asarray(img)
             self.images[item] = img
+        width = img.shape[1]
+        height = img.shape[0]
         rects = self.rects[item]
         if rects is None:
-            width = img.shape[1]
-            height = img.shape[0]
             _,_,_,cells = read_txt(fn+'.txt', binary_label = True)
             if cells is not None:
                 if self.get_points:
@@ -87,43 +99,125 @@ class BrailleDataset:
                                 else:
                                     yc = cl.bottom
                                 tp, bt = yc - h, yc + h
-                                rects.append( (lf / width, tp / height, rt / width, bt / height, 0) ) # class is always same
+                                rects.append( [lf / width, tp / height, rt / width, bt / height, 0] ) # class is always same
                 else:
-                    rects = [ (c.left/width, c.top/height, c.right/width, c.bottom/height,
-                           self.label_to_int(c.label)) for c in cells if c.label != '000000']
+                    rm = self.params.data.rect_margin
+                    rects = [ [(c.left  - rm*(c.right-c.left))/width,
+                               (c.top   - rm*(c.right-c.left))/height,
+                               (c.right + rm*(c.right-c.left))/width,
+                               (c.bottom+ rm*(c.right-c.left))/height,
+                               label_to_int(c.label)] for c in cells if c.label != '000000']
             else:
                 rects = []
             self.rects[item] = rects
-        #labels = [ self.label_to_int(c.label) for c in cells if c.label != '000000']
-        aug_res = self.albumentations(image = img, bboxes = rects)
-        aug_img = aug_res['image']
-        aug_bboxes = aug_res['bboxes']
-        aug_bboxes = [b for b in aug_bboxes if
-                      b[0]>0 and b[0]<1 and
-                      b[1]>0 and b[1]<1 and
-                      b[2]>0 and b[2]<1 and
-                      b[3]>0 and b[3]<1]
-        return F.to_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
-    def label_to_int(self, label):
-        v = [1,2,4,8,16,32]
-        r = sum([v[i] for i in range(6) if label[i]=='1'])
-        return r
+        #labels = [ label_to_int(c.label) for c in cells if c.label != '000000']
+
+        if (self.aug_images[item] is not None) and (random.random() < self.REPEAT_PROBABILITY):
+            aug_img = self.aug_images[item]
+            aug_bboxes = self.aug_bboxes[item]
+        else:
+            aug_img = self.random_resize_and_stretch(img,
+                                                     new_width_range=self.params.augmentation.img_width_range,
+                                                     stretch_limit = self.params.augmentation.stretch_limit)
+            aug_res = self.albumentations(image = aug_img, bboxes = rects)
+            aug_img = aug_res['image']
+            aug_bboxes = aug_res['bboxes']
+            aug_bboxes = [b for b in aug_bboxes if
+                          b[0]>0 and b[0]<1 and
+                          b[1]>0 and b[1]<1 and
+                          b[2]>0 and b[2]<1 and
+                          b[3]>0 and b[3]<1]
+            if not self.get_points:
+                for t in self.albumentations.transforms:
+                    if isinstance(t, T.VerticalFlip) and t.was_applied:
+                        aug_bboxes = [rect_vflip(b) for b in aug_bboxes]
+                    if isinstance(t, T.HorizontalFlip) and t.was_applied:
+                        aug_bboxes = [rect_hflip(b) for b in aug_bboxes]
+
+            self.aug_images[item] = aug_img
+            self.aug_bboxes[item] = aug_bboxes
+
+        if self.verbose >= 2:
+            print('BrailleDataset: preparing file '+fn + '. Total rects: ' + str(len(aug_bboxes)))
+
+        return self.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
+
+    def random_resize_and_stretch(self, img, new_width_range, stretch_limit = 0):
+        new_width_range = T.to_tuple(new_width_range)
+        stretch_limit = T.to_tuple(stretch_limit, bias=1)
+        new_width = int(random.uniform(new_width_range[0], new_width_range[1]))
+        stretch = random.uniform(stretch_limit[0], stretch_limit[1])
+        new_height = int(img.shape[0]*new_width/img.shape[1]*stretch)
+        return albu_f.resize(img, height=new_height, width=new_width, interpolation=cv2.INTER_LINEAR)
+
+    def to_normalized_tensor(self, img):
+        '''
+        returns image converted to FloatTensor and normalized
+        '''
+        ten_img = F.to_tensor(img)
+        means = ten_img.view(3, -1).mean(dim=1)
+        std = ten_img.view(3, -1).std(dim=1)
+        ten_img = (ten_img - means.view(-1, 1, 1)) / (3*std.view(-1, 1, 1))
+        # decolorize
+        ten_img = ten_img.mean(dim=0).expand(3, -1, -1)
+        return ten_img
 
 
-def create_dataloaders(params, collate_fn):
+def rect_vflip(b):
+    return b[:4] + [label_vflip(b[4]),]
+
+def rect_hflip(b):
+    return b[:4] + [label_hflip(b[4]),]
+
+def label_to_int(label):
+    v = [1,2,4,8,16,32]
+    r = sum([v[i] for i in range(6) if label[i]=='1'])
+    return r
+
+def label_vflip(lbl):
+    return ((lbl&(1+8))<<2) + ((lbl&(4+32))>>2) + (lbl&(2+16))
+
+def label_hflip(lbl):
+    return ((lbl&(1+2+4))<<3) + ((lbl&(8+16+32))>>3)
+
+def int_to_label(label):
+    label = int(label)
+    v = [1,2,4,8,16,32]
+    r = ''.join([ '1' if label&v[i] else '0' for i in range(6)])
+    return r
+
+def create_dataloaders(params, collate_fn, mode = 'train', verbose = 0):
     '''
     :param params:
     :param collate_fn: converts batch from BrailleDataset to format required by model
     :return: train_loader, (val_loader1, val_loader2)
     '''
-    train_dataset = BrailleDataset(params,  r'D:\Programming\Braille\Data\DSBI', mode = 'train')
-    val_dataset   = BrailleDataset(params,  r'D:\Programming\Braille\Data\DSBI', mode = 'test')
-    val_dataset1 = ovotools.pytorch_tools.DataSubset(val_dataset, list(range(0, len(val_dataset)//2)))
-    val_dataset2 = ovotools.pytorch_tools.DataSubset(val_dataset, list(range(len(val_dataset)//2, len(val_dataset))))
+    base_dataset = BrailleDataset(params,  r'D:\Programming\Braille\Data\DSBI', mode = mode, verbose = verbose)
+    data_len = len(base_dataset)
+    train_dataset = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(0, data_len*8//10)))
+    val_dataset1 = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(data_len*8//10, data_len*9//10)))
+    val_dataset2 = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(data_len*9//10, data_len)))
     train_loader = torch.utils.data.DataLoader(train_dataset, params.data.batch_size,
                                                       shuffle=True, num_workers=0, collate_fn=collate_fn)
     val_loader1   = torch.utils.data.DataLoader(val_dataset1, params.data.batch_size,
-                                                      shuffle=True, num_workers=0, collate_fn=collate_fn)
+                                                      shuffle=False, num_workers=0, collate_fn=collate_fn)
     val_loader2   = torch.utils.data.DataLoader(val_dataset2, params.data.batch_size,
-                                                      shuffle=True, num_workers=0, collate_fn=collate_fn)
+                                                      shuffle=False, num_workers=0, collate_fn=collate_fn)
     return train_loader, (val_loader1, val_loader2)
+
+
+if __name__ == '__main__':
+    assert label_to_int('100000') == 1
+    assert label_to_int('101000') == 1+4
+    assert label_to_int('000001') == 32
+
+    assert rect_hflip( [0,1,2,3, label_to_int('111000'),] ) == [0,1,2,3, label_to_int('000111'),]
+    assert rect_hflip( [0,1,2,3, label_to_int('000011'),] ) == [0,1,2,3, label_to_int('011000'),]
+    assert rect_hflip( [0,1,2,3, label_to_int('001100'),] ) == [0,1,2,3, label_to_int('100001'),]
+
+    assert rect_vflip( [0,1,2,3, label_to_int('111100'),] ) == [0,1,2,3, label_to_int('111001'),]
+    assert rect_vflip( [0,1,2,3, label_to_int('001011'),] ) == [0,1,2,3, label_to_int('100110'),]
+
+    assert int_to_label(label_to_int('001011')) == '001011'
+
+    print('OK')

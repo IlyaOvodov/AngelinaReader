@@ -13,8 +13,9 @@ def create_model_retinanet(params, phase, device):
     from pytorch_retinanet.encoder import DataEncoder
 
     num_classes = 1 if params.data.get_points else 64
-    model = RetinaNet(num_classes=num_classes).to(device)
     encoder = DataEncoder(**params.model_params.encoder_params)
+    model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
+                      num_classes=num_classes).to(device)
     retina_loss = FocalLoss(num_classes=num_classes)
 
     def detection_collate(batch):
@@ -45,7 +46,7 @@ def create_model_retinanet(params, phase, device):
         cls_targets = []
         for i in range(num_imgs):
             inputs[i] = imgs[i]
-            loc_target, cls_target = encoder.encode(boxes[i], labels[i], input_size=(w,h))
+            loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels[i], input_size=(w,h))
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
         return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets) )
