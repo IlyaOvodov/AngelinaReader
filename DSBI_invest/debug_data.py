@@ -37,8 +37,10 @@ model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, 
 model = None
 
 train_loader, (val_loader1, val_loader2) = DSBI_invest.data.create_dataloaders(params, collate_fn,
-                                                                               mode = 'debug', verbose = 2)
-val_loader1_it = iter(val_loader1)
+                            data_dir=r'D:\Programming\Braille\Data\My', fn_suffix = '', mode='inference',
+                                                                               #mode = 'debug',
+                                                                               verbose = 2)
+val_loader1_it = iter(train_loader)
 
 import PIL
 import PIL.ImageDraw
@@ -67,6 +69,6 @@ labels = target[1][0].clamp(min=0)
 ly = torch.eye(65, device = labels.device)  # [D,D]
 cls_preds = ly[labels][:,1:]
 
-boxest, labelst = encoder.decode(target[0][0].cpu().data, cls_preds, (w,h),
+boxest, labelst, scores = encoder.decode(target[0][0].cpu().data, cls_preds, (w,h),
                               cls_thresh = cls_thresh, nms_thresh = nms_thresh)
 print(len(boxest))

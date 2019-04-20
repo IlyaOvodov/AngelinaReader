@@ -1,5 +1,6 @@
 import os
 import random
+from collections import defaultdict
 import PIL
 import numpy as np
 import albumentations
@@ -10,27 +11,30 @@ import torchvision.transforms.functional as F
 import cv2
 
 from DSBI_invest.dsbi import read_txt
+import DSBI_invest.letters as letters
 import ovotools.pytorch_tools
 
 def common_aug(mode, params):
     '''
-    :param mode: 'train', 'test'
+    :param mode: 'train', 'test', 'inference'
+    :param params:
     '''
     #aug_params = params.get('augm_params', dict())
     augs_list = []
-    assert mode  in {'train', 'debug'} # TODO #assert mode in {'train', 'test'}
+    assert mode  in {'train', 'debug', 'inference'}
     if mode == 'train':
         augs_list.append(albumentations.RandomCrop(params.data.net_hw[0], params.data.net_hw[1], always_apply=True))
         augs_list.append(T.Rotate(limit=params.augmentation.rotate_limit, border_mode=cv2.BORDER_CONSTANT, always_apply=True))
         # augs_list.append(T.OpticalDistortion(border_mode=cv2.BORDER_CONSTANT)) - can't handle boundboxes
-    elif mode == 'debug':
+    elif mode in {'debug', 'inference'}:
         augs_list.append(albumentations.CenterCrop(params.data.net_hw[0], params.data.net_hw[1], always_apply=True))
-    augs_list.append(T.Blur(blur_limit=4))
-    augs_list.append(T.RandomBrightnessContrast())
-    augs_list.append(T.MotionBlur())
-    augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
-    #augs_list.append(T.VerticalFlip())
-    augs_list.append(T.HorizontalFlip())
+    if mode != 'inference':
+        augs_list.append(T.Blur(blur_limit=4))
+        augs_list.append(T.RandomBrightnessContrast())
+        augs_list.append(T.MotionBlur())
+        augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
+        #augs_list.append(T.VerticalFlip())
+        augs_list.append(T.HorizontalFlip())
 
     return albumentations.Compose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 
@@ -39,8 +43,8 @@ class BrailleDataset:
     '''
     return annotated images as: ( img: Tensor CxHxW, np.array(Nx5 - left (0..1), top, right, bottom, class ) )
     '''
-    def __init__(self, params, data_dir, mode, verbose):
-        assert mode in {'train', 'test', 'debug'}
+    def __init__(self, params, data_dir, fn_suffix, mode, verbose):
+        assert mode in {'train', 'debug', 'inference'}
         self.params = params
         data_dir_data = os.path.join(data_dir, 'data')
         self.files = []
@@ -49,7 +53,7 @@ class BrailleDataset:
             list_file = os.path.join(data_dir, fn + '.txt')
             with open(list_file, 'r') as f:
                 files = f.readlines()
-            files_list = [os.path.join(data_dir_data, fn.replace('.jpg\n', '+recto')) for fn in files]
+            files_list = [os.path.join(data_dir_data, fn.replace('.jpg\n', fn_suffix)) for fn in files]
             assert len(files_list) > 0, list_file
             self.files += files_list
         self.albumentations = common_aug(mode, params)
@@ -74,39 +78,42 @@ class BrailleDataset:
         height = img.shape[0]
         rects = self.rects[item]
         if rects is None:
-            _,_,_,cells = read_txt(fn+'.txt', binary_label = True)
-            if cells is not None:
-                if self.get_points:
-                    dy = 0.15
-                    dx = 0.3
-                    rects = []
-                    for cl in cells:
-                        w = int((cl.right - cl.left) * dx)
-                        h = int((cl.bottom - cl.top) * dy)
-                        for i in range(6):
-                            if cl.label[i] == '1':
-                                iy = i % 3
-                                ix = i - iy
-                                if ix == 0:
-                                    xc = cl.left
-                                else:
-                                    xc = cl.right
-                                lf, rt = xc - w, xc + w
-                                if iy == 0:
-                                    yc = cl.top
-                                elif iy == 1:
-                                    yc = (cl.top + cl.bottom) // 2
-                                else:
-                                    yc = cl.bottom
-                                tp, bt = yc - h, yc + h
-                                rects.append( [lf / width, tp / height, rt / width, bt / height, 0] ) # class is always same
+            if os.path.exists(fn+'.txt'):
+                _,_,_,cells = read_txt(fn+'.txt', binary_label = True)
+                if cells is not None:
+                    if self.get_points:
+                        dy = 0.15
+                        dx = 0.3
+                        rects = []
+                        for cl in cells:
+                            w = int((cl.right - cl.left) * dx)
+                            h = int((cl.bottom - cl.top) * dy)
+                            for i in range(6):
+                                if cl.label[i] == '1':
+                                    iy = i % 3
+                                    ix = i - iy
+                                    if ix == 0:
+                                        xc = cl.left
+                                    else:
+                                        xc = cl.right
+                                    lf, rt = xc - w, xc + w
+                                    if iy == 0:
+                                        yc = cl.top
+                                    elif iy == 1:
+                                        yc = (cl.top + cl.bottom) // 2
+                                    else:
+                                        yc = cl.bottom
+                                    tp, bt = yc - h, yc + h
+                                    rects.append( [lf / width, tp / height, rt / width, bt / height, 0] ) # class is always same
+                    else:
+                        rm = self.params.data.rect_margin
+                        rects = [ [(c.left  - rm*(c.right-c.left))/width,
+                                   (c.top   - rm*(c.right-c.left))/height,
+                                   (c.right + rm*(c.right-c.left))/width,
+                                   (c.bottom+ rm*(c.right-c.left))/height,
+                                   label_to_int(c.label)] for c in cells if c.label != '000000']
                 else:
-                    rm = self.params.data.rect_margin
-                    rects = [ [(c.left  - rm*(c.right-c.left))/width,
-                               (c.top   - rm*(c.right-c.left))/height,
-                               (c.right + rm*(c.right-c.left))/width,
-                               (c.bottom+ rm*(c.right-c.left))/height,
-                               label_to_int(c.label)] for c in cells if c.label != '000000']
+                    rects = []
             else:
                 rects = []
             self.rects[item] = rects
@@ -186,23 +193,46 @@ def int_to_label(label):
     r = ''.join([ '1' if label&v[i] else '0' for i in range(6)])
     return r
 
-def create_dataloaders(params, collate_fn, mode = 'train', verbose = 0):
+def int_to_label123(label):
+    label = int(label)
+    v = [1,2,4,8,16,32]
+    r = ''.join([ str(i+1) for i in range(6) if label&v[i]])
+    return r
+
+def int_to_letter(label, lang):
+    letter_dicts = defaultdict(dict, {
+        'EN': letters.alpha_map_EN,
+        'RU': letters.alpha_map_RU,
+        'NUM': letters.num_map,
+    })
+    d = letters.sym_map
+    d.update(letter_dicts[lang])
+    return d.get(int_to_label123(label),'')
+
+def create_dataloaders(params, collate_fn,
+                       data_dir=r'D:\Programming\Braille\Data\DSBI',
+                       fn_suffix = '+recto',
+                       mode = 'train', verbose = 0):
     '''
     :param params:
     :param collate_fn: converts batch from BrailleDataset to format required by model
     :return: train_loader, (val_loader1, val_loader2)
     '''
-    base_dataset = BrailleDataset(params,  r'D:\Programming\Braille\Data\DSBI', mode = mode, verbose = verbose)
+    base_dataset = BrailleDataset(params, data_dir=data_dir , fn_suffix = fn_suffix, mode = mode, verbose = verbose)
     data_len = len(base_dataset)
-    train_dataset = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(0, data_len*8//10)))
-    val_dataset1 = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(data_len*8//10, data_len*9//10)))
-    val_dataset2 = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(data_len*9//10, data_len)))
+    if mode=='train' and data_len>10:
+        train_dataset = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(0, data_len*8//10)))
+        val_dataset1 = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(data_len*8//10, data_len*9//10)))
+        val_dataset2 = ovotools.pytorch_tools.DataSubset(base_dataset, list(range(data_len*9//10, data_len)))
+        val_loader1   = torch.utils.data.DataLoader(val_dataset1, params.data.batch_size,
+                                                          shuffle=False, num_workers=0, collate_fn=collate_fn)
+        val_loader2   = torch.utils.data.DataLoader(val_dataset2, params.data.batch_size,
+                                                          shuffle=False, num_workers=0, collate_fn=collate_fn)
+    else:
+        train_dataset = base_dataset
+        val_loader1 = val_loader2 = None
     train_loader = torch.utils.data.DataLoader(train_dataset, params.data.batch_size,
-                                                      shuffle=True, num_workers=0, collate_fn=collate_fn)
-    val_loader1   = torch.utils.data.DataLoader(val_dataset1, params.data.batch_size,
-                                                      shuffle=False, num_workers=0, collate_fn=collate_fn)
-    val_loader2   = torch.utils.data.DataLoader(val_dataset2, params.data.batch_size,
-                                                      shuffle=False, num_workers=0, collate_fn=collate_fn)
+                                                      shuffle=mode=='train', num_workers=0, collate_fn=collate_fn)
     return train_loader, (val_loader1, val_loader2)
 
 
@@ -219,5 +249,11 @@ if __name__ == '__main__':
     assert rect_vflip( [0,1,2,3, label_to_int('001011'),] ) == [0,1,2,3, label_to_int('100110'),]
 
     assert int_to_label(label_to_int('001011')) == '001011'
+    assert int_to_label123(label_to_int('001011')) == '356'
+
+    assert int_to_letter(label_to_int('110110'),'EN') == 'g'
+    assert int_to_letter(label_to_int('110110'),'xx') == ''
+    assert int_to_letter(label_to_int('000000'),'EN') == ''
+
 
     print('OK')

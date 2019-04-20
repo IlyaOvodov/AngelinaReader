@@ -6,10 +6,10 @@ from ovotools import AttrDict
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/retina_points_noV',
+    model_name = 'NN_results/retina_chars',
     data = AttrDict(
-        get_points = True,
-        batch_size = 15,
+        get_points = False,
+        batch_size = 10,
         #mean = (0.4138001444901419, 0.4156750182887099, 0.3766904444889663),
         #std = (0.2965651186330059, 0.2801510185680299, 0.2719146471588908),
         net_hw = (416, 416),
@@ -23,11 +23,11 @@ params = AttrDict(
     model = 'retina',
     model_params = AttrDict(
         encoder_params = AttrDict(
-            anchor_areas = [5*5., 6*6., 10*10.,],
+            #anchor_areas = [5*5., 6*6., 10*10.,],
             #anchor_areas = [8*8., 16*16., 32*32., 64*64., 128*128.],
-            #anchor_areas = [8*8., 12*12., 16*16., 24.*24.,], GVNC
-            #aspect_ratios=[1 / 2.,],
-            aspect_ratios=[1.,],
+            anchor_areas = [8*16., 12*24., 16*32.,],
+            aspect_ratios=[1 / 2.,],
+            #aspect_ratios=[1.,],
             #scale_ratios=[1., pow(2, 1 / 3.), pow(2, 2 / 3.)]
             iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
             iuo_nofit_thr = 0,
@@ -48,11 +48,11 @@ params = AttrDict(
     ),
     clr=AttrDict(
         warmup_epochs=10,
-        min_lr=5e-6,
-        max_lr=3e-5,
-        period_epochs=200,
-        scale_max_lr=0.95,
-        scale_min_lr=0.95,
+        min_lr=1e-5,
+        max_lr=2e-4,
+        period_epochs=500,
+        scale_max_lr=0.9,
+        scale_min_lr=0.9,
     ),
 
     #decimate_lr_every = 1200,
