@@ -29,16 +29,16 @@ def create_model_retinanet(params, phase, device):
         if len(t):
             pass
 
-
         boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32)
                  *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32) for b in batch]
         labels = [torch.tensor(b[1][:, 4], dtype = torch.long) for b in batch]
         if params.data.get_points:
             labels = [torch.tensor([0]*len(lb), dtype = torch.long) for lb in labels]
+        original_images = [b[2] for b in batch]
 
         imgs = [x[0] for x in batch]
 
-        h = w = params.data.net_hw[0]
+        h, w = tuple(params.data.net_hw)
         num_imgs = len(batch)
         inputs = torch.zeros(num_imgs, 3, h, w)
 
@@ -49,7 +49,7 @@ def create_model_retinanet(params, phase, device):
             loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels[i], input_size=(w,h))
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
-        return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets) )
+        return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets) ), original_images
 
     class Loss:
         def __init__(self):

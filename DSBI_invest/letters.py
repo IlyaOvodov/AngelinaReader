@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
+num_sign = '##'
+
 sym_map = {
     '256': '.',
     '2'  : ',',
@@ -15,7 +17,7 @@ sym_map = {
     '345':')',
     '36' : '-',
     '6': 'caps',
-'3456': 'num'
+    '3456': num_sign
 }
 
 alpha_map_RU = {

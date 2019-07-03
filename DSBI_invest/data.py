@@ -22,12 +22,15 @@ def common_aug(mode, params):
     #aug_params = params.get('augm_params', dict())
     augs_list = []
     assert mode  in {'train', 'debug', 'inference'}
+    augs_list.append(albumentations.PadIfNeeded(min_height=params.data.net_hw[0], min_width=params.data.net_hw[1],
+                                                border_mode=cv2.BORDER_REPLICATE,
+                                                always_apply=True))
     if mode == 'train':
-        augs_list.append(albumentations.RandomCrop(params.data.net_hw[0], params.data.net_hw[1], always_apply=True))
+        augs_list.append(albumentations.RandomCrop(height=params.data.net_hw[0], width=params.data.net_hw[1], always_apply=True))
         augs_list.append(T.Rotate(limit=params.augmentation.rotate_limit, border_mode=cv2.BORDER_CONSTANT, always_apply=True))
         # augs_list.append(T.OpticalDistortion(border_mode=cv2.BORDER_CONSTANT)) - can't handle boundboxes
-    elif mode in {'debug', 'inference'}:
-        augs_list.append(albumentations.CenterCrop(params.data.net_hw[0], params.data.net_hw[1], always_apply=True))
+    elif mode == 'debug':
+        augs_list.append(albumentations.CenterCrop(height=params.data.net_hw[0], width=params.data.net_hw[1], always_apply=True))
     if mode != 'inference':
         augs_list.append(T.Blur(blur_limit=4))
         augs_list.append(T.RandomBrightnessContrast())
@@ -39,6 +42,61 @@ def common_aug(mode, params):
     return albumentations.Compose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 
 
+class ImagePreprocessor:
+    def __init__(self, params, mode):
+        assert mode in {'train', 'debug', 'inference'}
+        self.params = params
+        self.albumentations = common_aug(mode, params)
+        self.get_points = params.data.get('get_points', True)
+
+    def preprocess_and_augment(self, img, rects=[]):
+        aug_img = self.random_resize_and_stretch(img,
+                                                 new_width_range=self.params.augmentation.img_width_range,
+                                                 stretch_limit=self.params.augmentation.stretch_limit)
+        aug_res = self.albumentations(image=aug_img, bboxes=rects)
+        aug_img = aug_res['image']
+        aug_bboxes = aug_res['bboxes']
+        aug_bboxes = [b for b in aug_bboxes if
+                      b[0] > 0 and b[0] < 1 and
+                      b[1] > 0 and b[1] < 1 and
+                      b[2] > 0 and b[2] < 1 and
+                      b[3] > 0 and b[3] < 1]
+        if not self.get_points:
+            for t in self.albumentations.transforms:
+                if isinstance(t, T.VerticalFlip) and t.was_applied:
+                    aug_bboxes = [rect_vflip(b) for b in aug_bboxes]
+                if isinstance(t, T.HorizontalFlip) and t.was_applied:
+                    aug_bboxes = [rect_hflip(b) for b in aug_bboxes]
+        return aug_img, aug_bboxes
+
+    def random_resize_and_stretch(self, img, new_width_range, stretch_limit = 0):
+        new_width_range = T.to_tuple(new_width_range)
+        stretch_limit = T.to_tuple(stretch_limit, bias=1)
+        new_sz = int(random.uniform(new_width_range[0], new_width_range[1]))
+        stretch = random.uniform(stretch_limit[0], stretch_limit[1])
+
+        img_max_sz = img.shape[1] #max(img.shape[0]*stretch, img.shape[1]) #img.shape[1]  # GVNC - now it is resizing to max
+        new_width = int(img.shape[1]*new_sz/img_max_sz)
+        new_width = ((new_width+31)//32)*32
+        new_height = int(img.shape[0]*stretch*new_sz/img_max_sz)
+        new_height = ((new_height+31)//32)*32
+
+        return albu_f.resize(img, height=new_height, width=new_width, interpolation=cv2.INTER_LINEAR)
+
+    def to_normalized_tensor(self, img):
+        '''
+        returns image converted to FloatTensor and normalized
+        '''
+        ten_img = F.to_tensor(img)
+        means = ten_img.view(3, -1).mean(dim=1)
+        std = ten_img.view(3, -1).std(dim=1)
+        ten_img = (ten_img - means.view(-1, 1, 1)) / (3*std.view(-1, 1, 1))
+        # decolorize
+        ten_img = ten_img.mean(dim=0).expand(3, -1, -1)
+        return ten_img
+
+
+
 class BrailleDataset:
     '''
     return annotated images as: ( img: Tensor CxHxW, np.array(Nx5 - left (0..1), top, right, bottom, class ) )
@@ -46,6 +104,7 @@ class BrailleDataset:
     def __init__(self, params, data_dir, fn_suffix, mode, verbose):
         assert mode in {'train', 'debug', 'inference'}
         self.params = params
+        self.image_preprocessor = ImagePreprocessor(params, mode)
         data_dir_data = os.path.join(data_dir, 'data')
         self.files = []
         list_files = ('train', 'test') if mode == 'train' else (mode,)
@@ -123,51 +182,14 @@ class BrailleDataset:
             aug_img = self.aug_images[item]
             aug_bboxes = self.aug_bboxes[item]
         else:
-            aug_img = self.random_resize_and_stretch(img,
-                                                     new_width_range=self.params.augmentation.img_width_range,
-                                                     stretch_limit = self.params.augmentation.stretch_limit)
-            aug_res = self.albumentations(image = aug_img, bboxes = rects)
-            aug_img = aug_res['image']
-            aug_bboxes = aug_res['bboxes']
-            aug_bboxes = [b for b in aug_bboxes if
-                          b[0]>0 and b[0]<1 and
-                          b[1]>0 and b[1]<1 and
-                          b[2]>0 and b[2]<1 and
-                          b[3]>0 and b[3]<1]
-            if not self.get_points:
-                for t in self.albumentations.transforms:
-                    if isinstance(t, T.VerticalFlip) and t.was_applied:
-                        aug_bboxes = [rect_vflip(b) for b in aug_bboxes]
-                    if isinstance(t, T.HorizontalFlip) and t.was_applied:
-                        aug_bboxes = [rect_hflip(b) for b in aug_bboxes]
-
+            aug_img, aug_bboxes = self.image_preprocessor.preprocess_and_augment(img, rects)
             self.aug_images[item] = aug_img
             self.aug_bboxes[item] = aug_bboxes
 
         if self.verbose >= 2:
             print('BrailleDataset: preparing file '+fn + '. Total rects: ' + str(len(aug_bboxes)))
 
-        return self.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
-
-    def random_resize_and_stretch(self, img, new_width_range, stretch_limit = 0):
-        new_width_range = T.to_tuple(new_width_range)
-        stretch_limit = T.to_tuple(stretch_limit, bias=1)
-        new_width = int(random.uniform(new_width_range[0], new_width_range[1]))
-        stretch = random.uniform(stretch_limit[0], stretch_limit[1])
-        new_height = int(img.shape[0]*new_width/img.shape[1]*stretch)
-        return albu_f.resize(img, height=new_height, width=new_width, interpolation=cv2.INTER_LINEAR)
-
-    def to_normalized_tensor(self, img):
-        '''
-        returns image converted to FloatTensor and normalized
-        '''
-        ten_img = F.to_tensor(img)
-        means = ten_img.view(3, -1).mean(dim=1)
-        std = ten_img.view(3, -1).std(dim=1)
-        ten_img = (ten_img - means.view(-1, 1, 1)) / (3*std.view(-1, 1, 1))
-        # decolorize
-        ten_img = ten_img.mean(dim=0).expand(3, -1, -1)
-        return ten_img
+        return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), aug_img
 
 
 def rect_vflip(b):
