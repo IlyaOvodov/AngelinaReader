@@ -28,6 +28,7 @@ model_fn = join(local_config.data_path, model_root)
 from ovotools.params import AttrDict
 import numpy as np
 import torch
+import time
 import PIL.ImageDraw
 import PIL.ImageFont
 import DSBI_invest.data
@@ -58,15 +59,22 @@ class BrailleInference:
         self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
 
     def run(self, img_fn):
-
+        print("run.preprocess")
+        t = time.clock()
         img = PIL.Image.open(img_fn)
         np_img = np.asarray(img)
 
         aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
         input_data = self.preprocessor.to_normalized_tensor(aug_img)
         input_data = input_data.unsqueeze(0).to(device)
+        print(time.clock() - t)
+        print("run.model")
+        t = time.clock()
         with torch.no_grad():
             (loc_preds, cls_preds) = self.model(input_data)
+        print(time.clock() - t)
+        print("run.postprocess")
+        t = time.clock()
         h,w = input_data.shape[2:]
         boxes, labels, scores = self.encoder.decode(loc_preds[0].cpu().data, cls_preds[0].cpu().data, (w,h),
                                       cls_thresh = cls_thresh, nms_thresh = nms_thresh)
@@ -82,12 +90,13 @@ class BrailleInference:
             for ch in ln.chars:
                 s += ' ' * ch.spaces_before + ch.char
                 draw.rectangle(list(ch.box), outline='green')
-                draw.text((ch.box[0]+5,ch.box[3]), ch.char, font=fntA, fill="black")
+                chr = ch.char[:1]
+                draw.text((ch.box[0]+5,ch.box[3]), chr, font=fntA, fill="black")
                 #score = scores[i].item()
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
-
+        print(time.clock() - t)
         return aug_img, lines, out_text
 
 if __name__ == '__main__':

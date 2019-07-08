@@ -1,0 +1,6 @@
+opencv_python
+Flask
+Flask_Uploads
+torch>=1.0
+numpy
+Pillow

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="utf-8">
+        <title> AEyeAlliance </title>
+        <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
+		<link rel="icon" type="image/png" href="{{ url_for('static', filename='AEyeLogo.png') }}">
+        <!-- <link rel="stylessheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css"> -->
+        <style>
+			body {
+				background-color: black;
+				font-family: 'Poppins', sans-serif;
+				background-image: url("https://media0.giphy.com/media/ko7twHhomhk8E/giphy.gif?cid=790b76115d21e9395579633177557598&rid=giphy.gif");
+				background-repeat: no-repeat;
+				background-position: center right -150px;
+				padding: 100px;
+				background-size: 65%;
+			}
+			
+			nav {
+				font-size: 5vw;
+			}
+
+			a {
+				color: white;
+				text-decoration: none;
+			}
+
+			a:hover {
+				color: blue;
+				transition: 0.3s;
+			}
+
+		</style>
+    
+    </head>
+
+    <body>
+        {% block body %} {% endblock %}
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+    </body>
+
+</html>
+

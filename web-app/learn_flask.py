@@ -23,21 +23,9 @@ photos = UploadSet('photos', IMAGES)
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
 
-#@app.route("/")
-#def index():
-#    return render_template('home.html')
- 
-@app.route("/aboutus")
-def aboutus():
-    return render_template('aboutus.html')
-
-@app.route("/tutorial_slider")
-def tutorial_slider():
-    return render_template('tutorial_slider.html')
-
 @app.route("/")
-def upload():
-    return render_template('upload.html')
+def home():
+    return render_template('home.html')
 
 @app.route("/upload_results", methods=['GET', 'POST'])
 def save():

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
+        <link rel="icon" type="image/png" href="{{ url_for('static', filename='braille.gif') }}">
+        <title> Angelina braille reader </title>
+        <style>
+            body {
+                background-color: black;
+                <!-- font-family: 'Poppins', sans-serif; -->
+                background-image: "{{ url_for('static', filename='braille.gif') }}";
+                background-repeat: no-repeat;
+                background-position: bottom right;
+                background-attachment: fixed;
+                padding: 100px;
+                background-size: 15%;
+                margin-top: 0;
+                padding: 0;
+                text-align: center;
+            }
+            
+            nav {
+                font-size: 30px;
+                padding: 0;
+                margin-top: 0;
+                color: white;
+            }
+
+
+            a {
+                color: white;
+                text-decoration: none;
+                font-size: 35px;
+            }
+
+            a:hover {
+                color: blue;
+                transition: 0.3s;
+            }
+
+            input {
+                font-size: 30px;
+                font-family: 'Poppins', sans-serif;
+                position: absolute;
+                color: white;
+            }
+
+            input:hover {
+                color: red;
+                transition: 0.3s;
+            }
+
+            .submit {
+                background-color: DodgerBlue;
+                margin-left: -60px;
+            }
+
+            .file {
+                color: DodgerBlue;
+                margin-left: -180px;
+            }
+
+            img {
+                text-align: center;
+            }
+            
+            h1 {
+                text-align: center;
+                color: white;
+                font-size: 60px;
+                margin-bottom: 0;
+                margin-top: 0;
+            }
+
+        </style>
+    </head>
+
+    <body>
+        <h1>Angelina braille reader</h1>
+        </br>
+        <nav>
+            <div>
+                Распознавание текста шрифтом Брайля на изображении.<p/><p/>
+                Для распознавания надо сделать фото текста в свете,<p/>падающем НА ВАС (т.е. не из-за спины),<p/>загрузить файл в формате JPG и нажать "Распознать".
+            </div>
+            </br> </br>
+            <form method="post" action="/upload_results" name="submit" enctype="multipart/form-data">
+                <input type="file" name="fileField" class="file"><br /><br />
+                <input type="submit" name="submit" value="Распознать" class="submit">
+            </form>
+        </nav> 
+
+    </body>
+</html>

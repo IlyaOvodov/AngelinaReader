@@ -2,6 +2,8 @@
 # -*- coding: UTF-8 -*-
 
 num_sign = '##'
+caps_sign = 'caps'
+markout_sign = 'XXX'
 
 sym_map = {
     '256': '.',
@@ -16,8 +18,10 @@ sym_map = {
     '126':'(',
     '345':')',
     '36' : '-',
-    '6': 'caps',
-    '3456': num_sign
+    '6': caps_sign,
+    '45': caps_sign,
+    '3456': num_sign,
+    '123456': markout_sign,
 }
 
 alpha_map_RU = {
@@ -53,7 +57,7 @@ alpha_map_RU = {
     "23456" : "ь",
     "246" : "э",
     "1256" : "ю",
-    "1246" : "я"
+    "1246" : "я",
 }
 
 alpha_map_EN = {

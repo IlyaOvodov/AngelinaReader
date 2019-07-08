@@ -54,18 +54,28 @@ def boxes_to_lines(boxes, labels, lang = 'RU'):
     lines = sorted(lines, key = lambda l: l.y)
     for l in lines:
         digit_mode = False
+        caps_mode = False
         for ch in l.chars:
             if ch.spaces_before:
                 digit_mode = False
+                caps_mode = False
             lbl = DSBI_invest.data.int_to_letter(ch.label.item(), 'NUM' if digit_mode else lang)
-            if lbl == DSBI_invest.letters.num_sign:
+            if lbl == DSBI_invest.letters.markout_sign:
+                ch.char = ''
+            elif lbl == DSBI_invest.letters.num_sign:
                 digit_mode = True
+                ch.char = ''
+            elif lbl == DSBI_invest.letters.caps_sign:
+                caps_mode = True
                 ch.char = ''
             else:
                 if not lbl:
                     digit_mode = False
                     lbl = DSBI_invest.data.int_to_label123(ch.label.item())
-                    lbl = '&'+lbl
+                    lbl = '&'+lbl+'&'
+                if caps_mode:
+                    lbl = lbl.upper()
+                    caps_mode = False
                 ch.char = lbl
     return lines
 
