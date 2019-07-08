@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <title> Angelina braille reader </title>
         <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
         <link rel="icon" type="image/png" href="{{ url_for('static', filename='braille.gif') }}">
-        <title> Angelina braille reader </title>
         <style>
             body {
-                background-color: black;
-                <!-- font-family: 'Poppins', sans-serif; -->
-                background-image: "{{ url_for('static', filename='braille.gif') }}";
+                background-color: white;
+                font-family: 'Poppins', sans-serif;
+                background-image: url("{{ url_for('static', filename='braille.gif') }}");
                 background-repeat: no-repeat;
                 background-position: bottom right;
                 background-attachment: fixed;
@@ -17,24 +17,22 @@
                 margin-top: 0;
                 padding: 0;
                 text-align: center;
+                color: black;
             }
-            
+
             nav {
                 font-size: 30px;
                 padding: 0;
                 margin-top: 0;
-                color: white;
+                color: black;
             }
 
-
             a {
-                color: white;
                 text-decoration: none;
                 font-size: 35px;
             }
 
             a:hover {
-                color: blue;
                 transition: 0.3s;
             }
 
@@ -42,7 +40,7 @@
                 font-size: 30px;
                 font-family: 'Poppins', sans-serif;
                 position: absolute;
-                color: white;
+                color: black;
             }
 
             input:hover {
@@ -66,7 +64,7 @@
             
             h1 {
                 text-align: center;
-                color: white;
+                color: blue;
                 font-size: 60px;
                 margin-bottom: 0;
                 margin-top: 0;
@@ -81,7 +79,7 @@
         <nav>
             <div>
                 Распознавание текста шрифтом Брайля на изображении.<p/><p/>
-                Для распознавания надо сделать фото текста в свете,<p/>падающем НА ВАС (т.е. не из-за спины),<p/>загрузить файл в формате JPG и нажать "Распознать".
+                Для распознавания надо сделать фото текста в свете,<p/>падающем НА ВАС (т.е. не из-за спины).
             </div>
             </br> </br>
             <form method="post" action="/upload_results" name="submit" enctype="multipart/form-data">
