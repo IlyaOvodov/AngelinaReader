@@ -104,6 +104,7 @@ class BrailleDataset:
     def __init__(self, params, data_dir, fn_suffix, mode, verbose):
         assert mode in {'train', 'debug', 'inference'}
         self.params = params
+        self.mode = mode
         self.image_preprocessor = ImagePreprocessor(params, mode)
         data_dir_data = os.path.join(data_dir, 'data')
         self.files = []
@@ -115,7 +116,6 @@ class BrailleDataset:
             files_list = [os.path.join(data_dir_data, fn.replace('.jpg\n', fn_suffix)) for fn in files]
             assert len(files_list) > 0, list_file
             self.files += files_list
-        self.albumentations = common_aug(mode, params)
         self.images = [None] * len(self.files)
         self.rects = [None] * len(self.files)
         self.aug_images = [None] * len(self.files)
@@ -189,7 +189,10 @@ class BrailleDataset:
         if self.verbose >= 2:
             print('BrailleDataset: preparing file '+fn + '. Total rects: ' + str(len(aug_bboxes)))
 
-        return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), aug_img
+        if self.mode == 'train':
+            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
+        else:
+            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), aug_img
 
 
 def rect_vflip(b):
@@ -233,7 +236,7 @@ def int_to_letter(label, lang):
     return d.get(int_to_label123(label),'')
 
 def create_dataloaders(params, collate_fn,
-                       data_dir=r'D:\Programming\Braille\Data\DSBI',
+                       data_dir=r'D:\Programming.Data\Braille\DSBI',
                        fn_suffix = '+recto',
                        mode = 'train', verbose = 0):
     '''

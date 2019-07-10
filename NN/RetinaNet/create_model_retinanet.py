@@ -18,6 +18,11 @@ def create_model_retinanet(params, phase, device):
                       num_classes=num_classes).to(device)
     retina_loss = FocalLoss(num_classes=num_classes)
 
+    if 'load_model_from' in params.keys():
+        preloaded_weights = torch.load(os.path.join(local_config.data_path, params.load_model_from))
+        model.load_state_dict(preloaded_weights)
+
+
     def detection_collate(batch):
         '''
         :param batch: list of (tb image(CHW float), [(left, top, right, bottom, class),...]) сcoords in [0,1]
@@ -34,7 +39,7 @@ def create_model_retinanet(params, phase, device):
         labels = [torch.tensor(b[1][:, 4], dtype = torch.long) for b in batch]
         if params.data.get_points:
             labels = [torch.tensor([0]*len(lb), dtype = torch.long) for lb in labels]
-        original_images = [b[2] for b in batch]
+        original_images = [b[2] for b in batch if len(b)>2] # batch contains augmented image if not in train mode
 
         imgs = [x[0] for x in batch]
 
@@ -49,7 +54,10 @@ def create_model_retinanet(params, phase, device):
             loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels[i], input_size=(w,h))
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
-        return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets) ), original_images
+        if original_images: # inference mode
+            return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets) ), original_images
+        else:
+            return inputs, (torch.stack(loc_targets), torch.stack(cls_targets))
 
     class Loss:
         def __init__(self):
