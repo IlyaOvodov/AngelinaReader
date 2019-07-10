@@ -1,5 +1,5 @@
-import DSBI_invest.data
-import DSBI_invest.letters
+import braille_utils.letters as letters
+import braille_utils.label_tools as lt
 
 
 class LineChar:
@@ -59,19 +59,19 @@ def boxes_to_lines(boxes, labels, lang = 'RU'):
             if ch.spaces_before:
                 digit_mode = False
                 caps_mode = False
-            lbl = DSBI_invest.data.int_to_letter(ch.label.item(), 'NUM' if digit_mode else lang)
-            if lbl == DSBI_invest.letters.markout_sign:
+            lbl = lt.int_to_letter(ch.label.item(), 'NUM' if digit_mode else lang)
+            if lbl == letters.markout_sign:
                 ch.char = ''
-            elif lbl == DSBI_invest.letters.num_sign:
+            elif lbl == letters.num_sign:
                 digit_mode = True
                 ch.char = ''
-            elif lbl == DSBI_invest.letters.caps_sign:
+            elif lbl == letters.caps_sign:
                 caps_mode = True
                 ch.char = ''
             else:
                 if not lbl:
                     digit_mode = False
-                    lbl = DSBI_invest.data.int_to_label123(ch.label.item())
+                    lbl = lt.int_to_label123(ch.label.item())
                     lbl = '&'+lbl+'&'
                 if caps_mode:
                     lbl = lbl.upper()
@@ -82,4 +82,4 @@ def boxes_to_lines(boxes, labels, lang = 'RU'):
 
 
 if __name__ == '__main__':
-    norm_boxes([(1,2,3,4)], [1])
+    pass

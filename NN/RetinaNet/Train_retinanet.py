@@ -73,12 +73,12 @@ from ignite.engine import Events
 import ovotools.ignite_tools
 import ovotools.pytorch_tools
 
-import DSBI_invest.data
+import train.data
 import create_model_retinanet
 
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
 
-train_loader, (val_loader1, val_loader2) = DSBI_invest.data.create_dataloaders(params, collate_fn)
+train_loader, (val_loader1, val_loader2) = train.data.create_dataloaders(params, collate_fn)
 print('data loaded. train:{}, val1: {}, val2: {}'.format(len(train_loader), len(val_loader1), len(val_loader2)))
 
 optimizer = eval(params.optim)(model.parameters(), **params.optim_params)

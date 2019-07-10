@@ -9,7 +9,7 @@
 
 inference_width = 1024
 model_root = 'NN_results/retina_chars_72c04f'
-model_weights = '/models/clr.007'
+model_weights = '/models/clr.017'
 
 device = 'cuda:0'
 #device = 'cpu'
@@ -32,11 +32,13 @@ import time
 import copy
 import PIL.ImageDraw
 import PIL.ImageFont
-import DSBI_invest.data
+import train.data as data
+import braille_utils.letters as letters
+import braille_utils.label_tools as lt
 import create_model_retinanet
 import pytorch_retinanet
 import pytorch_retinanet.encoder
-import postprocess
+import braille_utils.postprocess as postprocess
 
 class BrailleInference:
     def __init__(self):
@@ -56,7 +58,7 @@ class BrailleInference:
         self.model.eval()
         print("Model loaded")
 
-        self.preprocessor = DSBI_invest.data.ImagePreprocessor(params, mode = 'inference')
+        self.preprocessor = data.ImagePreprocessor(params, mode = 'inference')
         self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
 
     def run(self, img_fn):
@@ -113,13 +115,13 @@ class BrailleInference:
             for ch in ln.chars:
                 chr = ch.char
                 if not chr:
-                    lbl = DSBI_invest.data.int_to_letter(ch.label.item(), 'SYM')
-                    if lbl in {DSBI_invest.letters.markout_sign,
-                               DSBI_invest.letters.num_sign,
-                               DSBI_invest.letters.caps_sign}:
+                    lbl = lt.int_to_letter(ch.label.item(), 'SYM')
+                    if lbl in {letters.markout_sign,
+                               letters.num_sign,
+                               letters.caps_sign}:
                         chr = lbl
                     else:
-                        chr = "&"+DSBI_invest.data.int_to_label123(ch.label.item())
+                        chr = "&"+lt.int_to_label123(ch.label.item())
                 shape = {
                     "label": chr,
                     "points": [[ch.box[0].item(), ch.box[1].item()],[ch.box[2].item(), ch.box[3].item()]],

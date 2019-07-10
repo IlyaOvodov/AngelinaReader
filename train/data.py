@@ -1,6 +1,5 @@
 import os
 import random
-from collections import defaultdict
 import PIL
 import numpy as np
 import albumentations
@@ -11,7 +10,7 @@ import torchvision.transforms.functional as F
 import cv2
 
 from DSBI_invest.dsbi import read_txt
-import DSBI_invest.letters as letters
+import braille_utils.label_tools as lt
 import ovotools.pytorch_tools
 
 def common_aug(mode, params):
@@ -170,7 +169,7 @@ class BrailleDataset:
                                    (c.top   - rm*(c.right-c.left))/height,
                                    (c.right + rm*(c.right-c.left))/width,
                                    (c.bottom+ rm*(c.right-c.left))/height,
-                                   label_to_int(c.label)] for c in cells if c.label != '000000']
+                                   lt.label_to_int(c.label)] for c in cells if c.label != '000000']
                 else:
                     rects = []
             else:
@@ -196,44 +195,11 @@ class BrailleDataset:
 
 
 def rect_vflip(b):
-    return b[:4] + [label_vflip(b[4]),]
+    return b[:4] + [lt.label_vflip(b[4]),]
 
 def rect_hflip(b):
-    return b[:4] + [label_hflip(b[4]),]
+    return b[:4] + [lt.label_hflip(b[4]),]
 
-def label_to_int(label):
-    v = [1,2,4,8,16,32]
-    r = sum([v[i] for i in range(6) if label[i]=='1'])
-    return r
-
-def label_vflip(lbl):
-    return ((lbl&(1+8))<<2) + ((lbl&(4+32))>>2) + (lbl&(2+16))
-
-def label_hflip(lbl):
-    return ((lbl&(1+2+4))<<3) + ((lbl&(8+16+32))>>3)
-
-def int_to_label(label):
-    label = int(label)
-    v = [1,2,4,8,16,32]
-    r = ''.join([ '1' if label&v[i] else '0' for i in range(6)])
-    return r
-
-def int_to_label123(label):
-    label = int(label)
-    v = [1,2,4,8,16,32]
-    r = ''.join([ str(i+1) for i in range(6) if label&v[i]])
-    return r
-
-def int_to_letter(label, lang):
-    letter_dicts = defaultdict(dict, {
-        'SYM': letters.sym_map,
-        'NUM': letters.num_map,
-        'EN': letters.alpha_map_EN,
-        'RU': letters.alpha_map_RU,
-    })
-    d = letters.sym_map
-    d.update(letter_dicts[lang])
-    return d.get(int_to_label123(label),'')
 
 def create_dataloaders(params, collate_fn,
                        data_dir=r'D:\Programming.Data\Braille\DSBI',
@@ -263,23 +229,11 @@ def create_dataloaders(params, collate_fn,
 
 
 if __name__ == '__main__':
-    assert label_to_int('100000') == 1
-    assert label_to_int('101000') == 1+4
-    assert label_to_int('000001') == 32
+    assert rect_hflip( [0,1,2,3, lt.label_to_int('111000'),] ) == [0,1,2,3, lt.label_to_int('000111'),]
+    assert rect_hflip( [0,1,2,3, lt.label_to_int('000011'),] ) == [0,1,2,3, lt.label_to_int('011000'),]
+    assert rect_hflip( [0,1,2,3, lt.label_to_int('001100'),] ) == [0,1,2,3, lt.label_to_int('100001'),]
 
-    assert rect_hflip( [0,1,2,3, label_to_int('111000'),] ) == [0,1,2,3, label_to_int('000111'),]
-    assert rect_hflip( [0,1,2,3, label_to_int('000011'),] ) == [0,1,2,3, label_to_int('011000'),]
-    assert rect_hflip( [0,1,2,3, label_to_int('001100'),] ) == [0,1,2,3, label_to_int('100001'),]
-
-    assert rect_vflip( [0,1,2,3, label_to_int('111100'),] ) == [0,1,2,3, label_to_int('111001'),]
-    assert rect_vflip( [0,1,2,3, label_to_int('001011'),] ) == [0,1,2,3, label_to_int('100110'),]
-
-    assert int_to_label(label_to_int('001011')) == '001011'
-    assert int_to_label123(label_to_int('001011')) == '356'
-
-    assert int_to_letter(label_to_int('110110'),'EN') == 'g'
-    assert int_to_letter(label_to_int('110110'),'xx') == ''
-    assert int_to_letter(label_to_int('000000'),'EN') == ''
-
+    assert rect_vflip( [0,1,2,3, lt.label_to_int('111100'),] ) == [0,1,2,3, lt.label_to_int('111001'),]
+    assert rect_vflip( [0,1,2,3, lt.label_to_int('001011'),] ) == [0,1,2,3, lt.label_to_int('100110'),]
 
     print('OK')
