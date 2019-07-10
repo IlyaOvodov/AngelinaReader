@@ -2,8 +2,8 @@
 # -*- coding: UTF-8 -*-
 
 num_sign = '##'
-caps_sign = 'caps'
-markout_sign = 'XXX'
+caps_sign = 'CC'
+markout_sign = 'XX'
 
 sym_map = {
     '256': '.',
@@ -12,13 +12,13 @@ sym_map = {
     '26' : '?',
     '23' : ';',
     '235': '!',
-    '236': '"', # <<
-    '356': '"', # >>
+    '236': '<<', # <<
+    '356': '>>', # >>
     '2356':'()',
     '126':'(',
     '345':')',
     '36' : '-',
-    '6': caps_sign,
+    #'6': caps_sign,
     '45': caps_sign,
     '3456': num_sign,
     '123456': markout_sign,

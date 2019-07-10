@@ -29,6 +29,7 @@ from ovotools.params import AttrDict
 import numpy as np
 import torch
 import time
+import copy
 import PIL.ImageDraw
 import PIL.ImageFont
 import DSBI_invest.data
@@ -81,6 +82,7 @@ class BrailleInference:
         lines = postprocess.boxes_to_lines(boxes, labels)
 
         aug_img = PIL.Image.fromarray(aug_img)
+        raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
         fnt = PIL.ImageFont.truetype("arial.ttf", 8)
         fntA = PIL.ImageFont.truetype("arial.ttf", 28)
@@ -97,7 +99,41 @@ class BrailleInference:
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
         print(time.clock() - t)
-        return aug_img, lines, out_text
+        return raw_image, aug_img, lines, out_text, self.to_dict(aug_img, lines)
+
+    def to_dict(self, img, lines):
+        '''
+        generates dict for LabelMe json format
+        :param img:
+        :param lines:
+        :return: dict
+        '''
+        shapes = []
+        for ln in lines:
+            for ch in ln.chars:
+                chr = ch.char
+                if not chr:
+                    lbl = DSBI_invest.data.int_to_letter(ch.label.item(), 'SYM')
+                    if lbl in {DSBI_invest.letters.markout_sign,
+                               DSBI_invest.letters.num_sign,
+                               DSBI_invest.letters.caps_sign}:
+                        chr = lbl
+                    else:
+                        chr = "&"+DSBI_invest.data.int_to_label123(ch.label.item())
+                shape = {
+                    "label": chr,
+                    "points": [[ch.box[0].item(), ch.box[1].item()],[ch.box[2].item(), ch.box[3].item()]],
+                    "shape_type": "rectangle",
+                    "line_color": None,
+                    "fill_color": None,
+                }
+                shapes.append(shape)
+        res = {"shapes": shapes,
+               "imageHeight": img.height, "imageWidth": img.width, "imagePath": None, "imageData": None,
+               "lineColor": None, "fillColor": None,
+               }
+        return res
+
 
 if __name__ == '__main__':
     recognizer = BrailleInference()

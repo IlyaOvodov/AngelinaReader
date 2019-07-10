@@ -223,9 +223,10 @@ def int_to_label123(label):
 
 def int_to_letter(label, lang):
     letter_dicts = defaultdict(dict, {
+        'SYM': letters.sym_map,
+        'NUM': letters.num_map,
         'EN': letters.alpha_map_EN,
         'RU': letters.alpha_map_RU,
-        'NUM': letters.num_map,
     })
     d = letters.sym_map
     d.update(letter_dicts[lang])
