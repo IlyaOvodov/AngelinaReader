@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import sys
 sys.path.append(r'../..')
 import local_config
@@ -31,8 +32,11 @@ params = AttrDict(
             iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
             iuo_nofit_thr = 0,
         ),
+        loss_params=AttrDict(
+            class_loss_scale = 100,
+        ),
     ),
-    load_model_from = 'NN_results/retina_chars_72c04f/models/clr.007',
+    load_model_from = 'NN_results/retina_chars_9a80a3/models/clr.006',
     optim = 'torch.optim.Adam',
     optim_params = AttrDict(
         lr=0.0001,
@@ -83,11 +87,17 @@ print('data loaded. train:{}, val1: {}, val2: {}'.format(len(train_loader), len(
 
 optimizer = eval(params.optim)(model.parameters(), **params.optim_params)
 
-metrics = {
-    'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size),
+metrics = OrderedDict({
+    'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
     'loc': ignite.metrics.Loss(loss.metric('loc'), batch_size=lambda y: params.data.batch_size),
     'cls': ignite.metrics.Loss(loss.metric('cls'), batch_size=lambda y: params.data.batch_size),
-}
+})
+
+eval_metrics = OrderedDict({
+    'loss': ignite.metrics.Loss(loss, batch_size=lambda y: params.data.batch_size), # loss calc must be called when eval
+    'loc': ignite.metrics.Loss(loss.metric('loc'), batch_size=lambda y: params.data.batch_size),
+    'cls': ignite.metrics.Loss(loss.metric('cls'), batch_size=lambda y: params.data.batch_size),
+})
 
 target_metric = 'val:loss'
 
@@ -95,13 +105,13 @@ trainer_metrics = {} if findLR else metrics
 eval_loaders = {}
 if findLR:
     eval_loaders['train'] = train_loader
-eval_loaders.update({'val': val_loader1, 'val2': val_loader2})
+eval_loaders.update({'val': val_loader1, 'val2': val_loader2, "tr" : train_loader})
 eval_event = ignite.engine.Events.ITERATION_COMPLETED if findLR else ignite.engine.Events.EPOCH_COMPLETED
 eval_duty_cycle = 2 if findLR else 5
 train_epochs = params.lr_finder.iters_num*len(train_loader) if findLR else max_epochs
 
 trainer = ovotools.ignite_tools.create_supervised_trainer(model, optimizer, loss, metrics=trainer_metrics, device = device)
-evaluator = ignite.engine.create_supervised_evaluator(model, metrics=metrics, device = device)
+evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metrics, device = device)
 
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,

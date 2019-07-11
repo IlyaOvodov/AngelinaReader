@@ -16,7 +16,7 @@ def create_model_retinanet(params, phase, device):
     encoder = DataEncoder(**params.model_params.encoder_params)
     model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
                       num_classes=num_classes).to(device)
-    retina_loss = FocalLoss(num_classes=num_classes)
+    retina_loss = FocalLoss(num_classes=num_classes, **params.model_params.get('loss_params', dict()))
 
     if 'load_model_from' in params.keys():
         preloaded_weights = torch.load(os.path.join(local_config.data_path, params.load_model_from))
