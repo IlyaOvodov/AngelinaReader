@@ -99,10 +99,10 @@ class BrailleDataset:
         _,_,_,cells = DSBI_invest.dsbi.read_txt(fn+'.txt', binary_label = True)
         if cells is not None:
             rects = [ (c.left/width, c.top/height, c.right/width, c.bottom/height,
-                       self.label_to_int(c.label)) for c in cells if c.label != '000000']
+                       self.label010_to_int(c.label)) for c in cells if c.label != '000000']
         else:
             rects = []
-        #labels = [ self.label_to_int(c.label) for c in cells if c.label != '000000']
+        #labels = [ self.label010_to_int(c.label) for c in cells if c.label != '000000']
         aug_res = self.albumentations(image = img, bboxes = rects)
         aug_img = aug_res['image']
         aug_bboxes = aug_res['bboxes']
@@ -112,7 +112,7 @@ class BrailleDataset:
                       b[2]>0 and b[2]<1 and
                       b[3]>0 and b[3]<1]
         return to_tensor(aug_img), np.asarray(aug_bboxes)
-    def label_to_int(self, label):
+    def label010_to_int(self, label):
         v = [1,2,4,8,16,32]
         r = sum([v[i] for i in range(6) if label[i]=='1'])
         return r

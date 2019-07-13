@@ -2,30 +2,69 @@ from collections import defaultdict
 import copy
 import braille_utils.letters as letters
 
-def label_to_int(label):
+def validate_int(int_label):
+    assert int_label >= 0 and int_label < 64, "Ошибочная метка: " + str(int_label)
+
+def label010_to_int(label010):
     v = [1,2,4,8,16,32]
-    r = sum([v[i] for i in range(6) if label[i]=='1'])
+    r = sum([v[i] for i in range(6) if label010[i]=='1'])
+    validate_int(r)
     return r
 
-def label_vflip(lbl):
-    return ((lbl&(1+8))<<2) + ((lbl&(4+32))>>2) + (lbl&(2+16))
+def label_vflip(int_lbl):
+    return ((int_lbl&(1+8))<<2) + ((int_lbl&(4+32))>>2) + (int_lbl&(2+16))
 
-def label_hflip(lbl):
-    return ((lbl&(1+2+4))<<3) + ((lbl&(8+16+32))>>3)
+def label_hflip(int_lbl):
+    return ((int_lbl&(1+2+4))<<3) + ((int_lbl&(8+16+32))>>3)
 
-def int_to_label(label):
-    label = int(label)
+def int_to_label010(int_lbl):
+    int_lbl = int(int_lbl)
     v = [1,2,4,8,16,32]
-    r = ''.join([ '1' if label&v[i] else '0' for i in range(6)])
+    r = ''.join([ '1' if int_lbl&v[i] else '0' for i in range(6)])
     return r
 
-def int_to_label123(label):
-    label = int(label)
+def int_to_label123(int_lbl):
+    int_lbl = int(int_lbl)
     v = [1,2,4,8,16,32]
-    r = ''.join([ str(i+1) for i in range(6) if label&v[i]])
+    r = ''.join([ str(i+1) for i in range(6) if int_lbl&v[i]])
     return r
 
-def int_to_letter(label, lang):
+def label123_to_int(label123):
+    v = [1,2,4,8,16,32]
+    try:
+        r = sum([v[int(ch)-1] for ch in label123])
+    except:
+        raise ValueError("incorrect label in 123 format: " + label123)
+    validate_int(r)
+    return r
+
+def human_label_to_int(label):
+    '''
+    :param label: label from labelme
+    :return: int label
+    '''
+    # русский -> английский
+    if label.lower() == "хх":
+        label = "XX"
+    if label.lower() == "сс":
+        label = "CC"
+
+    if label[0] == '&':
+        label123 = label[1:]
+        if label123[-1] == '&':
+            label123 = label123[:-1]
+    else:
+        ch_list = letters.reverce_dict.get(label.lower(), None)
+        if not ch_list:
+            ch_list = letters.reverce_dict.get(label.upper(), None)
+        if not ch_list:
+            raise ValueError("unrecognized label: " + label)
+        if len(ch_list) > 1:
+            raise ValueError("label: " + label + " has more then 1 meanings: " + str(ch_list))
+        label123 = ch_list[0]
+    return label123_to_int(label123)
+
+def int_to_letter(int_lbl, lang):
     letter_dicts = defaultdict(dict, {
         'SYM': letters.sym_map,
         'NUM': letters.num_map,
@@ -34,27 +73,40 @@ def int_to_letter(label, lang):
     })
     d = copy.copy(letters.sym_map)
     d.update(letter_dicts[lang])
-    return d.get(int_to_label123(label),'')
+    return d.get(int_to_label123(int_lbl),'')
 
 
 if __name__ == '__main__':
-    assert label_to_int('100000') == 1
-    assert label_to_int('101000') == 1+4
-    assert label_to_int('000001') == 32
+    assert label010_to_int('100000') == 1
+    assert label010_to_int('101000') == 1+4
+    assert label010_to_int('000001') == 32
 
-    assert label_hflip(label_to_int('111000')) == label_to_int('000111')
-    assert label_hflip(label_to_int('000011')) == label_to_int('011000')
-    assert label_hflip(label_to_int('001100')) == label_to_int('100001')
+    assert label_hflip(label010_to_int('111000')) == label010_to_int('000111')
+    assert label_hflip(label010_to_int('000011')) == label010_to_int('011000')
+    assert label_hflip(label010_to_int('001100')) == label010_to_int('100001')
 
-    assert label_vflip(label_to_int('111100')) == label_to_int('111001')
-    assert label_vflip(label_to_int('001011')) == label_to_int('100110')
+    assert label_vflip(label010_to_int('111100')) == label010_to_int('111001')
+    assert label_vflip(label010_to_int('001011')) == label010_to_int('100110')
 
-    assert int_to_label(label_to_int('001011')) == '001011'
-    assert int_to_label123(label_to_int('001011')) == '356'
+    assert int_to_label010(label010_to_int('001011')) == '001011'
+    assert int_to_label123(label010_to_int('001011')) == '356'
 
-    assert int_to_letter(label_to_int('110110'),'EN') == 'g'
-    assert int_to_letter(label_to_int('110110'),'xx') == ''
-    assert int_to_letter(label_to_int('000000'),'EN') == ''
+    assert int_to_letter(label010_to_int('110110'),'EN') == 'g'
+    assert int_to_letter(label010_to_int('110110'),'xx') == ''
+    assert int_to_letter(label010_to_int('000000'),'EN') == ''
 
+    assert int_to_label010(label123_to_int('124')) == '110100'
+    assert int_to_label010(label123_to_int('26')) == '010001'
+    assert int_to_label010(label123_to_int('')) == '000000'
+    #assert int_to_label010(label123_to_int('8')) == '000000'
+
+    assert int_to_label010(human_label_to_int('1')) == '100000'
+    assert int_to_label010(human_label_to_int('CC')) == '000110'
+    assert int_to_label010(human_label_to_int('xx')) == '111111'
+    assert int_to_label010(human_label_to_int('Хх')) == '111111' # русский
+    assert int_to_label010(human_label_to_int('##')) == '001111'
+    assert int_to_label010(human_label_to_int('а')) == '100000'
+    assert int_to_label010(human_label_to_int('Б')) == '110000'
+    assert int_to_label010(human_label_to_int('2')) == '110000'
 
     print('OK')
