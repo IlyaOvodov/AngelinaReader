@@ -8,8 +8,8 @@
 # In[1]:
 
 inference_width = 1024
-model_root = 'NN_results/retina_chars_72c04f'
-model_weights = '/models/clr.017'
+model_root = 'NN_results/retina_chars_7ec096'
+model_weights = '/models/clr.012'
 
 device = 'cuda:0'
 #device = 'cpu'
@@ -18,6 +18,9 @@ nms_thresh = 0
 
 fn = r'D:\Programming\Braille\Data\My\data\ola\IMG_5200.JPG'
 
+import os
+import json
+import glob
 import sys
 sys.path.append('../..')
 import local_config
@@ -136,12 +139,45 @@ class BrailleInference:
                }
         return res
 
+    def run_and_save(self, img_path, results_dir):
+        print("recognizer.run")
+        t = time.clock()
+        raw_image, out_img, lines, out_text, data_dict = self.run(img_path)
+        print(time.clock() - t)
+        print("save")
+        t = time.clock()
+
+        os.makedirs(results_dir, exist_ok=True)
+        filename_stem = os.path.splitext(os.path.basename(img_path))[0]
+
+        labeled_image_filename = filename_stem + '.labeled' + '.jpg'
+        json_path = results_dir + "/" + filename_stem + '.labeled' + '.json'
+        raw_image.save(results_dir + "/" + labeled_image_filename)
+        data_dict['imagePath'] = labeled_image_filename
+        with open(json_path, 'w') as opened_json:
+            json.dump(data_dict, opened_json, sort_keys=False, indent=4)
+
+        marked_image_path = results_dir + "/" + filename_stem + '.marked' + '.jpg'
+        recognized_text_path = results_dir + "/" + filename_stem + '.marked' + '.txt'
+        out_img.save(marked_image_path)
+        with open(recognized_text_path, 'w') as f:
+            for s in out_text:
+                f.write(s)
+                f.write('\n')
+        print(time.clock() - t)
+        return marked_image_path, out_text
+
+    def process_dir_and_save(self, img_filename_mask, results_dir):
+        img_files = glob.glob(img_filename_mask)
+        for img_file in img_files:
+            print('processing '+img_file)
+            self.run_and_save(img_file, results_dir)
+
 
 if __name__ == '__main__':
+
+    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\telefon\*.jpg'
+    results_dir =       r'D:\Programming.Data\Braille\My\labeled2\telefon'
+
     recognizer = BrailleInference()
-
-    out_img, lines, out_text = recognizer.run(fn)
-
-    for ln in out_text:
-        print(ln)
-    out_img.show()
+    recognizer.process_dir_and_save(img_filename_mask, results_dir)

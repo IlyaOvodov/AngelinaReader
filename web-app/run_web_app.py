@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request
 
-import json
 import time
 import os
 import sys
@@ -33,41 +32,14 @@ def home():
 def save():
     t0 = time.clock()
     print("save")
-    t = time.clock()
     # Save the image in the path
+    filename = None
     if request.method == 'POST' and 'fileField' in request.files:
         filename = photos.save(request.files['fileField'])
     print(time.clock() - t)
-    print("recognizer.run")
-    t = time.clock()
     img_path = IMG_ROOT + "/" + filename
-    raw_image, out_img, lines, out_text, data_dict = recognizer.run(img_path)
-    print(time.clock() - t)
-    print("save")
-    t = time.clock()
-
-    os.makedirs(RESULTS_ROOT, exist_ok=True)
-    filename_stem = filename.rsplit('.', 1)[0]
-
-    labeled_image_filename = filename_stem + '.labeled' + '.jpg'
-    json_path = RESULTS_ROOT + "/" + filename_stem + '.labeled' + '.json'
-    raw_image.save(RESULTS_ROOT + "/" + labeled_image_filename)
-    data_dict['imagePath'] = labeled_image_filename
-    with open(json_path, 'w') as opened_json:
-        json.dump(data_dict, opened_json, sort_keys=False, indent=4)
-
-    marked_image_path = RESULTS_ROOT + "/" + filename_stem + '.marked' + '.jpg'
-    recognized_text_path = RESULTS_ROOT + "/" + filename_stem + '.marked' + '.txt'
-    out_img.save(marked_image_path)
-    with open(recognized_text_path, 'w') as f:
-        for s in out_text:
-            f.write(s)
-            f.write('\n')
-    print(time.clock() - t)
+    marked_image_path, out_text = recognizer.run_and_save(img_path, RESULTS_ROOT)
     print(("total", time.clock() - t0) )
-    #full_filename = os.path.join(app.config['UPLOAD_FOLDER'], 'shovon.jpg')
-
-
     return render_template('display.html', filename=marked_image_path, letter=out_text)
 
 if __name__ == "__main__":
