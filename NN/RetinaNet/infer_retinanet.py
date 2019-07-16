@@ -44,6 +44,11 @@ import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
 class BrailleInference:
+
+    DRAW_ORIGINAL = 0
+    DRAW_REFINED = 1
+    DRAW_BOTH = 2
+
     def __init__(self):
 
         params = AttrDict.load(model_fn + '.param.txt', verbose = True)
@@ -64,7 +69,7 @@ class BrailleInference:
         self.preprocessor = data.ImagePreprocessor(params, mode = 'inference')
         self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
 
-    def run(self, img_fn, draw_refined = True):
+    def run(self, img_fn, draw_refined = DRAW_REFINED):
         print("run.preprocess")
         t = time.clock()
         img = PIL.Image.open(img_fn)
@@ -96,17 +101,20 @@ class BrailleInference:
         aug_img = PIL.Image.fromarray(aug_img)
         raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
-        fnt = PIL.ImageFont.truetype("arial.ttf", 8)
         fntA = PIL.ImageFont.truetype("arial.ttf", 28)
         out_text = []
         for ln in lines:
             s = ''
             for ch in ln.chars:
                 s += ' ' * ch.spaces_before + ch.char
-                ch_box = ch.refined_box if draw_refined else ch.original_box
-                draw.rectangle(list(ch_box), outline='green')
+                if draw_refined != self.DRAW_REFINED:
+                    ch_box = ch.original_box
+                    draw.rectangle(list(ch_box), outline='blue' if draw_refined == self.DRAW_BOTH else 'green')
+                if draw_refined != self.DRAW_ORIGINAL:
+                    ch_box = ch.refined_box
+                    draw.rectangle(list(ch_box), outline='green')
                 chr = ch.char[:1]
-                draw.text((ch_box[0]+5,ch_box[3]), chr, font=fntA, fill="black")
+                draw.text((ch_box[0]+3,ch_box[3]), chr, font=fntA, fill="black")
                 #score = scores[i].item()
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
@@ -114,7 +122,7 @@ class BrailleInference:
         print("run.draw", time.clock() - t)
         return raw_image, aug_img, lines, out_text, self.to_dict(aug_img, lines, draw_refined)
 
-    def to_dict(self, img, lines, draw_refined = True):
+    def to_dict(self, img, lines, draw_refined = DRAW_REFINED):
         '''
         generates dict for LabelMe json format
         :param img:
@@ -133,7 +141,7 @@ class BrailleInference:
                         chr = lbl
                     else:
                         chr = "&"+lt.int_to_label123(ch.label.item())
-                ch_box = ch.refined_box if draw_refined else ch.original_box
+                ch_box = ch.refined_box if draw_refined != self.DRAW_ORIGINAL else ch.original_box
                 shape = {
                     "label": chr,
                     "points": [[ch_box[0], ch_box[1]],
@@ -149,7 +157,7 @@ class BrailleInference:
                }
         return res
 
-    def run_and_save(self, img_path, results_dir, draw_refined = True):
+    def run_and_save(self, img_path, results_dir, draw_refined = DRAW_REFINED):
         print("recognizer.run")
         t = time.clock()
         raw_image, out_img, lines, out_text, data_dict = self.run(img_path, draw_refined)
@@ -177,7 +185,7 @@ class BrailleInference:
         print("save results", time.clock() - t)
         return marked_image_path, out_text
 
-    def process_dir_and_save(self, img_filename_mask, results_dir, draw_refined = True):
+    def process_dir_and_save(self, img_filename_mask, results_dir, draw_refined = DRAW_REFINED):
         img_files = glob.glob(img_filename_mask)
         for img_file in img_files:
             print('processing '+img_file)

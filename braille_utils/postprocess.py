@@ -17,61 +17,58 @@ class LineChar:
 
 
 class Line:
-    SPACE_TO_H = 1.0 # 6.6/(2.7*2+1.5) = 0.96, 6.0/(2.5*2+1.3)=0.95, 6.5/(2.5*2+1.3) = 1.03
+    SPACE_TO_H = 0.95 # 6.6/(2.7*2+1.5) = 0.96, 6.0/(2.5*2+1.3)=0.95, 6.5/(2.5*2+1.3) = 1.03
     LINE_THR = 0.5
     AVG_PERIOD = 5
     def __init__(self, box, label):
         self.chars = []
-        self.slip = 0
-        self._append_char(box, label)
-
-    def _append_char(self, box, label):
         new_char = LineChar(box, label)
         self.chars.append(new_char)
         self.x = new_char.x
         self.y = new_char.y
         self.h = new_char.h
-        return new_char
-
-    def _calc_err(self, chars, i, j, k):
-        factor = (chars[k].x - chars[i].x)/(chars[j].x - chars[i].x)
-        y = chars[i].y + (chars[j].y - chars[i].y) * factor
-        d = min(abs(chars[k].x - chars[i].x), abs(chars[k].x - chars[j].x))
-        d2 = min(abs(chars[self.AVG_PERIOD-1].x - chars[i].x), abs(chars[-self.AVG_PERIOD].x - chars[j].x))
-        assert d != 0
-        return abs(y-chars[k].y)*d2/d
+        self.slip = 0
 
     def check_and_append(self, box, label):
         x = (box[0] + box[2])/2
         y = (box[1] + box[3])/2
         if abs(self.y + self.slip*(x-self.x) -y) < self.h*self.LINE_THR:
-            new_char = self._append_char(box, label)
+            new_char = LineChar(box, label)
             if len(self.chars) >= self.AVG_PERIOD:
                 calc_chars = self.chars[-self.AVG_PERIOD:]
-                best_pair = None
-                best_err = 1e99
-                for i in range(self.AVG_PERIOD-1):
-                    for j in range(i+1, self.AVG_PERIOD):
-                        err = min([self._calc_err(calc_chars, i, j, k) for k in range(self.AVG_PERIOD) if k!=i and k!= j])
-                        if err < best_err:
-                            best_err, best_pair = err, (i,j)
-                i, j = best_pair
-                chars_before = sum([ch.spaces_before for ch in calc_chars[i+1: j+1]]) + j - i
-                step = (calc_chars[j].x-calc_chars[i].x)/chars_before
-                ref_x = (calc_chars[j].x + calc_chars[i].x + chars_before*step)/2
-                dist_in_chars = round((new_char.x - ref_x) / step)
-                new_char.spaces_before = max(0, dist_in_chars - 1 - (self.AVG_PERIOD - 1 - j))
-                expected_x = ref_x + step*dist_in_chars
-                factor = (expected_x - calc_chars[i].x) / (calc_chars[j].x - calc_chars[i].x)
-                expected_y = calc_chars[i].y + (calc_chars[j].y - calc_chars[i].y) * factor
-                w, h = (calc_chars[i].w + calc_chars[j].w)/2, (calc_chars[i].h + calc_chars[j].h)/2
+                best_pair = [1e99, None, None, None, None, ] # err, i,j,k,a,b
+                for i in range(self.AVG_PERIOD-3):
+                    for j in range(i+3, self.AVG_PERIOD):
+                        a = (calc_chars[j].y - calc_chars[i].y) / (calc_chars[j].x - calc_chars[i].x)
+                        b = (calc_chars[i].y * calc_chars[j].x - calc_chars[i].x * calc_chars[j].y) / (calc_chars[j].x - calc_chars[i].x)
+                        ks = [k for k in range(self.AVG_PERIOD) if k!=i and k!= j]
+                        errors = [abs(calc_chars[k].x * a + b - calc_chars[k].y) for k in ks]
+                        min_err = min(errors)
+                        if min_err < best_pair[0]:
+                            idx_if_min = min(range(len(errors)), key=errors.__getitem__)
+                            best_pair = min_err, i, j, ks[idx_if_min], a, b
+                _, i, j, k, a, b = best_pair
+                steps_between = j - i + sum([ch.spaces_before for ch in calc_chars[i+1: j+1]])
+                step = (calc_chars[j].x-calc_chars[i].x)/steps_between
+                reference_x = (calc_chars[j].x + calc_chars[i].x + steps_between*step)/2
+                steps_to_reference = round((new_char.x - reference_x) / step)
+                expected_x = reference_x + step*steps_to_reference
+                expected_y = expected_x * a + b
+                w, h = (calc_chars[i].w + calc_chars[j].w + calc_chars[k].w)/3, (calc_chars[i].h + calc_chars[j].h + calc_chars[k].h)/3
                 new_char.refined_box = [expected_x-w/2, expected_y-h/2, expected_x+w/2, expected_y+h/2]
+                new_char.spaces_before = max(0, round( (expected_x - 0.5*(self.chars[-1].refined_box[0] + self.chars[-1].refined_box[2]))/step )-1)
                 self.x, self.y = expected_x, expected_y
                 self.h = h
-                self.slip = (calc_chars[j].y - calc_chars[i].y)/(calc_chars[j].x - calc_chars[i].x)
-            elif len(self.chars) >= 2:
+                self.slip = a
+            else:
+                assert len(self.chars) >= 1
                 step = new_char.h * self.SPACE_TO_H
-                new_char.spaces_before = max(0, round((new_char.x - self.chars[-2].x)/step)-1)
+                new_char.spaces_before = max(0, round((new_char.x - self.chars[-1].x)/step)-1)
+                self.x = new_char.x
+                self.y = new_char.y
+                self.h = new_char.h
+                self.slip = 0
+            self.chars.append(new_char)
             return True
         return False
 
