@@ -48,6 +48,11 @@ def human_label_to_int(label):
         label = "XX"
     if label.lower() == "сс":
         label = "CC"
+    if label == "<<":
+        label = "«"
+    if label == ">>":
+        label = "»"
+
 
     if label[0] == '&':
         label123 = label[1:]
