@@ -3,37 +3,77 @@ import braille_utils.label_tools as lt
 
 
 class LineChar:
-    def __init__(self, box, label, spaces_before):
-        self.box = box
+    def __init__(self, box, label):
+        box = [b.item() for b in box]
+        self.original_box = box # box found by NN
+        self.x = (box[0] + box[2])/2 # original x of last char
+        self.y = (box[1] + box[3])/2 # original y of last char
+        self.w = (box[2]-box[0]) # original w
+        self.h = (box[3]-box[1]) # original h
+        self.refined_box = box # refined box
         self.label = label
-        self.spaces_before = spaces_before
+        self.spaces_before = 0
         self.char = ''
 
 
 class Line:
-    SPACES_THR = 0.4
+    SPACE_TO_H = 1.0 # 6.6/(2.7*2+1.5) = 0.96, 6.0/(2.5*2+1.3)=0.95, 6.5/(2.5*2+1.3) = 1.03
     LINE_THR = 0.5
+    AVG_PERIOD = 5
     def __init__(self, box, label):
-        self.chars = [LineChar(box, label, 0)]
-        self.y = (box[1] + box[3])/2
-        self.h = box[3]-box[1]
-        #self.spaces = []
+        self.chars = []
+        self.slip = 0
+        self._append_char(box, label)
+
+    def _append_char(self, box, label):
+        new_char = LineChar(box, label)
+        self.chars.append(new_char)
+        self.x = new_char.x
+        self.y = new_char.y
+        self.h = new_char.h
+        return new_char
+
+    def _calc_err(self, chars, i, j, k):
+        factor = (chars[k].x - chars[i].x)/(chars[j].x - chars[i].x)
+        y = chars[i].y + (chars[j].y - chars[i].y) * factor
+        d = min(abs(chars[k].x - chars[i].x), abs(chars[k].x - chars[j].x))
+        d2 = min(abs(chars[self.AVG_PERIOD-1].x - chars[i].x), abs(chars[-self.AVG_PERIOD].x - chars[j].x))
+        assert d != 0
+        return abs(y-chars[k].y)*d2/d
+
     def check_and_append(self, box, label):
+        x = (box[0] + box[2])/2
         y = (box[1] + box[3])/2
-        if abs(self.y-y)/self.h < self.LINE_THR:
-            r = self.chars[-1].box[2]
-            #spaces = (box[0]-r)/self.h
-            #self.spaces.append(spaces)
-            spaces = int((box[0]-r)/self.h + self.SPACES_THR)
-            self.chars += [LineChar(box, label, spaces)]
-            h = box[3] - box[1]
-            n = min(len(self.chars),5)
-            self.y += (y - self.y)/n
-            self.h += (h - self.h)/n
+        if abs(self.y + self.slip*(x-self.x) -y) < self.h*self.LINE_THR:
+            new_char = self._append_char(box, label)
+            if len(self.chars) >= self.AVG_PERIOD:
+                calc_chars = self.chars[-self.AVG_PERIOD:]
+                best_pair = None
+                best_err = 1e99
+                for i in range(self.AVG_PERIOD-1):
+                    for j in range(i+1, self.AVG_PERIOD):
+                        err = min([self._calc_err(calc_chars, i, j, k) for k in range(self.AVG_PERIOD) if k!=i and k!= j])
+                        if err < best_err:
+                            best_err, best_pair = err, (i,j)
+                i, j = best_pair
+                chars_before = sum([ch.spaces_before for ch in calc_chars[i+1: j+1]]) + j - i
+                step = (calc_chars[j].x-calc_chars[i].x)/chars_before
+                ref_x = (calc_chars[j].x + calc_chars[i].x + chars_before*step)/2
+                dist_in_chars = round((new_char.x - ref_x) / step)
+                new_char.spaces_before = max(0, dist_in_chars - 1 - (self.AVG_PERIOD - 1 - j))
+                expected_x = ref_x + step*dist_in_chars
+                factor = (expected_x - calc_chars[i].x) / (calc_chars[j].x - calc_chars[i].x)
+                expected_y = calc_chars[i].y + (calc_chars[j].y - calc_chars[i].y) * factor
+                w, h = (calc_chars[i].w + calc_chars[j].w)/2, (calc_chars[i].h + calc_chars[j].h)/2
+                new_char.refined_box = [expected_x-w/2, expected_y-h/2, expected_x+w/2, expected_y+h/2]
+                self.x, self.y = expected_x, expected_y
+                self.h = h
+                self.slip = (calc_chars[j].y - calc_chars[i].y)/(calc_chars[j].x - calc_chars[i].x)
+            elif len(self.chars) >= 2:
+                step = new_char.h * self.SPACE_TO_H
+                new_char.spaces_before = max(0, round((new_char.x - self.chars[-2].x)/step)-1)
             return True
         return False
-
-
 
 
 def boxes_to_lines(boxes, labels, lang = 'RU'):

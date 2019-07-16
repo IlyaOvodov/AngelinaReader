@@ -31,14 +31,15 @@ def home():
 @app.route("/upload_results", methods=['GET', 'POST'])
 def save():
     t0 = time.clock()
-    print("save")
+    print("save input file")
+    t = time.clock()
     # Save the image in the path
     filename = None
     if request.method == 'POST' and 'fileField' in request.files:
         filename = photos.save(request.files['fileField'])
-    print(time.clock() - t)
+    print("save input file", time.clock() - t)
     img_path = IMG_ROOT + "/" + filename
-    marked_image_path, out_text = recognizer.run_and_save(img_path, RESULTS_ROOT)
+    marked_image_path, out_text = recognizer.run_and_save(img_path, RESULTS_ROOT, draw_refined = True)
     print(("total", time.clock() - t0) )
     return render_template('display.html', filename=marked_image_path, letter=out_text)
 
