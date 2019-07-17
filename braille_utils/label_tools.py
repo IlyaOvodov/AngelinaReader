@@ -38,6 +38,7 @@ def label123_to_int(label123):
     validate_int(r)
     return r
 
+
 def human_label_to_int(label):
     '''
     :param label: label from labelme
@@ -59,15 +60,16 @@ def human_label_to_int(label):
         if label123[-1] == '&':
             label123 = label123[:-1]
     else:
-        ch_list = letters.reverce_dict.get(label.lower(), None)
+        ch_list = reverce_dict.get(label.lower(), None)
         if not ch_list:
-            ch_list = letters.reverce_dict.get(label.upper(), None)
+            ch_list = reverce_dict.get(label.upper(), None)
         if not ch_list:
             raise ValueError("unrecognized label: " + label)
         if len(ch_list) > 1:
             raise ValueError("label: " + label + " has more then 1 meanings: " + str(ch_list))
         label123 = ch_list[0]
     return label123_to_int(label123)
+
 
 def int_to_letter(int_lbl, lang):
     letter_dicts = defaultdict(dict, {
@@ -78,7 +80,19 @@ def int_to_letter(int_lbl, lang):
     })
     d = copy.copy(letters.sym_map)
     d.update(letter_dicts[lang])
-    return d.get(int_to_label123(int_lbl),'')
+    return d.get(int_to_label123(int_lbl),None)
+
+
+
+reverce_dict = defaultdict(list) # char -> list of labels from different dicts
+for d in (letters.sym_map, letters.num_map, letters.alpha_map_RU, letters.alpha_map_EN):
+    for lbl123, char in d.items():
+        reverce_dict[char].append(lbl123)
+
+label_is_valid = [
+    True if int_to_letter(int_label, 'RU') is not None else False
+    for int_label in range(64)
+]
 
 
 if __name__ == '__main__':
@@ -97,8 +111,8 @@ if __name__ == '__main__':
     assert int_to_label123(label010_to_int('001011')) == '356'
 
     assert int_to_letter(label010_to_int('110110'),'EN') == 'g'
-    assert int_to_letter(label010_to_int('110110'),'xx') == ''
-    assert int_to_letter(label010_to_int('000000'),'EN') == ''
+    assert int_to_letter(label010_to_int('110110'),'xx') is None
+    assert int_to_letter(label010_to_int('000000'),'EN') is None
 
     assert int_to_label010(label123_to_int('124')) == '110100'
     assert int_to_label010(label123_to_int('26')) == '010001'
@@ -113,5 +127,11 @@ if __name__ == '__main__':
     assert int_to_label010(human_label_to_int('а')) == '100000'
     assert int_to_label010(human_label_to_int('Б')) == '110000'
     assert int_to_label010(human_label_to_int('2')) == '110000'
+
+    print([
+        (label_is_valid[int_lbl], int_to_label123(int_lbl), int_to_letter(int_lbl, 'RU'))
+        for int_lbl in range(64)
+    ])
+    print(sum(label_is_valid))
 
     print('OK')

@@ -102,8 +102,3 @@ num_map = {
     '24': '9',
     '245': '0'
 }
-
-reverce_dict = defaultdict(list) # char -> list of labels from different dicts
-for d in (sym_map, num_map, alpha_map_RU, alpha_map_EN):
-    for lbl123, char in d.items():
-        reverce_dict[char].append(lbl123)

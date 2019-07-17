@@ -30,6 +30,7 @@ model_fn = join(local_config.data_path, model_root)
 
 from ovotools.params import AttrDict
 import numpy as np
+from collections import OrderedDict
 import torch
 import time
 import copy
@@ -69,6 +70,17 @@ class BrailleInference:
         self.preprocessor = data.ImagePreprocessor(params, mode = 'inference')
         self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
 
+    def calc_letter_statistics(self, cls_preds, cls_thresh):
+        scores = cls_preds.sigmoid()
+        scores[scores<cls_thresh] = 0
+        stat = scores.sum(1)
+        valid_mask = torch.Tensor(lt.label_is_valid).to(stat.device)
+        sum_valid = (stat*valid_mask).sum(1)
+        sum_invalid = (stat*(1-valid_mask)).sum(1)
+        err_score = sum_invalid/(sum_valid+1)
+        best_idx = torch.argmin(err_score)
+        return best_idx, err_score
+
     def run(self, img_fn, draw_refined = DRAW_REFINED):
         print("run.preprocess")
         t = time.clock()
@@ -79,15 +91,25 @@ class BrailleInference:
         input_data = self.preprocessor.to_normalized_tensor(aug_img)
         input_data = input_data.unsqueeze(0).to(device)
         print("run.preprocess", time.clock() - t)
+        print("run.make_batch")
+        t = time.clock()
+        input_data2 = torch.flip(input_data, [2,3])
+        input_data = torch.cat((input_data, input_data2), dim = 0)
+        input_data = torch.cat((input_data, -input_data), dim = 0)
+        print("run.make_batch", time.clock() - t)
         print("run.model")
         t = time.clock()
         with torch.no_grad():
             (loc_preds, cls_preds) = self.model(input_data)
         print("run.model", time.clock() - t)
+        print("run.cals_stats")
+        t = time.clock()
+        best_idx, err_score = self.calc_letter_statistics(cls_preds, cls_thresh)
+        print("run.cals_stats", time.clock() - t)
         print("run.decode")
         t = time.clock()
         h,w = input_data.shape[2:]
-        boxes, labels, scores = self.encoder.decode(loc_preds[0].cpu().data, cls_preds[0].cpu().data, (w,h),
+        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx].cpu().data, cls_preds[best_idx].cpu().data, (w,h),
                                       cls_thresh = cls_thresh, nms_thresh = nms_thresh)
         print("run.decode", time.clock() - t)
         print("run.postprocess")
@@ -99,6 +121,8 @@ class BrailleInference:
         t = time.clock()
 
         aug_img = PIL.Image.fromarray(aug_img)
+        if best_idx in (1,3):
+            aug_img = aug_img.transpose(PIL.Image.ROTATE_180)
         raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
         fntA = PIL.ImageFont.truetype("arial.ttf", 20)
@@ -120,7 +144,15 @@ class BrailleInference:
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
         print("run.draw", time.clock() - t)
-        return raw_image, aug_img, lines, out_text, self.to_dict(aug_img, lines, draw_refined)
+        return {
+            'image': raw_image,
+            'labeled_image': aug_img,
+            'lines': lines,
+            'text': out_text,
+            'dict': self.to_dict(aug_img, lines, draw_refined),
+            'best_idx': best_idx,
+            'err_scores': err_score.cpu().data
+        }
 
     def to_dict(self, img, lines, draw_refined = DRAW_REFINED):
         '''
@@ -160,7 +192,7 @@ class BrailleInference:
     def run_and_save(self, img_path, results_dir, draw_refined = DRAW_REFINED):
         print("recognizer.run")
         t = time.clock()
-        raw_image, out_img, lines, out_text, data_dict = self.run(img_path, draw_refined)
+        result_dict = self.run(img_path, draw_refined)
         print("recognizer.run", time.clock() - t)
         print("save results")
         t = time.clock()
@@ -170,20 +202,29 @@ class BrailleInference:
 
         labeled_image_filename = filename_stem + '.labeled' + '.jpg'
         json_path = results_dir + "/" + filename_stem + '.labeled' + '.json'
-        raw_image.save(results_dir + "/" + labeled_image_filename)
-        data_dict['imagePath'] = labeled_image_filename
+        result_dict['image'].save(results_dir + "/" + labeled_image_filename)
+        result_dict['dict']['imagePath'] = labeled_image_filename
         with open(json_path, 'w') as opened_json:
-            json.dump(data_dict, opened_json, sort_keys=False, indent=4)
+            json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=4)
 
         marked_image_path = results_dir + "/" + filename_stem + '.marked' + '.jpg'
         recognized_text_path = results_dir + "/" + filename_stem + '.marked' + '.txt'
-        out_img.save(marked_image_path)
+        result_dict['labeled_image'].save(marked_image_path)
         with open(recognized_text_path, 'w') as f:
-            for s in out_text:
+            for s in result_dict['text']:
                 f.write(s)
                 f.write('\n')
+
+        protocol_text_path = results_dir + "/" + filename_stem + '.protocol' + '.txt'
+        with open(protocol_text_path, 'w') as f:
+            json.dump(OrderedDict(
+                ver = '1',
+                best_idx = result_dict['best_idx'].item(),
+                err_scores = result_dict['err_scores'].tolist()
+            ), f, sort_keys=False, indent=4)
+
         print("save results", time.clock() - t)
-        return marked_image_path, out_text
+        return marked_image_path, result_dict['text']
 
     def process_dir_and_save(self, img_filename_mask, results_dir, draw_refined = DRAW_REFINED):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
@@ -204,9 +245,9 @@ class BrailleInference:
 if __name__ == '__main__':
 
     img_filename_mask = r'D:\Programming.Data\Braille\My\labeled1\val.txt' #
-    results_dir =       r'D:\Programming.Data\Braille\tmp\lines_v5'
+    results_dir =       r'D:\Programming.Data\Braille\tmp\flip_inv'
 
     recognizer = BrailleInference()
     #recognizer.process_dir_and_save(img_filename_mask, results_dir)
 
-    recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\lines_v5\ang_redmi')
+    recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi')
