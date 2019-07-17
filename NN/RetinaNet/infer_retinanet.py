@@ -71,9 +71,13 @@ class BrailleInference:
         self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
 
     def calc_letter_statistics(self, cls_preds, cls_thresh):
-        scores = cls_preds.sigmoid()
-        scores[scores<cls_thresh] = 0
-        stat = scores.sum(1)
+        stats = []
+        for cls_pred in cls_preds:
+            scores = cls_pred.sigmoid()
+            scores[scores<cls_thresh] = 0
+            stat = scores.sum(1)
+            stats.append(stat)
+        stat = torch.cat(stats, dim=0)
         valid_mask = torch.Tensor(lt.label_is_valid).to(stat.device)
         sum_valid = (stat*valid_mask).sum(1)
         sum_invalid = (stat*(1-valid_mask)).sum(1)
@@ -89,18 +93,22 @@ class BrailleInference:
 
         aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
         input_data = self.preprocessor.to_normalized_tensor(aug_img)
-        input_data = input_data.unsqueeze(0).to(device)
+        input_data = [input_data.unsqueeze(0).to(device)]
         print("run.preprocess", time.clock() - t)
         print("run.make_batch")
         t = time.clock()
-        input_data2 = torch.flip(input_data, [2,3])
-        input_data = torch.cat((input_data, input_data2), dim = 0)
-        input_data = torch.cat((input_data, -input_data), dim = 0)
+        input_data.append(torch.flip(input_data[0], [2,3])) # rotate 180
+        input_data.extend([-input_data[0], -input_data[1]])
         print("run.make_batch", time.clock() - t)
         print("run.model")
         t = time.clock()
         with torch.no_grad():
-            (loc_preds, cls_preds) = self.model(input_data)
+            loc_preds = []
+            cls_preds = []
+            for input_data_i in input_data:
+                (loc_pred, cls_pred) = self.model(input_data_i)
+                loc_preds.append(loc_pred)
+                cls_preds.append(cls_pred)
         print("run.model", time.clock() - t)
         print("run.cals_stats")
         t = time.clock()
@@ -108,8 +116,8 @@ class BrailleInference:
         print("run.cals_stats", time.clock() - t)
         print("run.decode")
         t = time.clock()
-        h,w = input_data.shape[2:]
-        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx].cpu().data, cls_preds[best_idx].cpu().data, (w,h),
+        h,w = input_data[0].shape[2:]
+        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
                                       cls_thresh = cls_thresh, nms_thresh = nms_thresh)
         print("run.decode", time.clock() - t)
         print("run.postprocess")
@@ -244,10 +252,10 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\labeled1\val.txt' #
-    results_dir =       r'D:\Programming.Data\Braille\tmp\flip_inv'
+    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\val.txt' #
+    results_dir =       r'D:\Programming.Data\Braille\My\labeled_new'
 
     recognizer = BrailleInference()
-    #recognizer.process_dir_and_save(img_filename_mask, results_dir)
+    recognizer.process_dir_and_save(img_filename_mask, results_dir)
 
-    recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi')
+    #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi')
