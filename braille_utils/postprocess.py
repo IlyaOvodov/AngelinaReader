@@ -27,6 +27,7 @@ class Line:
         self.chars.append(new_char)
         self.x = new_char.x
         self.y = new_char.y
+        self.start_y = new_char.y
         self.h = new_char.h
         self.slip = 0
 
@@ -84,7 +85,7 @@ def boxes_to_lines(boxes, labels, lang = 'RU'):
         else:
             lines.append(Line(box=b[0], label=b[1]))
 
-    lines = sorted(lines, key = lambda l: l.y)
+    lines = sorted(lines, key = lambda l: l.start_y)
     for l in lines:
         digit_mode = False
         caps_mode = False

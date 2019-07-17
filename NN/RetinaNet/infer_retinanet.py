@@ -186,16 +186,25 @@ class BrailleInference:
         return marked_image_path, out_text
 
     def process_dir_and_save(self, img_filename_mask, results_dir, draw_refined = DRAW_REFINED):
-        img_files = glob.glob(img_filename_mask)
-        for img_file in img_files:
+        if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
+            list_file = os.path.join(local_config.data_path, img_filename_mask)
+            data_dir = os.path.dirname(list_file)
+            with open(list_file, 'r') as f:
+                files = f.readlines()
+            img_files = [os.path.join(data_dir, fn[:-1] if fn[-1] == '\n' else fn) for fn in files]
+            img_folders = [os.path.split(fn)[0] for fn in files]
+        else:
+            img_files = glob.glob(img_filename_mask)
+            img_folders = '' * len(img_files)
+        for img_file,img_folder  in zip(img_files, img_folders):
             print('processing '+img_file)
-            self.run_and_save(img_file, results_dir, draw_refined)
+            self.run_and_save(img_file, os.path.join(results_dir, img_folder), draw_refined)
 
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\telefon\*.jpg'
-    results_dir =       r'D:\Programming.Data\Braille\My\labeled2\telefon'
+    img_filename_mask = r'D:\Programming.Data\Braille\My\labeled1\val.txt' #
+    results_dir =       r'D:\Programming.Data\Braille\tmp\lines_v4'
 
     recognizer = BrailleInference()
     recognizer.process_dir_and_save(img_filename_mask, results_dir)
