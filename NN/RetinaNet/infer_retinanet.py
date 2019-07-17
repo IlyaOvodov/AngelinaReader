@@ -101,7 +101,7 @@ class BrailleInference:
         aug_img = PIL.Image.fromarray(aug_img)
         raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
-        fntA = PIL.ImageFont.truetype("arial.ttf", 28)
+        fntA = PIL.ImageFont.truetype("arial.ttf", 20)
         out_text = []
         for ln in lines:
             s = ''
@@ -114,7 +114,7 @@ class BrailleInference:
                     ch_box = ch.refined_box
                     draw.rectangle(list(ch_box), outline='green')
                 chr = ch.char[:1]
-                draw.text((ch_box[0]+3,ch_box[3]), chr, font=fntA, fill="black")
+                draw.text((ch_box[0]+5,ch_box[3]-7), chr, font=fntA, fill="black")
                 #score = scores[i].item()
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
