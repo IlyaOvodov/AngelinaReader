@@ -195,7 +195,7 @@ class BrailleInference:
             img_folders = [os.path.split(fn)[0] for fn in files]
         else:
             img_files = glob.glob(img_filename_mask)
-            img_folders = '' * len(img_files)
+            img_folders = [''] * len(img_files)
         for img_file,img_folder  in zip(img_files, img_folders):
             print('processing '+img_file)
             self.run_and_save(img_file, os.path.join(results_dir, img_folder), draw_refined)
@@ -204,7 +204,9 @@ class BrailleInference:
 if __name__ == '__main__':
 
     img_filename_mask = r'D:\Programming.Data\Braille\My\labeled1\val.txt' #
-    results_dir =       r'D:\Programming.Data\Braille\tmp\lines_v4'
+    results_dir =       r'D:\Programming.Data\Braille\tmp\lines_v5'
 
     recognizer = BrailleInference()
-    recognizer.process_dir_and_save(img_filename_mask, results_dir)
+    #recognizer.process_dir_and_save(img_filename_mask, results_dir)
+
+    recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\lines_v5\ang_redmi')
