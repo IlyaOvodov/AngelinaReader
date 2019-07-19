@@ -249,10 +249,17 @@ def boxes_to_lines(boxes, labels, lang):
     lines = []
     boxes = sorted(boxes, key=lambda b: b[0][0])
     for b in boxes:
-        for l in lines:
-            if l.check_and_append(box=b[0], label=b[1]):
-                break
-        else:
+        found_line = None
+        for ln in lines:
+            if ln.check_and_append(box=b[0], label=b[1]):
+                # to handle seldom cases when one char can be related to several lines mostly because of errorneous outlined symbols
+                if (found_line and (found_line.chars[-1].x - found_line.chars[-2].x) < (ln.chars[-1].x - ln.chars[-2].x)):
+                    ln.chars.pop()
+                else:
+                    if found_line:
+                        found_line.chars.pop()
+                    found_line = ln
+        if found_line is None:
             lines.append(Line(box=b[0], label=b[1]))
 
     lines = _sort_lines(lines)

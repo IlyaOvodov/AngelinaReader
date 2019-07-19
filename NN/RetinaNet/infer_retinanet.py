@@ -242,10 +242,10 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
-    #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\list.txt' #
-    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
+    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\list.txt' #
+    #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
     results_dir =       r'D:\Programming.Data\Braille\My\labeled_new'
-    results_dir =       r'D:\Programming.Data\Braille\My\tmp'
+    #results_dir =       r'D:\Programming.Data\Braille\My\tmp'
 
     recognizer = BrailleInference()
     recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_REFINED)
