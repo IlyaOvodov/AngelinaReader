@@ -136,6 +136,8 @@ class BrailleInference:
         fntA = PIL.ImageFont.truetype("arial.ttf", 20)
         out_text = []
         for ln in lines:
+            if ln.has_space_before:
+                out_text.append('')
             s = ''
             for ch in ln.chars:
                 s += ' ' * ch.spaces_before + ch.char

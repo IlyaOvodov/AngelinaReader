@@ -34,12 +34,13 @@ class Line:
         self.x = new_char.x
         self.y = new_char.y
         self.h = new_char.h
-        self.slip = None
+        self.slip = 0
+        self.has_space_before = False
 
     def check_and_append(self, box, label):
         x = (box[0] + box[2])/2
         y = (box[1] + box[3])/2
-        if abs(self.y + (self.slip if self.slip is not None else 0) *(x-self.x) -y) < self.h*self.LINE_THR:
+        if abs(self.y + self.slip * (x-self.x) -y) < self.h*self.LINE_THR:
             new_char = LineChar(box, label)
             self.chars.append(new_char)
             calc_chars = self.chars[-self.AVG_PERIOD:]
@@ -92,14 +93,23 @@ class Line:
                 curr_char.spaces_before = max(0, round(0.5 * ((curr_char.refined_box[0] + curr_char.refined_box[2]) - (prev_char.refined_box[0] + prev_char.refined_box[2])) / step) - 1)
 
 
+def get_compareble_y(line1, line2):
+    line1, line2, sign = (line1, line2, 1) if line1.length > line2.length else (line2, line1, -1)
+    if line2.chars[0].x > line1.middle_x:
+        y1 = line1.chars[-1].y + line1.mean_slip * (line2.chars[0].x - line1.chars[-1].x)
+    else:
+        y1 = line1.chars[0].y + line1.mean_slip * (line2.chars[0].x - line1.chars[0].x)
+    if sign > 0:
+        return y1, line2.chars[0].y
+    else:
+        return line2.chars[0].y, y1
+
+
 def _sort_lines(lines):
 
     def _cmp_lines(line1, line2):
-        line1, line2, sign = (line1, line2, 1) if line1.length > line2.length else (line2, line1, -1)
-        if line2.chars[0].x > line1.middle_x:
-            return sign if line1.chars[-1].y + line1.mean_slip * (line2.chars[0].x - line1.chars[-1].x) > line2.chars[0].y else -sign
-        else:
-            return sign if line1.chars[0].y  + line1.mean_slip * (line2.chars[0].x - line1.chars[0].x ) > line2.chars[0].y else -sign
+        y1, y2 = get_compareble_y(line1, line2)
+        return 1 if y1 > y2 else -1
 
     for ln in lines:
         ln.length = ln.chars[-1].x - ln.chars[0].x
@@ -245,6 +255,8 @@ def boxes_to_lines(boxes, labels, lang):
     :param boxes: list of (left, tor, right, bottom)
     :return: text: list of strings
     '''
+    VERTICAL_SPACING_THR = 2.3
+
     boxes = list(zip(boxes, labels))
     lines = []
     boxes = sorted(boxes, key=lambda b: b[0][0])
@@ -265,9 +277,17 @@ def boxes_to_lines(boxes, labels, lang):
     lines = _sort_lines(lines)
     interpret_line_f = interpret_line_funcs[lang]
     interpret_line_mode = None
-    for l in lines:
-        l.refine()
-        interpret_line_mode = interpret_line_f(l, lang, mode = interpret_line_mode)
+    prev_line = None
+    for ln in lines:
+        ln.refine()
+
+        if prev_line is not None:
+            prev_y, y = get_compareble_y(prev_line, ln)
+            if (y - prev_y) > VERTICAL_SPACING_THR * ln.h:
+                ln.has_space_before = True
+        prev_line = ln
+
+        interpret_line_mode = interpret_line_f(ln, lang, mode = interpret_line_mode)
     return lines
 
 
