@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding: utf-8
 from collections import defaultdict
 import copy
 import braille_utils.letters as letters
@@ -39,35 +41,37 @@ def label123_to_int(label123):
     return r
 
 
+# acceptable chars for labeling -> output chars in letters.py
+labeling_synonyms = {
+    "xx": "XX",
+    "хх": "XX", # russian х
+    "cc": "CC",
+    "сс": "CC", # russian с
+    "<<": "«",
+    ">>": "»",
+    "((": "()",
+    "))": "()",
+}
+
+
 def human_label_to_int(label):
     '''
     :param label: label from labelme
     :return: int label
     '''
-    # русский -> английский
-    if label.lower() == "хх":
-        label = "XX"
-    if label.lower() == "сс":
-        label = "CC"
-    if label == "<<":
-        label = "«"
-    if label == ">>":
-        label = "»"
-
-
+    label = label.lower()
     if label[0] == '&':
         label123 = label[1:]
         if label123[-1] == '&':
             label123 = label123[:-1]
     else:
-        ch_list = reverce_dict.get(label.lower(), None)
-        if not ch_list:
-            ch_list = reverce_dict.get(label.upper(), None)
+        label = labeling_synonyms.get(label, label)
+        ch_list = reverce_dict.get(label, None)
         if not ch_list:
             raise ValueError("unrecognized label: " + label)
         if len(ch_list) > 1:
             raise ValueError("label: " + label + " has more then 1 meanings: " + str(ch_list))
-        label123 = ch_list[0]
+        label123 = list(ch_list)[0]
     return label123_to_int(label123)
 
 
@@ -83,14 +87,13 @@ def int_to_letter(int_lbl, lang):
     return d.get(int_to_label123(int_lbl),None)
 
 
-
-reverce_dict = defaultdict(list) # char -> list of labels from different dicts
-for d in (letters.sym_map, letters.num_map, letters.alpha_map_RU, letters.alpha_map_EN):
+reverce_dict = defaultdict(set) # char -> set of labels from different dicts
+for d in (letters.sym_map, letters.num_map, letters.num_map_denominator, letters.alpha_map_RU, letters.alpha_map_EN):
     for lbl123, char in d.items():
-        reverce_dict[char].append(lbl123)
+        reverce_dict[char].add(lbl123)
 
 label_is_valid = [
-    True if int_to_letter(int_label, 'RU') is not None else False
+    True if (int_to_letter(int_label, 'RU') is not None or int_to_letter(int_label, 'NUM') is not None) else False
     for int_label in range(64)
 ]
 
