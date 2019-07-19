@@ -39,7 +39,7 @@ def save():
         filename = photos.save(request.files['fileField'])
     print("save input file", time.clock() - t)
     img_path = IMG_ROOT + "/" + filename
-    marked_image_path, out_text = recognizer.run_and_save(img_path, RESULTS_ROOT, draw_refined = recognizer.DRAW_REFINED)
+    marked_image_path, out_text = recognizer.run_and_save(img_path, RESULTS_ROOT, lang = 'RU', draw_refined = recognizer.DRAW_REFINED) #TODO  accept lang
     print(("total", time.clock() - t0) )
     return render_template('display.html', filename=marked_image_path, letter=out_text)
 

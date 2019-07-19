@@ -13,7 +13,7 @@ sym_map = {
     '26' : '?',
     '23' : ';',
     '235': '!',
-    '2356':'()',
+    '2356':'()', # postprocess to (, ). Labeled as ((, )), ()
     '126':'(',
     '345':')',
     '36' : '-',
@@ -37,7 +37,7 @@ alpha_map_RU = {
     '13' : 'к',
     '123' : 'л',
     '134' : 'м',
-    '1345' : 'н',
+    '1345' : 'н', # preprocess to № if followed by number
     '135' : 'о',
     '1234' : 'п',
     '1235' : 'р',
@@ -62,6 +62,7 @@ alpha_map_RU = {
     '356': '»',  # >>
     '4': "'",
     '456': "|",
+    '346': '§',  # mark as &&
 }
 
 alpha_map_EN = {
@@ -111,7 +112,7 @@ num_map = {
     '245': '0',
 }
 
-num_map_denominator = {
+num_denominator_map = {
     # digins in denominator:
     '2': '/1',
     '23': '/2',
@@ -122,5 +123,39 @@ num_map_denominator = {
     '2356': '/7',
     '236': '/8',
     '35': '/9',
-    '356': '/0',
+    '356': '/0', # postprocess num 0 0 to %
 }
+
+math_RU = {
+    '2': ',', # decimal separator
+    '3': '..',  # postprocess to ".". Thousand separator.
+    '235': '+',
+    '36': '-',
+    '236': '*',
+    #'??': '*', # also mul., by dot.
+    '256': '::',  # postprocess to ":".
+    '246': '<',
+    '135': '>',
+    '2356': '=',
+    '126':'(',
+    '345':')',
+    '12356': '[',
+    '23456': ']',
+    '246': '{',
+    '135': '}',
+    '135': '}',
+    '456': "|",
+    '6': "en",
+    '46': "EN",
+}
+
+
+letter_dicts = {
+    'SYM': sym_map,
+    'EN': alpha_map_EN,
+    'RU': alpha_map_RU,
+    'NUM': num_map,
+    'NUM_DENOMINATOR': num_denominator_map,
+    'MATH_RU': math_RU,
+}
+

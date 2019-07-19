@@ -1,4 +1,5 @@
 from functools import cmp_to_key
+from collections import defaultdict
 
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
@@ -14,9 +15,10 @@ class LineChar:
         self.h = (box[3]-box[1]) # original h
         self.approximation = None # approximation (err,a,b,w,h) on interval ending on this
         self.refined_box = box # refined box
-        self.label = label
+        self.label = label.item()
         self.spaces_before = 0
-        self.char = ''
+        self.char = '' # char to display in printed text
+        self.labeling_char = '' # char to display in rects labeling
 
 
 class Line:
@@ -109,7 +111,136 @@ def _sort_lines(lines):
     return sorted(lines, key = cmp_to_key(_cmp_lines))
 
 
-def boxes_to_lines(boxes, labels, lang = 'RU'):
+def interpret_line_RU(line, lang, mode = None):
+    '''
+    precess line of chars and fills char and labeling_char attributes of chars according to language rules
+    :param line: list of LineChar. LineChar must have spaces_before, char and labeling_char attributes
+    :param lang: 'RU' etc.
+    :return: None
+    '''
+    if mode is None:
+        mode = defaultdict(bool)
+    digit_mode = mode['digit_mode']
+    frac_mode = mode['frac_mode']
+    math_mode = mode['math_mode']
+    math_lang = mode['math_lang']
+    if not math_lang:
+        math_lang = ''
+    caps_mode = mode['caps_mode']
+    brackets_on = mode['brackets_on']
+    if not brackets_on:
+        brackets_on = [None] # at least 1 element to always check brackets_on[-1]
+
+    prev_ch = None
+    for i, ch in enumerate(line.chars):
+        ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM', lang])
+        if ch.char == letters.markout_sign:
+            ch.char = ''
+            if i < len(line.chars)-1:
+                line.chars[i+1].spaces_before += ch.spaces_before
+                ch.spaces_before = 0
+        elif ch.char == letters.num_sign:
+            ch.char = ''
+            if digit_mode:
+                ch.spaces_before += 1 # need to separate from previous number or separate fraction part from integer part
+            digit_mode = True
+            math_mode = True
+            if prev_ch is not None and prev_ch.labeling_char == 'н':
+                prev_ch.char = '№'
+        else:
+            prev_ch = ch
+            if ch.spaces_before:
+                digit_mode = False
+                frac_mode = False
+            char = None
+            if digit_mode:
+                if not frac_mode:
+                    char = lt.int_to_letter(ch.label, ['NUM'])
+                    if char is None:
+                        char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
+                        if char is not None:
+                            if char == '/0' and prev_ch.labeling_char == '0':
+                                prev_ch.char = ''
+                                ch.char = '%'
+                                char = None
+                            else:
+                                frac_mode = True
+                    if char is not None:
+                        ch.labeling_char = ch.char = char
+                else:
+                    char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
+                    if char is not None:
+                        ch.labeling_char = char
+                        ch.char = char[1:]
+            if math_mode and char is None:
+                frac_mode = False
+                if math_lang:
+                    char = lt.int_to_letter(ch.label, [math_lang.upper()])
+                    if char is not None:
+                        ch.labeling_char = char
+                        if math_lang.isupper():
+                            char = char.upper()
+                        ch.char = char
+                    else:
+                        math_lang = ''
+                if not math_lang:
+                    char = lt.int_to_letter(ch.label, ['MATH_RU'])
+                    if char is not None:
+                        ch.labeling_char = ch.char = char
+                        if ch.char in {'en','EN'}:
+                            math_lang = ch.char
+                            ch.char = ''
+                        elif ch.char == '..':
+                            ch.char = '.'
+                        elif ch.char == '::':
+                            ch.char = ':'
+                        ch.spaces_before = max(0, ch.spaces_before-1)
+                    else:
+                        math_mode = False
+                        math_lang = ''
+                        digit_mode = False
+                        frac_mode = False
+            if not math_mode:
+                if ch.char == '()':
+                    if ch.spaces_before:
+                        ch.char = '('
+                        brackets_on.append('((')
+                    elif brackets_on[-1] == '((':
+                            ch.char = ')'
+                            brackets_on.pop()
+                elif ch.char == 'ъ' and ch.spaces_before:
+                    ch.char = '['
+                    brackets_on.append('[')
+                elif ch.char == 'ь' and i < len(line.chars)-1 and line.chars[i+1].spaces_before and brackets_on[-1] == '[':
+                    ch.char = ']'
+                    brackets_on.pop()
+            if ch.char is None:
+                ch.labeling_char = '~' + lt.int_to_label123(ch.label)
+                ch.char = ch.labeling_char + '~'
+            if caps_mode:
+                ch.char = ch.char.upper()
+                caps_mode = False
+            if ch.char == letters.caps_sign:
+                caps_mode = True
+                ch.char = ''
+
+    return {
+        'digit_mode': digit_mode,
+        'frac_mode': frac_mode,
+        'math_mode': math_mode,
+        'math_lang': math_lang,
+        'caps_mode': caps_mode,
+        'brackets_on': brackets_on,
+    }
+
+
+interpret_line_funcs = {
+    'RU': interpret_line_RU,
+    'EN': interpret_line_RU, # TODO in can work with some errors for EN
+}
+
+
+def boxes_to_lines(boxes, labels, lang):
     '''
     :param boxes: list of (left, tor, right, bottom)
     :return: text: list of strings
@@ -125,32 +256,11 @@ def boxes_to_lines(boxes, labels, lang = 'RU'):
             lines.append(Line(box=b[0], label=b[1]))
 
     lines = _sort_lines(lines)
+    interpret_line_f = interpret_line_funcs[lang]
+    interpret_line_mode = None
     for l in lines:
         l.refine()
-        digit_mode = False
-        caps_mode = False
-        for ch in l.chars:
-            if ch.spaces_before:
-                digit_mode = False
-                caps_mode = False
-            lbl = lt.int_to_letter(ch.label.item(), 'NUM' if digit_mode else lang)
-            if lbl == letters.markout_sign:
-                ch.char = ''
-            elif lbl == letters.num_sign:
-                digit_mode = True
-                ch.char = ''
-            elif lbl == letters.caps_sign:
-                caps_mode = True
-                ch.char = ''
-            else:
-                if not lbl:
-                    digit_mode = False
-                    lbl = lt.int_to_label123(ch.label.item())
-                    lbl = '&'+lbl+'&'
-                if caps_mode:
-                    lbl = lbl.upper()
-                    caps_mode = False
-                ch.char = lbl
+        interpret_line_mode = interpret_line_f(l, lang, mode = interpret_line_mode)
     return lines
 
 

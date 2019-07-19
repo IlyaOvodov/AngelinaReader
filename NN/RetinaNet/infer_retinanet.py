@@ -85,7 +85,7 @@ class BrailleInference:
         best_idx = torch.argmin(err_score)
         return best_idx, err_score
 
-    def run(self, img_fn, draw_refined = DRAW_REFINED):
+    def run(self, img_fn, lang, draw_refined = DRAW_REFINED):
         print("run.preprocess")
         t = time.clock()
         img = PIL.Image.open(img_fn)
@@ -122,7 +122,7 @@ class BrailleInference:
         print("run.decode", time.clock() - t)
         print("run.postprocess")
         t = time.clock()
-        lines = postprocess.boxes_to_lines(boxes, labels)
+        lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
 
         print("run.postprocess", time.clock() - t)
         print("run.draw")
@@ -145,8 +145,7 @@ class BrailleInference:
                 if draw_refined != self.DRAW_ORIGINAL:
                     ch_box = ch.refined_box
                     draw.rectangle(list(ch_box), outline='green')
-                chr = ch.char[:1]
-                draw.text((ch_box[0]+5,ch_box[3]-7), chr, font=fntA, fill="black")
+                draw.text((ch_box[0]+5,ch_box[3]-7), ch.char, font=fntA, fill="black")
                 #score = scores[i].item()
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
@@ -172,18 +171,9 @@ class BrailleInference:
         shapes = []
         for ln in lines:
             for ch in ln.chars:
-                chr = ch.char
-                if not chr:
-                    lbl = lt.int_to_letter(ch.label.item(), 'SYM')
-                    if lbl in {letters.markout_sign,
-                               letters.num_sign,
-                               letters.caps_sign}:
-                        chr = lbl
-                    else:
-                        chr = "&"+lt.int_to_label123(ch.label.item())
                 ch_box = ch.refined_box if draw_refined != self.DRAW_ORIGINAL else ch.original_box
                 shape = {
-                    "label": chr,
+                    "label": ch.labeling_char,
                     "points": [[ch_box[0], ch_box[1]],
                                [ch_box[2], ch_box[3]]],
                     "shape_type": "rectangle",
@@ -197,10 +187,10 @@ class BrailleInference:
                }
         return res
 
-    def run_and_save(self, img_path, results_dir, draw_refined = DRAW_REFINED):
+    def run_and_save(self, img_path, results_dir, lang, draw_refined = DRAW_REFINED):
         print("recognizer.run")
         t = time.clock()
-        result_dict = self.run(img_path, draw_refined)
+        result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined)
         print("recognizer.run", time.clock() - t)
         print("save results")
         t = time.clock()
@@ -234,7 +224,7 @@ class BrailleInference:
         print("save results", time.clock() - t)
         return marked_image_path, result_dict['text']
 
-    def process_dir_and_save(self, img_filename_mask, results_dir, draw_refined = DRAW_REFINED):
+    def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_REFINED):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
             data_dir = os.path.dirname(list_file)
@@ -247,15 +237,17 @@ class BrailleInference:
             img_folders = [''] * len(img_files)
         for img_file,img_folder  in zip(img_files, img_folders):
             print('processing '+img_file)
-            self.run_and_save(img_file, os.path.join(results_dir, img_folder), draw_refined)
+            self.run_and_save(img_file, os.path.join(results_dir, img_folder), lang = lang, draw_refined = draw_refined)
 
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\val.txt' #
+    #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\list.txt' #
+    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
     results_dir =       r'D:\Programming.Data\Braille\My\labeled_new'
+    results_dir =       r'D:\Programming.Data\Braille\My\tmp'
 
     recognizer = BrailleInference()
-    recognizer.process_dir_and_save(img_filename_mask, results_dir)
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_REFINED)
 
-    #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi')
+    #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi', lang = 'RU')
