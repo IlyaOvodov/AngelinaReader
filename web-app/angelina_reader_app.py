@@ -166,7 +166,7 @@ def login():
     if form.validate_on_submit():
         user = all_users.get(form.e_mail.data, None)
         if user is None:
-            flash('Пользователь не найден. Если Вы - новый пользователь, поставьте галочку выше')
+            flash('Пользователь не найден. Если Вы - новый пользователь, зарегистрируйтесь')
             return redirect(url_for('login'))
         user = User(form.e_mail.data, user['name'], is_new=False)
         #if user is None or not user.check_password(form.password.data):
