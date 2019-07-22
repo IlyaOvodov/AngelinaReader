@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+Исправьте текст и нажмите "Записать".
+    <table width="100%">
+    <tr>
+        <td width="60%" valign="top">
+            <img align="middle" src="/{{filename}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain">
+        <td/>
+        <td width="40%" valign="top">
+            <form action="" method="post">
+            {{ form.hidden_tag() }}
+            <p>{{ form.text(rows=40, cols=40) }}</p>
+            <p>{{ form.submit() }}</p>
+            </form>
+        <td/>
+    <tr/>
+<table/>
+
+{% endblock %}

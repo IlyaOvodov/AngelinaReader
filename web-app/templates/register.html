@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div>
+    <br><br>
+    Регистрация нужна исключительно чтобы иметь обратную связь о ходе тестирования. Пароль пока не предусмотрен.<p/>
+    Укажите e-mail и имя.
+</div>
+
+<form action="" method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.e_mail.label }}<br>
+        {{ form.e_mail(size=32) }}<br><br><br>
+    </p>
+    <p>
+        {{ form.username.label }}<br>
+        {{ form.username(size=32) }}<br><br><br>
+    </p>
+    <p>{{ form.remember_me() }} <br> {{ form.remember_me.label }} </p>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    {% for message in messages %}
+        <span style="color: red;">{{ message }}</span>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <p>{{ form.submit() }}</p>
+</form>
+
+{% endblock %}

@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
+
     <head>
+        <meta charset="utf-8">
         <title> Angelina braille reader </title>
-        <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
-        <link rel="icon" type="image/png" href="{{ url_for('static', filename='braille.gif') }}">
+		<link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+        <!-- <link rel="stylessheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css"> -->
         <style>
             body {
                 background-color: white;
@@ -15,13 +17,13 @@
                 padding: 100px;
                 background-size: 15%;
                 margin-top: 0;
+                font-size: 15px;
                 padding: 0;
-                text-align: center;
                 color: black;
             }
 
             nav {
-                font-size: 30px;
+                font-size: 15px;
                 padding: 0;
                 margin-top: 0;
                 color: black;
@@ -29,7 +31,7 @@
 
             a {
                 text-decoration: none;
-                font-size: 35px;
+                font-size: 15px;
             }
 
             a:hover {
@@ -44,50 +46,50 @@
             }
 
             input:hover {
-                color: red;
+                color: blue;
                 transition: 0.3s;
             }
 
             .submit {
                 background-color: DodgerBlue;
-                margin-left: -60px;
             }
 
             .file {
                 color: DodgerBlue;
-                margin-left: -180px;
             }
 
             img {
                 text-align: center;
             }
-            
+
             h1 {
                 text-align: center;
-                color: blue;
-                font-size: 60px;
                 margin-bottom: 0;
                 margin-top: 0;
             }
 
-        </style>
+		</style>
+    
     </head>
 
     <body>
-        <h1>Angelina braille reader</h1>
-        </br>
-        <nav>
-            <div>
-                Распознавание текста шрифтом Брайля на изображении.<p/><p/>
-                Для распознавания надо сделать фото текста в свете,<p/>
-                дающем контрастное изображение точек со светом и тенью (т.е. падающем не сверху).
-            </div>
-            </br> </br>
-            <form method="post" action="/upload_results" name="submit" enctype="multipart/form-data">
-                <input type="file" name="fileField" class="file"><br /><br />
-                <input type="submit" name="submit" value="Распознать" class="submit">
-            </form>
-        </nav> 
+    <div>
+        <h1 style="color: blue; background-color:rgb(248,238,210); text-align: center; font-size: 40px;">Angelina braille reader</h1>
+        <div style="background-color:rgb(248,238,210);">
+        <br>
+        <a href="{{ url_for('index') }}"> Главная </a><sp/><sp/>
+        <a href="{{ url_for('help') }}"> Помощь </a>
+        {% if current_user.is_anonymous  %}
+            <a href="{{ url_for('login') }}"> Войти </a>
+            <a href="{{ url_for('register') }}"> Зарегистрироваться </a>
+        {% else %}
+            {{ current_user.name }}
+            <a href="{{ url_for('logout') }}"> Выйти </a>
+        {% endif %}
+    </div>
 
+    {% block content %} {% endblock %}
+    <!-- <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script> -->
     </body>
+
 </html>

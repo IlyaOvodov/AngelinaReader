@@ -1,80 +1,24 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title> Angelina braille reader </title>
-        <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
-        <link rel="icon" type="image/png" href="{{ url_for('static', filename='braille.gif') }}">
-        <style>
-            body {
-                background-color: white;
-                font-family: 'Poppins', sans-serif;
-                background-image: url("{{ url_for('static', filename='braille.gif') }}");
-                background-repeat: no-repeat;
-                background-position: bottom right;
-                background-attachment: fixed;
-                padding: 100px;
-                background-size: 15%;
-                margin-top: 0;
-                padding: 0;
-                text-align: center;
-                color: black;
-            }
+{% extends "base.html" %}
 
-            nav {
-                font-size: 30px;
-                padding: 0;
-                margin-top: 0;
-                color: black;
-            }
+{% block content %}
+Картинку можно сохранить (правой кнопкой мыши "сохранить как").
+    Если Вы готовы помочь в усовершенствовании программы,</br>
+    <a href="correct" style="font-size: 25px;">помогите исправить ошибки в тексте</a>
 
-            a {
-                color: blue;
-                text-decoration: none;
-                font-size: 35px;
-            }
+    <table width="100%">
+    <tr>
+        <td width="60%" valign="top">
+            <img align="middle" src="/{{filename}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain">
+        <td/>
+        <td width="40%" valign="top">
+            <!-- Display the word {{letter}} -->
+            <div align="left" class = "translation">
+                {% for row in letter %}
+                {{row}}<br>
+                {% endfor %}
+            </div>
+        <td/>
+    <tr/>
+<table/>
 
-            a:hover {
-                color: DodgerBlue;
-                transition: 0.3s;
-            }
-            img {
-                max-width: 100%;
-                max-height: 100%;
-            }
-            
-            h1 {
-                text-align: center;
-                color: blue;
-                font-size: 60px;
-                margin-bottom: 0;
-                margin-top: 0;
-            }
-        </style>
-    </head>
-
-    <body>
-        <h1> Результат: </h1>
-        <table>
-            <tr>
-                <td>
-                    <img align="middle" src="/{{filename}}" alt="Recognized image">
-                <td/>
-                <td>
-                    <!-- Display the word {{letter}} -->
-                    <div align="left" class = "translation">
-                        {% for row in letter %}
-                        {{row}}<br>
-                        {% endfor %}
-                    </div>
-                <td/>
-            <tr/>
-        <table/>
-        <a href="\">Распознать еще</a>
-        <!--
-        <script>
-            document.getElementsByClassName("translation")[0].innerHTML = "Translation: <br> {{letter}}"
-        </script>
-        -->
-        
-    </body>
-</html>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<br/>
+<div>
+    <br><br>
+    Распознавание текста шрифтом Брайля на изображении. Для распознавания загрузите фото текста (<a href="{{ url_for('help') }}">как сделать фото</a>)
+</div>
+</br> </br>
+<form method="post" action="" name="submit" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.file(default=initial_file) }}<br><br><br>
+    </p>
+
+    {% if current_user.is_anonymous  %}
+        <p/><p/>
+        Для работы необходимо <a href="{{ url_for('login') }}"> войти/зарегистрироваться </a> <p/>
+    {% else %}
+        <p/><p/>
+    Если Вы согласны, чтобы данное изображение было использование в наборе данных, опубликованном публично для разработки
+    алгоритмов распознавания текста Брайля, отметьте это ниже. Вы можете распознать текст, и не дав согласие. В этом случае
+    загруженное изображение не будет включено в публично доступный набор данных.
+        <table><tr>
+            <td>{{ form.agree() }} <br/> {{ form.agree.label }}</td>
+            <td>{{ form.disgree() }} <br/> {{ form.disgree.label }}</td>
+        </tr></table>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    {% for message in messages %}
+        <span style="color: red;">{{ message }}</span>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <p>{{ form.submit() }}</p>
+
+    {% endif %}
+
+</form>
+{% endblock %}

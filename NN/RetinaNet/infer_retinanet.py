@@ -189,7 +189,7 @@ class BrailleInference:
                }
         return res
 
-    def run_and_save(self, img_path, results_dir, lang, draw_refined = DRAW_REFINED):
+    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_REFINED):
         print("recognizer.run")
         t = time.clock()
         result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined)
@@ -217,11 +217,14 @@ class BrailleInference:
 
         protocol_text_path = results_dir + "/" + filename_stem + '.protocol' + '.txt'
         with open(protocol_text_path, 'w') as f:
-            json.dump(OrderedDict(
+            info = OrderedDict(
                 ver = '1',
                 best_idx = result_dict['best_idx'].item(),
-                err_scores = result_dict['err_scores'].tolist()
-            ), f, sort_keys=False, indent=4)
+                err_scores = result_dict['err_scores'].tolist(),
+            )
+            if extra_info:
+                info.update(extra_info)
+            json.dump(info, f, sort_keys=False, indent=4)
 
         print("save results", time.clock() - t)
         return marked_image_path, result_dict['text']
