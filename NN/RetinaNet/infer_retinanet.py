@@ -134,6 +134,7 @@ class BrailleInference:
         raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
         fntA = PIL.ImageFont.truetype("arial.ttf", 20)
+        fntErr = PIL.ImageFont.truetype("arial.ttf", 12)
         out_text = []
         for ln in lines:
             if ln.has_space_before:
@@ -147,7 +148,10 @@ class BrailleInference:
                 if draw_refined != self.DRAW_ORIGINAL:
                     ch_box = ch.refined_box
                     draw.rectangle(list(ch_box), outline='green')
-                draw.text((ch_box[0]+5,ch_box[3]-7), ch.char, font=fntA, fill="black")
+                if ch.char.startswith('~'):
+                    draw.text((ch_box[0], ch_box[3]), ch.char, font=fntErr, fill="black")
+                else:
+                    draw.text((ch_box[0]+5,ch_box[3]-7), ch.char, font=fntA, fill="black")
                 #score = scores[i].item()
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')

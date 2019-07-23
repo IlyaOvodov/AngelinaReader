@@ -4,9 +4,15 @@
 <form method="post" action="" name="submit" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
     <br><br>
-    Вы уверены? Можете поменять решение.
+    Если Вы согласитесь на публикацию загруженного Вами текста,<br>
+    это поможет совершенствованию алгоритмов оптического распознавания Брайля<br>
+    теми, кто захочет участвовать в разработке таких алгоритмов.<br>
+    <br>
+    Вы уверены, что возражаете? Можете поменять решение.<br>
+    <br>
         <table><tr>
             <td>{{ form.agree() }} <br/> {{ form.agree.label }}</td>
+            <td> <sp/><sp/> </td>
             <td>{{ form.disgree() }} <br/> {{ form.disgree.label }}</td>
         </tr></table>
 

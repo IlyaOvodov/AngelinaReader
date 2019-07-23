@@ -5,6 +5,7 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField
 from wtforms.validators import DataRequired
+from flask_uploads import UploadSet, configure_uploads, IMAGES
 
 import time
 import os
@@ -15,11 +16,6 @@ sys.path.insert(2, '../NN/RetinaNet')
 import infer_retinanet
 from config import Config
 
-
-IMG_ROOT = 'static/upload'
-RESULTS_ROOT = 'static/results'
-CORR_RESULTS_ROOT = 'static/corrected'
-
 print("infer_retinanet.BrailleInference()")
 t = time.clock()
 recognizer = infer_retinanet.BrailleInference()
@@ -29,15 +25,17 @@ app = Flask(__name__)
 app.config.from_object(Config)
 login_manager = LoginManager(app)
 
+IMG_ROOT = app.config['DATA_ROOT'] + '/raw'
+RESULTS_ROOT = app.config['DATA_ROOT'] + '/results'
+CORR_RESULTS_ROOT = app.config['DATA_ROOT'] + '/corrected'
+os.makedirs(app.config['DATA_ROOT'], exist_ok=True)
 
-from flask_uploads import UploadSet, configure_uploads, IMAGES
 photos = UploadSet('photos', IMAGES)
 
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
 
-
-users_file = 'static/all_users.json'
+users_file = app.config['DATA_ROOT'] + '/all_users.json'
 if os.path.isfile(users_file):
     with open(users_file) as f:
         all_users = json.load(f)
@@ -100,8 +98,8 @@ def index():
 def confirm():
     class Form(FlaskForm):
         img_path = HiddenField()
-        agree = BooleanField("Я согласен")
-        disgree = BooleanField("Возражаю", default=True)
+        agree = BooleanField("Я согласен на публикацию.")
+        disgree = BooleanField("Возражаю. Это приватный текст.", default=True)
         submit = SubmitField('Распознать')
     form = Form()
     if form.validate_on_submit():
@@ -112,6 +110,7 @@ def confirm():
         return redirect(url_for('results', img_path=request.form['img_path'], has_public_confirm=has_public_confirm))
     form = Form(img_path = request.values['img_path'])
     return render_template('confirm.html', form=form)
+
 
 @app.route("/results", methods=['GET', 'POST'])
 @login_required
@@ -136,7 +135,7 @@ def results():
     out_text = '\n'.join(out_text)
     form = ResultsForm(marked_image_path=marked_image_path,
                        text = out_text)
-    return render_template('correct.html', filename=marked_image_path, form=form)
+    return render_template('results.html', form=form)
 
 
 @app.route("/help")
@@ -156,7 +155,7 @@ def login():
         user = all_users.get(form.e_mail.data, None)
         if user is None:
             flash('Пользователь не найден. Если Вы - новый пользователь, зарегистрируйтесь')
-            return redirect(url_for('login'))
+            return redirect(url_for('register'))
         user = User(form.e_mail.data, user['name'], is_new=False)
         #if user is None or not user.check_password(form.password.data):
         #    return redirect(url_for('login'))
