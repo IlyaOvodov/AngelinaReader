@@ -130,6 +130,8 @@ def interpret_line_RU(line, lang, mode = None):
     '''
     if mode is None:
         mode = defaultdict(bool)
+    else:
+        mode = defaultdict(bool, mode)
     digit_mode = mode['digit_mode']
     frac_mode = mode['frac_mode']
     math_mode = mode['math_mode']
@@ -143,7 +145,7 @@ def interpret_line_RU(line, lang, mode = None):
 
     prev_ch = None
     for i, ch in enumerate(line.chars):
-        ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM', lang])
+        ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM'])
         if ch.char == letters.markout_sign:
             ch.char = ''
             if i < len(line.chars)-1:
@@ -162,41 +164,34 @@ def interpret_line_RU(line, lang, mode = None):
             if ch.spaces_before:
                 digit_mode = False
                 frac_mode = False
-            char = None
+            ch.char = None
             if digit_mode:
                 if not frac_mode:
-                    char = lt.int_to_letter(ch.label, ['NUM'])
-                    if char is None:
-                        char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
-                        if char is not None:
-                            if char == '/0' and prev_ch.labeling_char == '0':
+                    ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['NUM'])
+                    if ch.char is None:
+                        ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
+                        if ch.char is not None:
+                            if ch.char == '/0' and prev_ch.labeling_char == '0':
                                 prev_ch.char = ''
                                 ch.char = '%'
-                                char = None
                             else:
                                 frac_mode = True
-                    if char is not None:
-                        ch.labeling_char = ch.char = char
                 else:
-                    char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
-                    if char is not None:
-                        ch.labeling_char = char
-                        ch.char = char[1:]
-            if math_mode and char is None:
+                    ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
+                    if ch.char is not None:
+                        ch.char = ch.char[1:]
+            if math_mode and ch.char is None:
                 frac_mode = False
                 if math_lang:
-                    char = lt.int_to_letter(ch.label, [math_lang.upper()])
-                    if char is not None:
-                        ch.labeling_char = char
+                    ch.labeling_char = ch.char = lt.int_to_letter(ch.label, [math_lang.upper()])
+                    if ch.char is not None:
                         if math_lang.isupper():
-                            char = char.upper()
-                        ch.char = char
+                            ch.char = ch.char.upper()
                     else:
                         math_lang = ''
                 if not math_lang:
-                    char = lt.int_to_letter(ch.label, ['MATH_RU'])
-                    if char is not None:
-                        ch.labeling_char = ch.char = char
+                    ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['MATH_RU'])
+                    if ch.char is not None:
                         if ch.char in {'en','EN'}:
                             math_lang = ch.char
                             ch.char = ''
@@ -210,6 +205,8 @@ def interpret_line_RU(line, lang, mode = None):
                         math_lang = ''
                         digit_mode = False
                         frac_mode = False
+            if ch.char is None:
+                ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM', lang])
             if not math_mode:
                 if ch.char == '()':
                     if ch.spaces_before:
@@ -235,11 +232,11 @@ def interpret_line_RU(line, lang, mode = None):
                 ch.char = ''
 
     return {
-        'digit_mode': digit_mode,
-        'frac_mode': frac_mode,
-        'math_mode': math_mode,
-        'math_lang': math_lang,
-        'caps_mode': caps_mode,
+        #'digit_mode': digit_mode,
+        #'frac_mode': frac_mode,
+        #'math_mode': math_mode,
+        #'math_lang': math_lang,
+        #'caps_mode': caps_mode,
         'brackets_on': brackets_on,
     }
 
