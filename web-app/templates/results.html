@@ -8,13 +8,13 @@
     <table width="100%" valign="top">
     <tr>
         <td width="60%" valign="top">
-            <img align="middle" src="/{{form.marked_image_path.data}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
+            <img src="/{{form.marked_image_path.data}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
         </td>
         <td width="40%" valign="top">
             <b>Если Вы готовы помочь в усовершенствовании программы,<br/>
             исправьте текст и нажмите "Записать".</b>
             <br/>
-            Если нет - просто вернитесь на <a href="{{ url_for('index') }}">гравную страницу</a>
+            Если нет - просто вернитесь на <a href="{{ url_for('index') }}">главную страницу</a>
             <p>{{ form.text(rows=30, cols=40) }}</p>
             <p>{{ form.submit() }}</p>
             <br><br><br>

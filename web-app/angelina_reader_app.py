@@ -196,6 +196,6 @@ if __name__ == "__main__":
     debug = True
     app.jinja_env.cache = {}
     if debug:
-        app.run(debug=True)
+        app.run(debug=True, port=5001)
     else:
         app.run(host='0.0.0.0', threaded=True)
