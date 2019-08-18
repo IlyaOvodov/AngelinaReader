@@ -81,24 +81,50 @@ class BrailleInference:
         valid_mask = torch.Tensor(lt.label_is_valid).to(stat.device)
         sum_valid = (stat*valid_mask).sum(1)
         sum_invalid = (stat*(1-valid_mask)).sum(1)
-        err_score = sum_invalid/(sum_valid+1)
+        err_score = (sum_invalid+1)/(sum_valid+1)
         best_idx = torch.argmin(err_score)
-        return best_idx, err_score
+        return best_idx.item(), (err_score.cpu().data.tolist(), sum_valid.cpu().data.tolist(), sum_invalid.cpu().data.tolist())
 
     def run(self, img_fn, lang, draw_refined = DRAW_REFINED):
         print("run.preprocess")
         t = time.clock()
         img = PIL.Image.open(img_fn)
-        np_img = np.asarray(img)
-
-        aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
-        input_data = self.preprocessor.to_normalized_tensor(aug_img)
-        input_data = [input_data.unsqueeze(0).to(device)]
+        input_data = []
         print("run.preprocess", time.clock() - t)
         print("run.make_batch")
         t = time.clock()
-        input_data.append(torch.flip(input_data[0], [2,3])) # rotate 180
-        input_data.extend([-input_data[0], -input_data[1]])
+
+        np_img = np.asarray(img)
+        aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
+        if len(aug_img.shape)==2:
+            aug_img =  np.tile(aug_img[:,:,np.newaxis],(1,1,3))
+        input_tensor = self.preprocessor.to_normalized_tensor(aug_img)
+        print(np_img.shape, aug_img.shape, input_tensor.shape)
+
+        input_data.append(input_tensor.unsqueeze(0).to(device)) # 0 - as is
+        input_data.append(torch.flip(input_data[-1], [2,3]))    # 1 - rotate 180
+        input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
+
+        aug_img_rot = None
+        '''
+        np_img_rot = np.rot90(np_img, 1, (0,1))
+        aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0] #TODO ломает все, т.к.
+
+        5000x3000->
+(3456, 5184, 3) (1024, 1024, 3) torch.Size([3, 1024, 1024])
+(5184, 3456, 3) (1536, 1024, 3) torch.Size([3, 1536, 1024])        
+        3000x5000->
+(5184, 3456, 3) (1536, 1024, 3) torch.Size([3, 1536, 1024])
+(3456, 5184, 3) (1024, 1024, 3) torch.Size([3, 1024, 1024])        
+
+        input_tensor = self.preprocessor.to_normalized_tensor(aug_img_rot)
+        print(np_img_rot.shape, aug_img_rot.shape, input_tensor.shape)
+
+        input_data.append(input_tensor.unsqueeze(0).to(device))
+        input_data.append(torch.flip(input_data[-1], [2,3])) # rotate 180
+        input_data.extend([-input_data[-2], -input_data[-1]])
+        '''
+
         print("run.make_batch", time.clock() - t)
         print("run.model")
         t = time.clock()
@@ -128,8 +154,8 @@ class BrailleInference:
         print("run.draw")
         t = time.clock()
 
-        aug_img = PIL.Image.fromarray(aug_img)
-        if best_idx in (1,3):
+        aug_img = PIL.Image.fromarray(aug_img if best_idx < 4 else aug_img_rot)
+        if best_idx in (1,3,5,7):
             aug_img = aug_img.transpose(PIL.Image.ROTATE_180)
         raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
@@ -164,7 +190,7 @@ class BrailleInference:
             'text': out_text,
             'dict': self.to_dict(aug_img, lines, draw_refined),
             'best_idx': best_idx,
-            'err_scores': err_score.cpu().data
+            'err_scores': err_score
         }
 
     def to_dict(self, img, lines, draw_refined = DRAW_REFINED):
@@ -222,9 +248,9 @@ class BrailleInference:
         protocol_text_path = results_dir + "/" + filename_stem + '.protocol' + '.txt'
         with open(protocol_text_path, 'w') as f:
             info = OrderedDict(
-                ver = '1',
-                best_idx = result_dict['best_idx'].item(),
-                err_scores = result_dict['err_scores'].tolist(),
+                ver = '2',
+                best_idx = result_dict['best_idx'],
+                err_scores = result_dict['err_scores'],
             )
             if extra_info:
                 info.update(extra_info)

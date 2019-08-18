@@ -11,6 +11,7 @@ import time
 import os
 import json
 import sys
+import argparse
 sys.path.insert(1, '..')
 sys.path.insert(2, '../NN/RetinaNet')
 import infer_retinanet
@@ -193,7 +194,15 @@ def logout():
 
 
 if __name__ == "__main__":
-    debug = True
+    parser = argparse.ArgumentParser(description='Angelina Braille reader web app.')
+    parser.add_argument('--debug', dest='debug', action='store_true',
+                        help='enable debug mode (default: off)')
+    args = parser.parse_args()
+    debug = args.debug
+    if debug:
+        print('running in DEBUG mode!')
+    else:
+        print('running with no debug mode')
     app.jinja_env.cache = {}
     if debug:
         app.run(debug=True, port=5001)
