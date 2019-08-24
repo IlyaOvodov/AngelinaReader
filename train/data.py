@@ -217,7 +217,7 @@ class BrailleDataset:
         if ext == 'txt':
             return read_DSBI_annotation(self.params, label_filename, get_points, width, height)
         elif ext == 'json':
-            return read_LabelMe_annotation(self.params, label_filename, get_points, width, height)
+            return read_LabelMe_annotation(label_filename, get_points)
         else:
             raise ValueError("unsupported label file type: " + ext)
 
@@ -265,7 +265,7 @@ def limiting_scaler(source, dest):
         return int(min(max(0, x), source-1)) * dest/source
     return scale
 
-def read_LabelMe_annotation(params, label_filename, get_points, width, height):
+def read_LabelMe_annotation(label_filename, get_points):
     with open(label_filename, 'r') as opened_json:
         loaded = json.load(opened_json)
     convert_x = limiting_scaler(loaded["imageWidth"], 1.0)

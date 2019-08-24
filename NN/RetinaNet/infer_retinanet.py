@@ -148,6 +148,8 @@ class BrailleInference:
         print("run.decode", time.clock() - t)
         print("run.postprocess")
         t = time.clock()
+        boxes = boxes.tolist()
+        labels = labels.tolist()
         lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
 
         print("run.postprocess", time.clock() - t)

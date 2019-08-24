@@ -7,7 +7,6 @@ import braille_utils.label_tools as lt
 
 class LineChar:
     def __init__(self, box, label):
-        box = [b.item() for b in box]
         self.original_box = box # box found by NN
         self.x = (box[0] + box[2])/2 # original x of last char
         self.y = (box[1] + box[3])/2 # original y of last char
@@ -15,7 +14,7 @@ class LineChar:
         self.h = (box[3]-box[1]) # original h
         self.approximation = None # approximation (err,a,b,w,h) on interval ending on this
         self.refined_box = box # refined box
-        self.label = label.item()
+        self.label = label
         self.spaces_before = 0
         self.char = '' # char to display in printed text
         self.labeling_char = '' # char to display in rects labeling
@@ -141,7 +140,7 @@ def interpret_line_RU(line, lang, mode = None):
     caps_mode = mode['caps_mode']
     brackets_on = mode['brackets_on']
     if not brackets_on:
-        brackets_on = [None] # at least 1 element to always check brackets_on[-1]
+        brackets_on = defaultdict(int)
 
     prev_ch = None
     for i, ch in enumerate(line.chars):
@@ -160,7 +159,6 @@ def interpret_line_RU(line, lang, mode = None):
             if prev_ch is not None and prev_ch.labeling_char == 'н':
                 prev_ch.char = '№'
         else:
-            prev_ch = ch
             if ch.spaces_before:
                 digit_mode = False
                 frac_mode = False
@@ -175,7 +173,7 @@ def interpret_line_RU(line, lang, mode = None):
                                 prev_ch.char = ''
                                 ch.char = '%'
                             else:
-                                frac_mode = True
+                                ch.labeling_char = ch.char = None #frac_mode = True # TOOD вернуться к отображению дробей
                 else:
                     ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
                     if ch.char is not None:
@@ -189,7 +187,7 @@ def interpret_line_RU(line, lang, mode = None):
                             ch.char = ch.char.upper()
                     else:
                         math_lang = ''
-                if not math_lang:
+                if not math_lang and ch.spaces_before: # без spaces_before точка и запятая после числа интерпретируется как математический знак :
                     ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['MATH_RU'])
                     if ch.char is not None:
                         if ch.char in {'en','EN'}:
@@ -200,27 +198,30 @@ def interpret_line_RU(line, lang, mode = None):
                         elif ch.char == '::':
                             ch.char = ':'
                         ch.spaces_before = max(0, ch.spaces_before-1)
-                    else:
-                        math_mode = False
-                        math_lang = ''
-                        digit_mode = False
-                        frac_mode = False
             if ch.char is None:
                 ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM', lang])
+                if ch.char not in {',', '.'}:
+                    math_mode = False
+                    math_lang = ''
+                    digit_mode = False
+                    frac_mode = False
             if not math_mode:
-                if ch.char == '()':
-                    if ch.spaces_before:
-                        ch.char = '('
-                        brackets_on.append('((')
-                    elif brackets_on[-1] == '((':
-                            ch.char = ')'
-                            brackets_on.pop()
-                elif ch.char == 'ъ' and ch.spaces_before:
-                    ch.char = '['
-                    brackets_on.append('[')
-                elif ch.char == 'ь' and i < len(line.chars)-1 and line.chars[i+1].spaces_before and brackets_on[-1] == '[':
-                    ch.char = ']'
-                    brackets_on.pop()
+                if prev_ch and prev_ch.char == ",":
+                    prev_ch.char = ", "
+            if ch.char == '()':
+                if ch.spaces_before or prev_ch is None or prev_ch.char in {',', '.'}:
+                    ch.char = '('
+                    brackets_on['(('] += 1
+                elif brackets_on['(('] > 0:
+                        ch.char = ')'
+                        brackets_on['(('] -= 1
+            elif ch.char == 'ъ' and (ch.spaces_before or prev_ch is None or not prev_ch.char.isalpha()):
+                ch.char = '['
+                brackets_on['['] += 1
+            elif ch.char == 'ь' and i < len(line.chars)-1 and (line.chars[i+1].spaces_before or True # TODO
+                                                                ) and brackets_on['['] > 0:
+                ch.char = ']'
+                brackets_on['['] -= 1
             if ch.char is None:
                 ch.labeling_char = '~' + lt.int_to_label123(ch.label)
                 ch.char = ch.labeling_char + '~'
@@ -230,6 +231,7 @@ def interpret_line_RU(line, lang, mode = None):
             if ch.char == letters.caps_sign:
                 caps_mode = True
                 ch.char = ''
+        prev_ch = ch
 
     return {
         #'digit_mode': digit_mode,
@@ -288,6 +290,109 @@ def boxes_to_lines(boxes, labels, lang):
     return lines
 
 
+def string_to_line(text_line):
+    '''
+    :param text_line: single line text
+    :return: Line (not postprocessed)
+    '''
+    ext_mode = False
+    line = None
+    spaces_before = 0
+    for ch in text_line:
+        if ch == '~':
+            if not ext_mode:
+                ext_mode = True
+                ext_ch = ''
+                ch = None
+            else:
+                ext_mode = False
+                if ext_ch.isdigit():
+                    ext_ch = '~'+ext_ch
+                ch = ext_ch
+        if ch:
+            if ext_mode:
+                ext_ch += ch
+            else:
+                if ch == ' ':
+                    spaces_before += 1
+                else:
+                    label = lt.human_label_to_int(ch)
+                    if line is None:
+                        line = Line(box=[0,0,0,0], label=label)
+                    else:
+                        line.chars.append(LineChar(box=[0,0,0,0], label=label))
+                    line.chars[-1].spaces_before = spaces_before
+                    spaces_before = 0
+    assert not ext_mode, text_line
+    return line
+
+
+def text_to_lines(text, lang = 'RU'):
+    '''
+    :param text: multiline text
+    :return: list of Line
+    '''
+    text_lines = text.splitlines()
+    interpret_line_mode = None
+    has_space_before = False
+    lines = []
+    for tln in text_lines:
+        if not tln.strip():
+            has_space_before = True
+        else:
+            ln = string_to_line(tln)
+            ln.has_space_before = has_space_before
+            has_space_before = False
+            lines.append(ln)
+    interpret_line_f = interpret_line_funcs[lang]
+    interpret_line_mode = None
+    for ln in lines:
+        interpret_line_mode = interpret_line_f(ln, lang, mode = interpret_line_mode)
+    return lines
+
+
+def lines_to_text(lines):
+    '''
+    :param lines: list of Line (returned by boxes_to_lines or text_to_lines)
+    :return: text as string
+    '''
+    out_text = []
+    for ln in lines:
+        if ln.has_space_before:
+            out_text.append('')
+        s = ''
+        for ch in ln.chars:
+            s += ' ' * ch.spaces_before + ch.char
+        out_text.append(s)
+    return '\n'.join(out_text)
+
+
+def validate_postprocess(in_text, out_text):
+    '''
+    :return: validates that  in_text -> out_text
+    '''
+    res_text = lines_to_text(text_to_lines(in_text))
+    assert res_text == out_text, (in_text, res_text, out_text)
+
 
 if __name__ == '__main__':
-    pass
+    #OK
+    validate_postprocess('''а ~((~б~))~,''', '''а (б),''')
+    validate_postprocess('''~((~в~))~,''', '''(в),''')
+    validate_postprocess('''~()~~##~1~()~,''', '''(1),''')
+    validate_postprocess('''~##~1,ма,''', '''1, ма,''')
+    validate_postprocess('''~##~20-х годах''', '''20-х годах''')
+    validate_postprocess('''~##~1\n0''', '''1\nж''')
+
+    validate_postprocess('''ab  c
+
+d e f''', '''аб  ц
+
+д е ф''')
+
+    validate_postprocess('''~1~b  c~##~34
+
+d e f''', '''аб  ц34
+
+д е ф''')
+
