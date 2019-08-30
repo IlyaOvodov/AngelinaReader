@@ -36,7 +36,7 @@ params = AttrDict(
             class_loss_scale = 100,
         ),
     ),
-    load_model_from = 'NN_results/retina_chars_c0849b/models/clr.011',
+    load_model_from = 'NN_results/retina_chars_7ec096/models/clr.012',
     optim = 'torch.optim.SGD',
     optim_params = AttrDict(
         lr=0.0001,
@@ -83,17 +83,21 @@ import create_model_retinanet
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
 
 train_loader = train.data.create_dataloader(params, collate_fn, list_file_names=[r'DSBI\data\my_train.txt',
-                                                                                 r'My\labeled1\train.txt',
-                                                                                 r'My\labeled1\train.txt',
-                                                                                 r'My\labeled1\train.txt',
-                                                                                 r'My\labeled1\train.txt',
+                                                                                 r'My\labeled\labeled2\train_books.txt',
+                                                                                 r'My\labeled\labeled2\train_withtext.txt',
+                                                                                 r'My\labeled\labeled2\train_pupils.txt',
+                                                                                 r'My\labeled\labeled2\train_pupils.txt',
+                                                                                 r'My\labeled\not_braille\_not_braille.txt',
                                                                                  ], shuffle = True)
 val_loader1  = train.data.create_dataloader(params, collate_fn, list_file_names=[r'DSBI\data\my_val1.txt',
                                                                                  r'DSBI\data\my_val2.txt',
                                                                                  ], shuffle = False)
-val_loader2  = train.data.create_dataloader(params, collate_fn, list_file_names=[r'My\labeled1\val.txt',], shuffle = False)
-val_loader3  = train.data.create_dataloader(params, collate_fn, list_file_names=[r'My\labeled1\val_inv.txt',], shuffle = False)
-print('data loaded. train:{}, val_dsbi: {}, val_ola: {}, val_inv: {}'.format(len(train_loader), len(val_loader1), len(val_loader2), len(val_loader3)))
+val_loader2  = train.data.create_dataloader(params, collate_fn, list_file_names=[r'My\labeled\labeled2\val_books.txt',
+                                                                                 r'My\labeled\labeled2\val_withtext.txt',
+                                                                                 ], shuffle = False)
+val_loader3  = train.data.create_dataloader(params, collate_fn, list_file_names=[r'My\labeled\labeled2\val_pupils.txt',
+                                                                                 ], shuffle = False)
+print('data loaded. train:{}, val_dsbi: {}, val_books: {}, val_pupils: {}'.format(len(train_loader), len(val_loader1), len(val_loader2), len(val_loader3)))
 
 optimizer = eval(params.optim)(model.parameters(), **params.optim_params)
 
@@ -115,7 +119,7 @@ trainer_metrics = {} if findLR else metrics
 eval_loaders = {}
 if findLR:
     eval_loaders['train'] = train_loader
-eval_loaders.update({'val_dsbi': val_loader1, 'val_ola': val_loader2, "val_inv" : val_loader3})
+eval_loaders.update({'val_dsbi': val_loader1, 'val_books': val_loader2, "val_pupils" : val_loader3})
 eval_event = ignite.engine.Events.ITERATION_COMPLETED if findLR else ignite.engine.Events.EPOCH_COMPLETED
 eval_duty_cycle = 2 if findLR else 5
 train_epochs = params.lr_finder.iters_num*len(train_loader) if findLR else max_epochs
