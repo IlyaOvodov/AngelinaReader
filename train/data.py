@@ -155,6 +155,11 @@ class BrailleDataset:
         if img is None:
             img = PIL.Image.open(img_fn) #cv2.imread(img_fn) #PIL.Image.open(img_fn)
             img = np.asarray(img)
+            if len(img.shape) == 2:
+                img = np.tile(img[:, :, np.newaxis], (1, 1, 3))
+            if img.shape[2] == 4:
+                img = img[:, :, :3]
+            assert len(img.shape) == 3 and img.shape[2] == 3, (img_fn, img.shape)
             self.images[item] = img
         width = img.shape[1]
         height = img.shape[0]
