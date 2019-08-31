@@ -131,9 +131,9 @@ class BrailleDataset:
             for fn in files:
                 if fn[-1] == '\n':
                     fn = fn[:-1]
-                imege_fn, labels_fn = self.filenames_of_item(data_dir, fn)
-                if imege_fn:
-                    self.image_files.append(imege_fn)
+                image_fn, labels_fn = self.filenames_of_item(data_dir, fn)
+                if image_fn:
+                    self.image_files.append(image_fn)
                     self.label_files.append(labels_fn)
 
         assert len(self.image_files) > 0, list_file
@@ -191,10 +191,10 @@ class BrailleDataset:
         :param fn: filename from list
         :return: image filename, label filename or None, None
         '''
-        def check_label_ext(imege_fn, ext):
-            if not os.path.isfile(imege_fn):
+        def check_label_ext(image_fn, ext):
+            if not os.path.isfile(image_fn):
                 return None
-            lbl_fn = imege_fn.rsplit('.',1)[0]+ext
+            lbl_fn = image_fn.rsplit('.',1)[0]+ext
             if os.path.isfile(lbl_fn):
                 return lbl_fn
             return None

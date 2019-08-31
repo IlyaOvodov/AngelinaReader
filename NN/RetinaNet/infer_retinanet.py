@@ -16,7 +16,7 @@ device = 'cuda:0'
 cls_thresh = 0.3
 nms_thresh = 0
 
-fn = r'D:\Programming\Braille\Data\My\data\ola\IMG_5200.JPG'
+verbose = False
 
 import os
 import json
@@ -50,7 +50,7 @@ class BrailleInference:
     DRAW_REFINED = 1
     DRAW_BOTH = 2
 
-    def __init__(self):
+    def __init__(self, model_fn = model_fn, model_weights = model_weights):
 
         params = AttrDict.load(model_fn + '.param.txt', verbose = True)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
@@ -85,13 +85,15 @@ class BrailleInference:
         best_idx = torch.argmin(err_score)
         return best_idx.item(), (err_score.cpu().data.tolist(), sum_valid.cpu().data.tolist(), sum_invalid.cpu().data.tolist())
 
-    def run(self, img_fn, lang, draw_refined = DRAW_REFINED):
-        print("run.preprocess")
+    def run(self, img_fn, lang, draw_refined = DRAW_REFINED, attempts_number = 4):
+        if verbose:
+            print("run.preprocess")
         t = time.clock()
         img = PIL.Image.open(img_fn)
         input_data = []
-        print("run.preprocess", time.clock() - t)
-        print("run.make_batch")
+        if verbose:
+            print("run.preprocess", time.clock() - t)
+            print("run.make_batch")
         t = time.clock()
 
         np_img = np.asarray(img)
@@ -99,11 +101,13 @@ class BrailleInference:
         if len(aug_img.shape)==2:
             aug_img =  np.tile(aug_img[:,:,np.newaxis],(1,1,3))
         input_tensor = self.preprocessor.to_normalized_tensor(aug_img)
-        print(np_img.shape, aug_img.shape, input_tensor.shape)
+        #print(np_img.shape, aug_img.shape, input_tensor.shape)
 
         input_data.append(input_tensor.unsqueeze(0).to(device)) # 0 - as is
-        input_data.append(torch.flip(input_data[-1], [2,3]))    # 1 - rotate 180
-        input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
+        if attempts_number > 1:
+            input_data.append(torch.flip(input_data[-1], [2,3]))    # 1 - rotate 180
+        if attempts_number > 2:
+            input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
 
         aug_img_rot = None
         '''
@@ -125,8 +129,9 @@ class BrailleInference:
         input_data.extend([-input_data[-2], -input_data[-1]])
         '''
 
-        print("run.make_batch", time.clock() - t)
-        print("run.model")
+        if verbose:
+            print("run.make_batch", time.clock() - t)
+            print("run.model")
         t = time.clock()
         with torch.no_grad():
             loc_preds = []
@@ -135,25 +140,29 @@ class BrailleInference:
                 (loc_pred, cls_pred) = self.model(input_data_i)
                 loc_preds.append(loc_pred)
                 cls_preds.append(cls_pred)
-        print("run.model", time.clock() - t)
-        print("run.cals_stats")
+        if verbose:
+            print("run.model", time.clock() - t)
+            print("run.cals_stats")
         t = time.clock()
         best_idx, err_score = self.calc_letter_statistics(cls_preds, cls_thresh)
-        print("run.cals_stats", time.clock() - t)
-        print("run.decode")
+        if verbose:
+            print("run.cals_stats", time.clock() - t)
+            print("run.decode")
         t = time.clock()
-        h,w = input_data[0].shape[2:]
+        h,w = input_data[0].shape[2:] # TODO here is cause of problem with rotation
         boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
                                       cls_thresh = cls_thresh, nms_thresh = nms_thresh)
-        print("run.decode", time.clock() - t)
-        print("run.postprocess")
+        if verbose:
+            print("run.decode", time.clock() - t)
+            print("run.postprocess")
         t = time.clock()
         boxes = boxes.tolist()
         labels = labels.tolist()
         lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
 
-        print("run.postprocess", time.clock() - t)
-        print("run.draw")
+        if verbose:
+            print("run.postprocess", time.clock() - t)
+            print("run.draw")
         t = time.clock()
 
         aug_img = PIL.Image.fromarray(aug_img if best_idx < 4 else aug_img_rot)
@@ -184,7 +193,8 @@ class BrailleInference:
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
-        print("run.draw", time.clock() - t)
+        if verbose:
+            print("run.draw", time.clock() - t)
         return {
             'image': raw_image,
             'labeled_image': aug_img,
@@ -222,11 +232,13 @@ class BrailleInference:
         return res
 
     def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_REFINED):
-        print("recognizer.run")
+        if verbose:
+            print("recognizer.run")
         t = time.clock()
         result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined)
-        print("recognizer.run", time.clock() - t)
-        print("save results")
+        if verbose:
+            print("recognizer.run", time.clock() - t)
+            print("save results")
         t = time.clock()
 
         os.makedirs(results_dir, exist_ok=True)
@@ -258,7 +270,8 @@ class BrailleInference:
                 info.update(extra_info)
             json.dump(info, f, sort_keys=False, indent=4)
 
-        print("save results", time.clock() - t)
+        if verbose:
+            print("save results", time.clock() - t)
         return marked_image_path, result_dict['text']
 
     def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_REFINED):
