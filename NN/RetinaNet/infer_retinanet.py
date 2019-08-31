@@ -8,8 +8,8 @@
 # In[1]:
 
 inference_width = 1024
-model_root = 'NN_results/retina_chars_7ec096'
-model_weights = '/models/clr.012'
+model_root = 'NN_saved/retina_chars_eced60'
+model_weights = '/models/clr.008'
 
 device = 'cuda:0'
 #device = 'cpu'
@@ -231,11 +231,12 @@ class BrailleInference:
                }
         return res
 
-    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_REFINED):
+    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_REFINED,
+                     remove_labeled_from_filename = False, attempts_number = 4):
         if verbose:
             print("recognizer.run")
         t = time.clock()
-        result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined)
+        result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined, attempts_number = attempts_number)
         if verbose:
             print("recognizer.run", time.clock() - t)
             print("save results")
@@ -243,6 +244,8 @@ class BrailleInference:
 
         os.makedirs(results_dir, exist_ok=True)
         filename_stem = os.path.splitext(os.path.basename(img_path))[0]
+        if remove_labeled_from_filename and filename_stem.endswith('.labeled'):
+            filename_stem = filename_stem[: -len('.labeled')]
 
         labeled_image_filename = filename_stem + '.labeled' + '.jpg'
         json_path = results_dir + "/" + filename_stem + '.labeled' + '.json'
@@ -274,7 +277,8 @@ class BrailleInference:
             print("save results", time.clock() - t)
         return marked_image_path, result_dict['text']
 
-    def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_REFINED):
+    def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_REFINED,
+                             remove_labeled_from_filename = False, attempts_number = 4):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
             data_dir = os.path.dirname(list_file)
@@ -287,17 +291,22 @@ class BrailleInference:
             img_folders = [''] * len(img_files)
         for img_file,img_folder  in zip(img_files, img_folders):
             print('processing '+img_file)
-            self.run_and_save(img_file, os.path.join(results_dir, img_folder), lang = lang, draw_refined = draw_refined)
-
+            self.run_and_save(img_file, os.path.join(results_dir, img_folder), lang = lang, extra_info = None, draw_refined = draw_refined,
+			                  remove_labeled_from_filename = remove_labeled_from_filename,
+                              attempts_number = attempts_number)
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\list.txt' #
+    img_filename_mask = r'D:\Programming.Data\Braille\My\recognized\labeled3a\list.txt' #
     #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
-    results_dir =       r'D:\Programming.Data\Braille\My\labeled_new'
+    results_dir =       r'D:\Programming.Data\Braille\My\recognized\labeled3_new'
     #results_dir =       r'D:\Programming.Data\Braille\My\tmp'
+    remove_labeled_from_filename = True
+    attempts_number = 1
 
     recognizer = BrailleInference()
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_REFINED)
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_REFINED,
+                                    remove_labeled_from_filename = remove_labeled_from_filename,
+                                    attempts_number = attempts_number)
 
     #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi', lang = 'RU')
