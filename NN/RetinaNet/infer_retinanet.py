@@ -98,10 +98,8 @@ class BrailleInference:
 
         np_img = np.asarray(img)
         aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
-        if len(aug_img.shape)==2:
-            aug_img =  np.tile(aug_img[:,:,np.newaxis],(1,1,3))
+        aug_img = data.unify_shape(aug_img)
         input_tensor = self.preprocessor.to_normalized_tensor(aug_img)
-        #print(np_img.shape, aug_img.shape, input_tensor.shape)
 
         input_data.append(input_tensor.unsqueeze(0).to(device)) # 0 - as is
         if attempts_number > 1:
@@ -110,24 +108,16 @@ class BrailleInference:
             input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
 
         aug_img_rot = None
-        '''
-        np_img_rot = np.rot90(np_img, 1, (0,1))
-        aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0] #TODO ломает все, т.к.
-
-        5000x3000->
-(3456, 5184, 3) (1024, 1024, 3) torch.Size([3, 1024, 1024])
-(5184, 3456, 3) (1536, 1024, 3) torch.Size([3, 1536, 1024])        
-        3000x5000->
-(5184, 3456, 3) (1536, 1024, 3) torch.Size([3, 1536, 1024])
-(3456, 5184, 3) (1024, 1024, 3) torch.Size([3, 1024, 1024])        
-
-        input_tensor = self.preprocessor.to_normalized_tensor(aug_img_rot)
-        print(np_img_rot.shape, aug_img_rot.shape, input_tensor.shape)
-
-        input_data.append(input_tensor.unsqueeze(0).to(device))
-        input_data.append(torch.flip(input_data[-1], [2,3])) # rotate 180
-        input_data.extend([-input_data[-2], -input_data[-1]])
-        '''
+        if attempts_number > 4:
+            np_img_rot = np.rot90(np_img, 1, (0,1))
+            aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0]
+            aug_img_rot = data.unify_shape(aug_img_rot)
+            input_tensor = self.preprocessor.to_normalized_tensor(aug_img_rot)
+            input_data.append(input_tensor.unsqueeze(0).to(device))  # 4 - rotate 90
+            if attempts_number > 5:
+                input_data.append(torch.flip(input_data[-1], [2,3])) # 5 - rotate 270
+            if attempts_number > 6:
+                input_data.extend([-input_data[-2], -input_data[-1]])   # 6 - rotate 90 inverted, 7 - rotate 270 inverted
 
         if verbose:
             print("run.make_batch", time.clock() - t)
@@ -149,7 +139,7 @@ class BrailleInference:
             print("run.cals_stats", time.clock() - t)
             print("run.decode")
         t = time.clock()
-        h,w = input_data[0].shape[2:] # TODO here is cause of problem with rotation
+        h,w = input_data[best_idx].shape[2:] # TODO here is cause of problem with rotation
         boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
                                       cls_thresh = cls_thresh, nms_thresh = nms_thresh)
         if verbose:
@@ -297,12 +287,12 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\recognized\labeled3a\list.txt' #
+    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\uploaded\list.txt' #
     #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
-    results_dir =       r'D:\Programming.Data\Braille\My\recognized\labeled3_new'
-    #results_dir =       r'D:\Programming.Data\Braille\My\tmp'
+    #results_dir =       r'D:\Programming.Data\Braille\My\books2\res'
+    results_dir =       r'D:\Programming.Data\Braille\My\tmp'
     remove_labeled_from_filename = True
-    attempts_number = 1
+    attempts_number = 8
 
     recognizer = BrailleInference()
     recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_REFINED,
