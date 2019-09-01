@@ -85,7 +85,7 @@ class BrailleInference:
         best_idx = torch.argmin(err_score)
         return best_idx.item(), (err_score.cpu().data.tolist(), sum_valid.cpu().data.tolist(), sum_invalid.cpu().data.tolist())
 
-    def run(self, img_fn, lang, draw_refined = DRAW_REFINED, attempts_number = 4):
+    def run(self, img_fn, lang, draw_refined = DRAW_REFINED, attempts_number = 8):
         if verbose:
             print("run.preprocess")
         t = time.clock()
@@ -222,7 +222,7 @@ class BrailleInference:
         return res
 
     def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_REFINED,
-                     remove_labeled_from_filename = False, attempts_number = 4):
+                     remove_labeled_from_filename = False, attempts_number = 8):
         if verbose:
             print("recognizer.run")
         t = time.clock()
@@ -268,7 +268,7 @@ class BrailleInference:
         return marked_image_path, result_dict['text']
 
     def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_REFINED,
-                             remove_labeled_from_filename = False, attempts_number = 4):
+                             remove_labeled_from_filename = False, attempts_number = 8):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
             data_dir = os.path.dirname(list_file)
