@@ -61,9 +61,10 @@ class BrailleInference:
             rotate_limit=0,
         )
 
+        self.model_weights_fn = model_fn + model_weights
         self.model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
         self.model = self.model.to(device)
-        self.model.load_state_dict(torch.load(model_fn + model_weights, map_location = 'cpu'))
+        self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
         self.model.eval()
         print("Model loaded")
 
@@ -258,6 +259,7 @@ class BrailleInference:
                 ver = '2',
                 best_idx = result_dict['best_idx'],
                 err_scores = result_dict['err_scores'],
+                model_weights = self.model_weights_fn,
             )
             if extra_info:
                 info.update(extra_info)
@@ -287,7 +289,7 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\uploaded\list.txt' #
+    img_filename_mask = r'D:\Programming.Data\Braille\My\recognized\labeled3\list.txt' #
     #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
     #results_dir =       r'D:\Programming.Data\Braille\My\books2\res'
     results_dir =       r'D:\Programming.Data\Braille\My\tmp'

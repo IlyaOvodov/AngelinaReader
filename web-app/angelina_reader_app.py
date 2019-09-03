@@ -68,22 +68,24 @@ def load_user(user_id):
 
 @app.route("/", methods=['GET', 'POST'])
 @app.route("/index", methods=['GET', 'POST'])
-def index():
+def index(is_mobile=False):
+    template_name = 'm.html' if is_mobile else 'index.html'
     class MainForm(FlaskForm):
-        file = FileField("Загрузить файл")
+        camera_file = FileField()
+        file = FileField()
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
-        submit = SubmitField("Распознать")
     form = MainForm()
     if form.validate_on_submit():
-        if not form.file.data:
+        file_data = form.camera_file.data or form.file.data
+        if not file_data:
             flash('Необходимо загрузить файл')
-            return render_template('index.html', form=form)
+            return render_template(template_name, form=form)
         if form.agree.data and form.disgree.data or not form.agree.data and not form.disgree.data:
-            flash('Выберите один из двух вариантов')
-            return render_template('index.html', form=form)
+            flash('Выберите один из двух вариантов (согласен/возражаю)')
+            return render_template(template_name, form=form)
         os.makedirs(IMG_ROOT, exist_ok=True)
-        filename = photos.save(form.file.data)
+        filename = photos.save(file_data)
         img_path = IMG_ROOT + "/" + filename
         has_public_confirm = form.agree.data
 
@@ -91,7 +93,12 @@ def index():
             return redirect(url_for('confirm', img_path=img_path))
         return redirect(url_for('results', img_path=img_path, has_public_confirm=has_public_confirm))
 
-    return render_template('index.html', form=form)
+    return render_template(template_name, form=form)
+
+
+@app.route("/m", methods=['GET', 'POST'])
+def m():
+    return index(is_mobile=True)
 
 
 @app.route("/confirm", methods=['GET', 'POST'])
@@ -105,7 +112,7 @@ def confirm():
     form = Form()
     if form.validate_on_submit():
         if form.agree.data and form.disgree.data or not form.agree.data and not form.disgree.data:
-            flash('Выберите один из двух вариантов')
+            flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template('confirm.html', form=form)
         has_public_confirm = form.agree.data
         return redirect(url_for('results', img_path=request.form['img_path'], has_public_confirm=has_public_confirm))

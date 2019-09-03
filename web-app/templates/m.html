@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<br/>
+<form method="post" action="" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    {% if current_user.is_anonymous  %}
+        Для работы необходимо <a href="{{ url_for('login') }}"> войти </a> / <a href="{{ url_for('register') }}"> зарегистрироваться </a>
+    {% else %}
+        Согласен на использование загруженного изображения в публично доступном наборе данных.
+        <br/><br/>
+        <table width="100%" height="50%"><tr>
+            <td width="50%" height="100%">{{ form.agree(style="transform : scale(3)") }} <br/><br/> {{ form.agree.label }}</td>
+            <td width="50%" height="100%">{{ form.disgree(style="transform : scale(3)") }} <br/><br/> {{ form.disgree.label }}</td>
+        </tr></table>
+        <br/>
+        {{ form.camera_file(default=initial_file, accept="image/*", onchange="form.submit()", capture="camera", style="display:none;") }}
+        <input type="button" id="form_camera_file_click" value="Сделать фото" onclick="form.camera_file.click();"/><br/><br/><br/>
+        {{ form.file(default=initial_file, accept="image/*", onchange="form.submit()", style="display:none;") }}
+        <input type="button" id="form_file_click" value="Загрузить файл" onclick="form.file.click()"  style="float:center" width="50%"/><br/><br/><br/>
+    {% endif %}
+
+</form>
+{% endblock %}

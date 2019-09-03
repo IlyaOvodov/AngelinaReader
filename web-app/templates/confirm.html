@@ -1,30 +1,21 @@
 {% extends "base.html" %}
 
 {% block content %}
+<br/>
 <form method="post" action="" name="submit" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
-    <br><br>
     Если Вы согласитесь на публикацию загруженного Вами текста,<br>
     это поможет совершенствованию алгоритмов оптического распознавания Брайля<br>
     теми, кто захочет участвовать в разработке таких алгоритмов.<br>
     <br>
     Вы уверены, что возражаете? Можете поменять решение.<br>
     <br>
-        <table><tr>
-            <td>{{ form.agree() }} <br/> {{ form.agree.label }}</td>
-            <td> <sp/><sp/> </td>
-            <td>{{ form.disgree() }} <br/> {{ form.disgree.label }}</td>
-        </tr></table>
-
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    {% for message in messages %}
-        <span style="color: red;">{{ message }}</span>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-
-    <p>{{ form.submit() }}</p>
+    <table width="100%" height="50%"><tr>
+        <td width="50%" height="100%">{{ form.agree(style="transform : scale(3)") }} <br/><br/> {{ form.agree.label }}</td>
+        <td width="50%" height="100%">{{ form.disgree(style="transform : scale(3)") }} <br/><br/> {{ form.disgree.label }}</td>
+    </tr></table>
+    <br/>
+    {{ form.submit() }}<br/><br/><br/>
 
 </form>
 {% endblock %}

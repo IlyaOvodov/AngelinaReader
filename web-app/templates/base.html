@@ -81,6 +81,7 @@
         </h1>
         <br>
         <a href="{{ url_for('index') }}"> Главная </a><sp/><sp/>
+        <a href="{{ url_for('m') }}"> Мобильная </a><sp/><sp/>
         <a href="{{ url_for('help') }}"> Помощь </a>
         {% if current_user.is_anonymous  %}
             <a href="{{ url_for('login') }}"> Войти </a>
@@ -89,12 +90,22 @@
             {{ current_user.name }}
             <a href="{{ url_for('logout') }}"> Выйти </a>
         {% endif %}
-            <br/>Предложения и замечания пишите на <a href="mailto:angelina-reader@ovdv.ru">angelina-reader@ovdv.ru</a>
+        <br/>
+        Предложения и замечания пишите на <a href="mailto:angelina-reader@ovdv.ru">angelina-reader@ovdv.ru</a>
 
     </div>
 
     {% block content %} {% endblock %}
-    <!-- <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script> -->
+
+    <br/>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    {% for message in messages %}
+        <span style="color: red;">{{ message }}</span>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
     </body>
 
 </html>
