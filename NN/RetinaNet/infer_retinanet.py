@@ -83,7 +83,7 @@ class BrailleInference:
         sum_valid = (stat*valid_mask).sum(1)
         sum_invalid = (stat*(1-valid_mask)).sum(1)
         err_score = (sum_invalid+1)/(sum_valid+1)
-        best_idx = torch.argmin(err_score)
+        best_idx = torch.argmin(err_score/(sum_valid+1)) # эвристика так себе придуманная
         return best_idx.item(), (err_score.cpu().data.tolist(), sum_valid.cpu().data.tolist(), sum_invalid.cpu().data.tolist())
 
     def run(self, img_fn, lang, draw_refined = DRAW_REFINED, attempts_number = 8):
@@ -256,7 +256,7 @@ class BrailleInference:
         protocol_text_path = results_dir + "/" + filename_stem + '.protocol' + '.txt'
         with open(protocol_text_path, 'w') as f:
             info = OrderedDict(
-                ver = '2',
+                ver = '3',
                 best_idx = result_dict['best_idx'],
                 err_scores = result_dict['err_scores'],
                 model_weights = self.model_weights_fn,
@@ -289,10 +289,10 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\My\recognized\labeled3\list.txt' #
-    #img_filename_mask = r'D:\Programming.Data\Braille\My\raw\1.txt'
-    #results_dir =       r'D:\Programming.Data\Braille\My\books2\res'
-    results_dir =       r'D:\Programming.Data\Braille\My\tmp'
+    #img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика\list.txt' #
+    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\list.txt'
+    results_dir =       r'D:\Programming.Data\Braille\My\tmp\tmp2'
+    #results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\res\Математика3'
     remove_labeled_from_filename = True
     attempts_number = 8
 
