@@ -16,11 +16,6 @@ function set_onchange() {
 </script>
 <form method="post" class="container" action="" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
-    <div class="wrapper">
-        <br/>
-		Распознавание текста шрифтом Брайля на изображении.<br/> 
-		Для распознавания загрузите фото текста (<a href="{{ url_for('help') }}">как сделать фото</a>)
-    </div>
     {% if current_user.is_anonymous  %}
         <div class="wrapper" style="padding-top: 20px">
             Для работы необходимо <a href="{{ url_for('login') }}"> войти </a> / <a href="{{ url_for('register') }}"> зарегистрироваться </a>
@@ -28,9 +23,7 @@ function set_onchange() {
     {% else %}
         <div id="normal_mode">
             <div class="wrapper">
-                Если Вы согласны, чтобы данное изображение было использование в наборе данных, опубликованном публично для разработки
-                новых алгоритмов распознавания текста Брайля, отметьте это ниже. Вы можете распознать текст, и не дав согласие. В этом случае
-                загруженное изображение не будет включено в публично доступный набор данных.
+                Согласен на использование загруженного изображения в публично доступном наборе данных:
             </div>
             <div>
                 <table class="centered" width="100%"><tr>
@@ -53,6 +46,6 @@ function set_onchange() {
     {% endif %}
 </form>
 <div class="header_footer" style="text-align: center; position:fixed; bottom:0px; padding:1% 2% 1% 2%">
-    Предложения и замечания пишите на адрес: <a href="mailto:angelina-reader@ovdv.ru" style="white-space: nowrap">angelina-reader@ovdv.ru</a>
+    Для предложений и замечаний: <a href="mailto:angelina-reader@ovdv.ru" style="white-space: nowrap">angelina-reader@ovdv.ru</a>
 </div>
 {% endblock %}

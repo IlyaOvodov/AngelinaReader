@@ -6,6 +6,8 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField
 from wtforms.validators import DataRequired
 from flask_uploads import UploadSet, configure_uploads, IMAGES
+from flask_mobility import Mobility
+from flask_mobility.decorators import mobile_template
 
 import time
 import os
@@ -23,6 +25,7 @@ recognizer = infer_retinanet.BrailleInference()
 print(time.clock()-t)
 
 app = Flask(__name__)
+Mobility(app)
 app.config.from_object(Config)
 login_manager = LoginManager(app)
 
@@ -66,10 +69,11 @@ def load_user(user_id):
         user = User(user_id, user["name"], is_new=False)
     return user
 
+
 @app.route("/", methods=['GET', 'POST'])
 @app.route("/index", methods=['GET', 'POST'])
-def index(is_mobile=False):
-    template_name = 'm.html' if is_mobile else 'index.html'
+@mobile_template('{m/}index.html')
+def index(template, is_mobile=False):
     class MainForm(FlaskForm):
         camera_file = FileField()
         file = FileField()
@@ -80,10 +84,10 @@ def index(is_mobile=False):
         file_data = form.camera_file.data or form.file.data
         if not file_data:
             flash('Необходимо загрузить файл')
-            return render_template(template_name, form=form)
+            return render_template(template, form=form)
         if form.agree.data and form.disgree.data or not form.agree.data and not form.disgree.data:
             flash('Выберите один из двух вариантов (согласен/возражаю)')
-            return render_template(template_name, form=form)
+            return render_template(template, form=form)
         os.makedirs(IMG_ROOT, exist_ok=True)
         filename = photos.save(file_data)
         img_path = IMG_ROOT + "/" + filename
@@ -93,17 +97,13 @@ def index(is_mobile=False):
             return redirect(url_for('confirm', img_path=img_path))
         return redirect(url_for('results', img_path=img_path, has_public_confirm=has_public_confirm))
 
-    return render_template(template_name, form=form)
-
-
-@app.route("/m", methods=['GET', 'POST'])
-def m():
-    return index(is_mobile=True)
+    return render_template(template, form=form)
 
 
 @app.route("/confirm", methods=['GET', 'POST'])
 @login_required
-def confirm():
+@mobile_template('{m/}confirm.html')
+def confirm(template):
     class Form(FlaskForm):
         img_path = HiddenField()
         agree = BooleanField("Я согласен на публикацию.")
@@ -113,16 +113,17 @@ def confirm():
     if form.validate_on_submit():
         if form.agree.data and form.disgree.data or not form.agree.data and not form.disgree.data:
             flash('Выберите один из двух вариантов (согласен/возражаю)')
-            return render_template('confirm.html', form=form)
+            return render_template(template, form=form)
         has_public_confirm = form.agree.data
         return redirect(url_for('results', img_path=request.form['img_path'], has_public_confirm=has_public_confirm))
     form = Form(img_path = request.values['img_path'])
-    return render_template('confirm.html', form=form)
+    return render_template(template, form=form)
 
 
 @app.route("/results", methods=['GET', 'POST'])
 @login_required
-def results():
+@mobile_template('{m/}results.html')
+def results(template):
     class ResultsForm(FlaskForm):
         marked_image_path = HiddenField()
         text = TextAreaField()
@@ -143,7 +144,7 @@ def results():
     out_text = '\n'.join(out_text)
     form = ResultsForm(marked_image_path=marked_image_path,
                        text = out_text)
-    return render_template('results.html', form=form)
+    return render_template(template, form=form)
 
 
 @app.route("/help")
@@ -152,7 +153,8 @@ def help():
 
 
 @app.route('/login', methods=['GET', 'POST'])
-def login():
+@mobile_template('{m/}login.html')
+def login(template):
     class LoginForm(FlaskForm):
         e_mail = StringField('E-mail', validators=[DataRequired()])
         remember_me = BooleanField('Запомнить меня')
@@ -169,11 +171,12 @@ def login():
         #    return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('index'))
-    return render_template('login.html', title='Sign In', form=form)
+    return render_template(template, title='Sign In', form=form)
 
 
 @app.route('/register', methods=['GET', 'POST'])
-def register():
+@mobile_template('{m/}register.html')
+def register(template):
     class RegisterForm(FlaskForm):
         e_mail = StringField('E-mail', validators=[DataRequired()])
         username = StringField('Имя, фамилия', validators=[DataRequired()])
@@ -191,7 +194,7 @@ def register():
         #    return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('index'))
-    return render_template('register.html', title='Sign In', form=form)
+    return render_template(template, title='Sign In', form=form)
 
 
 @app.route('/logout')
@@ -212,6 +215,7 @@ if __name__ == "__main__":
         print('running with no debug mode')
     app.jinja_env.cache = {}
     if debug:
+		app.config['TEMPLATES_AUTO_RELOAD'] = True
         app.run(debug=True, port=5001)
     else:
         app.run(host='0.0.0.0', threaded=True)

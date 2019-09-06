@@ -1,111 +1,140 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title> Angelina braille reader </title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+    <!-- <link rel="stylessheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css"> -->
+    <style>
+        * {
+            margin: 0 0 0 0;
+            padding: 0 0 0 0;
+            <!-- outline: 1px #ff00002b solid; -->
+        }
 
-    <head>
-        <meta charset="utf-8">
-        <title> Angelina braille reader </title>
-		<link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
-        <!-- <link rel="stylessheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css"> -->
-        <style>
-            body {
-                background-color: white;
-                font-family: 'Poppins', sans-serif;
-                background-image: url("{{ url_for('static', filename='braille.gif') }}");
-                background-repeat: no-repeat;
-                background-position: bottom right;
-                background-attachment: fixed;
-                padding: 100px;
-                background-size: 15%;
-                margin-top: 0;
-                font-size: 15px;
-                padding: 0;
-                color: black;
-            }
+        body {
+            background-color: white;
+            font-family: 'Poppins', sans-serif;
+            font-size: large;
+        }
 
-            nav {
-                font-size: 15px;
-                padding: 0;
-                margin-top: 0;
-                color: black;
-            }
+        .header_footer {
+            background-color:rgb(248,238,210);
+			width: 100%
+        }
 
-            a {
-                text-decoration: none;
-                font-size: 15px;
-            }
+        .menu_item {
+            padding: 0px 2% 0px 2%
+        }
 
-            a:hover {
-                transition: 0.3s;
-            }
+        a {
+            text-decoration: none;
+        }
 
-            input {
-                font-size: 30px;
-                font-family: 'Poppins', sans-serif;
-                position: absolute;
-                color: black;
-            }
+        .title {
+            font-size: 150%;
+            font-weight: bold;
+            color: black;
+            padding: 20px 20px 20px 20px;
+        }
 
-            input:hover {
-                color: blue;
-                transition: 0.3s;
-            }
+		.wrapper {
+			{% if request.MOBILE %}
+    	    padding: 4px 20px 4px 20px;
+			{% else %}
+            padding: 20px 20px 20px 20px;
+			{% endif %}
+        }
 
-            .submit {
-                background-color: DodgerBlue;
-            }
+		.button_wrapper {
+			{% if request.MOBILE %}
+            padding: 10px 20px 4px 0;
+			{% else %}
+            padding: 20px 20px 20px 20px;
+			{% endif %}
+			text-align: center;
+			margin: auto;
+        }
 
-            .file {
-                color: DodgerBlue;
-            }
+        input:hover {
+            color: blue;
+            transition: 0.3s;
+        }
 
-            img {
-                text-align: center;
-            }
+        .container {
+            min-width: 240px;
+            max-width: 1000px;
+            align: center;
+            margin: auto;
+        }
 
-            h1 {
-                text-align: center;
-                margin-bottom: 0;
-                margin-top: 0;
-            }
+        .centered {
+            text-align: center;
+            margin: auto;
+        }
 
-		</style>
-    
-    </head>
+        input[type="checkbox"] {
+            transform: scale(2);
+            margin: 10px;
+        }
+		
+		input[type="button"] {
+            font-size: 150%;
+            color: black;
+		    white-space: normal;
+		    width: 40%;
+			margin: 1%
+		}
 
-    <body>
-    <div style="background-color:rgb(248,238,210);">
-        <h1 style="color: blue; text-align: center; font-size: 40px;">Angelina braille reader
+		input[type="submit"] {
+            font-size: 150%;
+            color: black;
+		    white-space: normal;
+		    width: 40%;
+			margin: 1%
+        }
+
+		input[type="text"] {
+            font-size: 150%;
+            color: black;
+		}
+
+        img {
+            text-align: center;
+        }
+
+    </style>
+
+</head>
+
+{% from 'flashed_messages_macro.html' import flashed_messages %}
+<body>
+    <div class="header_footer" style="padding-top:1%">
         {% if config['DEBUG'] %}
-            <span style="color: red">(DEBUG)</span>
-        {% endif %}
-        </h1>
-        <br>
-        <a href="{{ url_for('index') }}"> Главная </a><sp/><sp/>
-        <a href="{{ url_for('m') }}"> Мобильная </a><sp/><sp/>
-        <a href="{{ url_for('help') }}"> Помощь </a>
-        {% if current_user.is_anonymous  %}
-            <a href="{{ url_for('login') }}"> Войти </a>
-            <a href="{{ url_for('register') }}"> Зарегистрироваться </a>
+            <div style="color: blue; text-align: center; font-size: 80%;">Angelina braille reader
+            <span style="color: red; text-align: center; font-size: 180%;">(DEBUG)</span></div>
         {% else %}
-            {{ current_user.name }}
-            <a href="{{ url_for('logout') }}"> Выйти </a>
+            <div style="color: blue; text-align: center; font-size: 180%;">Angelina braille reader</div>
         {% endif %}
-        <br/>
-        Предложения и замечания пишите на <a href="mailto:angelina-reader@ovdv.ru">angelina-reader@ovdv.ru</a>
-
+        <table width="100%">
+        <tr>
+        <td valign="top">
+        <a href="{{ url_for('index') }}" class="menu_item"> Главная </a>
+        <a href="{{ url_for('help') }}" class="menu_item"> Помощь </a>
+        {% if current_user.is_anonymous  %}
+            <a href="{{ url_for('login') }}" style="float:right;" class="menu_item"> Войти </a>
+            <a href="{{ url_for('register') }}" style="float:right;" class="menu_item"> Зарегистрироваться </a>
+        {% else %}
+            <a href="{{ url_for('logout') }}" class="menu_item" style="float:right;"> Выйти </a>
+            <span class="menu_item" style="float:right;">{{ current_user.name }}</span>
+        {% endif %}
+        </td>
+        </tr>
+        </table>
     </div>
 
     {% block content %} {% endblock %}
 
-    <br/>
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    {% for message in messages %}
-        <span style="color: red;">{{ message }}</span>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-
-    </body>
-
+</body>
 </html>
