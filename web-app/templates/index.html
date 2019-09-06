@@ -40,7 +40,6 @@ function set_onchange() {
             </div>
             {{ flashed_messages() }}
             <div class="button_wrapper">
-                <input type="button" id="form_camera_file_click" value="Сделать фото" onclick="set_onchange(); form.camera_file.click();"/>
                 <input type="button" id="form_file_click" value="Загрузить файл" onclick="set_onchange(); form.file.click();"/>
             </div>
             {{ form.camera_file(accept="image/*", capture="camera", style="display:none;") }}
