@@ -215,7 +215,7 @@ if __name__ == "__main__":
         print('running with no debug mode')
     app.jinja_env.cache = {}
     if debug:
-		app.config['TEMPLATES_AUTO_RELOAD'] = True
+        app.config['TEMPLATES_AUTO_RELOAD'] = True
         app.run(debug=True, port=5001)
     else:
         app.run(host='0.0.0.0', threaded=True)
