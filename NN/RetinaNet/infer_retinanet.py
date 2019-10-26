@@ -46,6 +46,7 @@ import braille_utils.postprocess as postprocess
 
 class BrailleInference:
 
+    DRAW_NONE = -1
     DRAW_ORIGINAL = 0
     DRAW_REFINED = 1
     DRAW_BOTH = 2
@@ -86,7 +87,7 @@ class BrailleInference:
         best_idx = torch.argmin(err_score/(sum_valid+1)) # эвристика так себе придуманная
         return best_idx.item(), (err_score.cpu().data.tolist(), sum_valid.cpu().data.tolist(), sum_invalid.cpu().data.tolist())
 
-    def run(self, img_fn, lang, draw_refined = DRAW_REFINED, attempts_number = 8):
+    def run(self, img_fn, lang, draw_refined = DRAW_NONE, attempts_number = 8):
         if verbose:
             print("run.preprocess")
         t = time.clock()
@@ -170,12 +171,13 @@ class BrailleInference:
             s = ''
             for ch in ln.chars:
                 s += ' ' * ch.spaces_before + ch.char
-                if draw_refined != self.DRAW_REFINED:
+                if draw_refined != self.DRAW_REFINED and draw_refined != self.DRAW_NONE:
                     ch_box = ch.original_box
                     draw.rectangle(list(ch_box), outline='blue' if draw_refined == self.DRAW_BOTH else 'green')
                 if draw_refined != self.DRAW_ORIGINAL:
                     ch_box = ch.refined_box
-                    draw.rectangle(list(ch_box), outline='green')
+                    if draw_refined != self.DRAW_NONE:
+                        draw.rectangle(list(ch_box), outline='green')
                 if ch.char.startswith('~'):
                     draw.text((ch_box[0], ch_box[3]), ch.char, font=fntErr, fill="black")
                 else:
@@ -196,7 +198,7 @@ class BrailleInference:
             'err_scores': err_score
         }
 
-    def to_dict(self, img, lines, draw_refined = DRAW_REFINED):
+    def to_dict(self, img, lines, draw_refined = DRAW_NONE):
         '''
         generates dict for LabelMe json format
         :param img:
@@ -222,7 +224,7 @@ class BrailleInference:
                }
         return res
 
-    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_REFINED,
+    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_NONE,
                      remove_labeled_from_filename = False, attempts_number = 8):
         if verbose:
             print("recognizer.run")
@@ -269,7 +271,7 @@ class BrailleInference:
             print("save results", time.clock() - t)
         return marked_image_path, result_dict['text']
 
-    def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_REFINED,
+    def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_NONE,
                              remove_labeled_from_filename = False, attempts_number = 8):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
@@ -290,14 +292,13 @@ class BrailleInference:
 if __name__ == '__main__':
 
     #img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика\list.txt' #
-    img_filename_mask = r'D:\Programming.Data\Braille\My\raw\list.txt'
-    results_dir =       r'D:\Programming.Data\Braille\My\tmp\tmp2'
-    #results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\res\Математика3'
+    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\q\*.jpg'
+    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\q'
     remove_labeled_from_filename = True
     attempts_number = 8
 
     recognizer = BrailleInference()
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_REFINED,
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_NONE,
                                     remove_labeled_from_filename = remove_labeled_from_filename,
                                     attempts_number = attempts_number)
 
