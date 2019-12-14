@@ -14,7 +14,7 @@ model_weights = '/models/clr.008'
 device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
-nms_thresh = 0
+nms_thresh = 0.
 
 verbose = False
 
@@ -44,6 +44,68 @@ import pytorch_retinanet
 import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
+class BraileInferenceImpl(torch.nn.Module):
+    def __init__(self, params, model_weights_fn, label_is_valid):
+        super(BraileInferenceImpl, self).__init__()
+        self.model_weights_fn = model_weights_fn
+
+        #self.model = model
+        self.model, _, _ = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
+        self.model = self.model.to(device)
+        self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
+        self.model.eval()
+        #self.model = torch.jit.script(self.model)
+
+        self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
+        #self.encoder = encoder
+        self.valid_mask = torch.tensor(label_is_valid).long()
+        self.cls_thresh = cls_thresh
+        self.nms_thresh = nms_thresh
+
+    def calc_letter_statistics(self, cls_preds, cls_thresh):
+        # type: (List[Tensor], float)->Tuple[int, Tuple[Tensor, Tensor, Tensor]]
+        stats = []
+        for cls_pred in cls_preds:
+            scores = cls_pred.sigmoid()
+            scores[scores<cls_thresh] = torch.tensor(0.).to(scores.device)
+            stat = scores.sum(1)
+            stats.append(stat)
+        stat = torch.cat(stats, dim=0)
+        valid_mask = self.valid_mask.to(stat.device)
+        sum_valid = (stat*valid_mask).sum(1)
+        sum_invalid = (stat*(1-valid_mask)).sum(1)
+        err_score = (sum_invalid+1)/(sum_valid+1)
+        best_idx = torch.argmin(err_score/(sum_valid+1)) # эвристика так себе придуманная
+        return best_idx.item(), (err_score, sum_valid, sum_invalid)
+
+    def forward(self, input_tensor, input_tensor_rotated, attempts_number = 8):
+        # type: (Tensor, Tensor, int)->Tuple[Tensor,Tensor,Tensor,int, Tuple[Tensor, Tensor, Tensor]]
+        input_data = []
+        input_data.append(input_tensor.unsqueeze(0)) # 0 - as is
+        if attempts_number > 1:
+            input_data.append(torch.flip(input_data[-1], [2,3]))    # 1 - rotate 180
+        if attempts_number > 2:
+            input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
+        if attempts_number > 4:
+            input_data.append(input_tensor_rotated.unsqueeze(0))  # 4 - rotate 90
+            if attempts_number > 5:
+                input_data.append(torch.flip(input_data[-1], [2,3])) # 5 - rotate 270
+            if attempts_number > 6:
+                input_data.extend([-input_data[-2], -input_data[-1]])   # 6 - rotate 90 inverted, 7 - rotate 270 inverted
+            print("run.model")
+        loc_preds: List[Tensor] = []
+        cls_preds: List[Tensor] = []
+        for input_data_i in input_data:
+            (loc_pred, cls_pred) = self.model(input_data_i)
+            loc_preds.append(loc_pred)
+            cls_preds.append(cls_pred)
+        best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh)
+        h,w = input_data[best_idx].shape[2:]
+        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
+                                      cls_thresh = self.cls_thresh, nms_thresh = self.nms_thresh)
+        return boxes, labels, scores, best_idx, err_score
+
+
 class BrailleInference:
 
     DRAW_NONE = -1
@@ -51,8 +113,7 @@ class BrailleInference:
     DRAW_REFINED = 1
     DRAW_BOTH = 2
 
-    def __init__(self, model_fn = model_fn, model_weights = model_weights):
-
+    def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = True):
         params = AttrDict.load(model_fn + '.param.txt', verbose = True)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
         params.data.batch_size = 1 #######
@@ -61,38 +122,29 @@ class BrailleInference:
             stretch_limit = 0.0,
             rotate_limit=0,
         )
-
-        self.model_weights_fn = model_fn + model_weights
-        self.model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
-        self.model = self.model.to(device)
-        self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
-        self.model.eval()
-        print("Model loaded")
-
         self.preprocessor = data.ImagePreprocessor(params, mode = 'inference')
-        self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
+        model_weights_fn = model_fn + model_weights
+        model_script_fn = model_weights_fn + '.pth'
 
-    def calc_letter_statistics(self, cls_preds, cls_thresh):
-        stats = []
-        for cls_pred in cls_preds:
-            scores = cls_pred.sigmoid()
-            scores[scores<cls_thresh] = 0
-            stat = scores.sum(1)
-            stats.append(stat)
-        stat = torch.cat(stats, dim=0)
-        valid_mask = torch.Tensor(lt.label_is_valid).to(stat.device)
-        sum_valid = (stat*valid_mask).sum(1)
-        sum_invalid = (stat*(1-valid_mask)).sum(1)
-        err_score = (sum_invalid+1)/(sum_valid+1)
-        best_idx = torch.argmin(err_score/(sum_valid+1)) # эвристика так себе придуманная
-        return best_idx.item(), (err_score.cpu().data.tolist(), sum_valid.cpu().data.tolist(), sum_invalid.cpu().data.tolist())
+        if create_script != False:
+            self.impl = BraileInferenceImpl(params, model_weights_fn, lt.label_is_valid).cuda()
+            if create_script is not None:
+                self.impl = torch.jit.script(self.impl)
+            if isinstance(self.impl, torch.jit.ScriptModule):
+                torch.jit.save(self.impl, model_script_fn)
+                print("Model loaded and saved to " + model_script_fn)
+            else:
+                print("Model loaded")
+        else:
+            self.impl = torch.jit.load(model_script_fn)
+            print("Model pth loaded")
+        self.impl.to(device)
 
     def run(self, img_fn, lang, draw_refined = DRAW_NONE, attempts_number = 8):
         if verbose:
             print("run.preprocess")
         t = time.clock()
         img = PIL.Image.open(img_fn)
-        input_data = []
         if verbose:
             print("run.preprocess", time.clock() - t)
             print("run.make_batch")
@@ -101,52 +153,19 @@ class BrailleInference:
         np_img = np.asarray(img)
         aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
         aug_img = data.unify_shape(aug_img)
-        input_tensor = self.preprocessor.to_normalized_tensor(aug_img)
-
-        input_data.append(input_tensor.unsqueeze(0).to(device)) # 0 - as is
-        if attempts_number > 1:
-            input_data.append(torch.flip(input_data[-1], [2,3]))    # 1 - rotate 180
-        if attempts_number > 2:
-            input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
+        input_tensor = self.preprocessor.to_normalized_tensor(aug_img).to(device)
+        input_tensor_rotated = torch.tensor(0).to(device)
 
         aug_img_rot = None
         if attempts_number > 4:
             np_img_rot = np.rot90(np_img, 1, (0,1))
             aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0]
             aug_img_rot = data.unify_shape(aug_img_rot)
-            input_tensor = self.preprocessor.to_normalized_tensor(aug_img_rot)
-            input_data.append(input_tensor.unsqueeze(0).to(device))  # 4 - rotate 90
-            if attempts_number > 5:
-                input_data.append(torch.flip(input_data[-1], [2,3])) # 5 - rotate 270
-            if attempts_number > 6:
-                input_data.extend([-input_data[-2], -input_data[-1]])   # 6 - rotate 90 inverted, 7 - rotate 270 inverted
+            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot).to(device)
 
-        if verbose:
-            print("run.make_batch", time.clock() - t)
-            print("run.model")
-        t = time.clock()
         with torch.no_grad():
-            loc_preds = []
-            cls_preds = []
-            for input_data_i in input_data:
-                (loc_pred, cls_pred) = self.model(input_data_i)
-                loc_preds.append(loc_pred)
-                cls_preds.append(cls_pred)
-        if verbose:
-            print("run.model", time.clock() - t)
-            print("run.cals_stats")
-        t = time.clock()
-        best_idx, err_score = self.calc_letter_statistics(cls_preds, cls_thresh)
-        if verbose:
-            print("run.cals_stats", time.clock() - t)
-            print("run.decode")
-        t = time.clock()
-        h,w = input_data[best_idx].shape[2:] # TODO here is cause of problem with rotation
-        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
-                                      cls_thresh = cls_thresh, nms_thresh = nms_thresh)
-        if verbose:
-            print("run.decode", time.clock() - t)
-            print("run.postprocess")
+            boxes, labels, scores, best_idx, err_score = self.impl(input_tensor, input_tensor_rotated, attempts_number)
+
         t = time.clock()
         boxes = boxes.tolist()
         labels = labels.tolist()
@@ -195,7 +214,7 @@ class BrailleInference:
             'text': out_text,
             'dict': self.to_dict(aug_img, lines, draw_refined),
             'best_idx': best_idx,
-            'err_scores': err_score
+            'err_scores': list([ten.cpu().data.tolist() for ten in err_score])
         }
 
     def to_dict(self, img, lines, draw_refined = DRAW_NONE):
@@ -261,7 +280,7 @@ class BrailleInference:
                 ver = '3',
                 best_idx = result_dict['best_idx'],
                 err_scores = result_dict['err_scores'],
-                model_weights = self.model_weights_fn,
+                model_weights = self.impl.model_weights_fn,
             )
             if extra_info:
                 info.update(extra_info)
@@ -292,8 +311,8 @@ class BrailleInference:
 if __name__ == '__main__':
 
     #img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика\list.txt' #
-    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\q\*.jpg'
-    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\q'
+    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика_ч1кн3\*.jpg'
+    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\Математика_ч1кн3'
     remove_labeled_from_filename = True
     attempts_number = 8
 
