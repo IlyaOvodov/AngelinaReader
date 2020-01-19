@@ -152,6 +152,13 @@ def help():
     return render_template('help.html')
 
 
+@app.route("/results_demo")
+@mobile_template('{m/}results_demo.html')
+def results_demo(template):
+    time.sleep(1)
+    return render_template(template)
+
+
 @app.route('/login', methods=['GET', 'POST'])
 @mobile_template('{m/}login.html')
 def login(template):
