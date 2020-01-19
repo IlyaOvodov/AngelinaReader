@@ -43,7 +43,7 @@ def common_aug(mode, params):
     if mode != 'inference':
         augs_list.append(T.Blur(blur_limit=4))
         augs_list.append(T.RandomBrightnessContrast())
-        augs_list.append(T.MotionBlur())
+        #augs_list.append(T.MotionBlur())
         augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
         #augs_list.append(T.VerticalFlip())
         augs_list.append(T.HorizontalFlip())
