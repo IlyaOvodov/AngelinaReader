@@ -7,7 +7,7 @@ from ovotools import AttrDict
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/retina_DSBI_TEST',
+    model_name = 'NN_results/retina_DSBI_TEST_noaugm',
     data = AttrDict(
         get_points = False,
         batch_size = 12,
@@ -38,9 +38,13 @@ params = AttrDict(
         }
     ),
     augmentation = AttrDict(
-        img_width_range=(614, 1840),  # 768*0.8, 1536*1.2
-        stretch_limit = 0.1,
-        rotate_limit = 5,
+        img_width_range=(1024, 1024),  # 768*0.8, 1536*1.2
+        stretch_limit = 0,
+        rotate_limit = 0,
+        blur_limit = 0,
+        RandomBrightnessContrast = False,
+        JpegCompression = False,
+        HorizontalFlip = False,
     ),
     model = 'retina',
     model_params = AttrDict(
@@ -60,7 +64,7 @@ params = AttrDict(
     #load_model_from = 'NN_results/retina_chars_7ec096/models/clr.012',
     optim = 'torch.optim.Adam',
     optim_params = AttrDict(
-        lr=0.0001,
+        lr=0.0002,
         #momentum=0.9,
         #weight_decay = 0, #0.001,
         #nesterov = False,
@@ -70,16 +74,21 @@ params = AttrDict(
         log_lr_start=-4,
         log_lr_end=-0.3,
     ),
-    clr=AttrDict(
-        warmup_epochs=10,
-        min_lr=1e-05,
-        max_lr=0.0002,
-        period_epochs=500,
-        scale_max_lr=0.9,
-        scale_min_lr=0.9,
+    lr_scheduler=AttrDict(
+        type='clr',
+        params=AttrDict(
+            milestones=[5000, 10000,],
+            gamma=0.1,
+        ),
     ),
-
-    #decimate_lr_every = 1200,
+    clr=AttrDict(
+       warmup_epochs=10,
+       min_lr=1e-05,
+       max_lr=0.0002,
+       period_epochs=500,
+       scale_max_lr=0.9,
+       scale_min_lr=0.9,
+    ),
 )
 max_epochs = 100000
 tensorboard_port = 6006
@@ -97,11 +106,16 @@ import ignite
 from ignite.engine import Events
 import ovotools.ignite_tools
 import ovotools.pytorch_tools
+import ovotools.pytorch
 
 import train.data
 import create_model_retinanet
 
+ctx = ovotools.pytorch.Context(settings=None, params=params)
+
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
+ctx.net  = model
+ctx.loss = loss
 
 train_loader = train.data.create_dataloader(params, collate_fn,
                                             list_file_names=params.data.train_list_file_names, shuffle=True)
@@ -111,7 +125,7 @@ print('data loaded. train:{} batches'.format(len(train_loader)))
 for k,v in val_loaders.items():
     print('             {}:{} batches'.format(k, len(v)))
 
-optimizer = eval(params.optim)(model.parameters(), **params.optim_params)
+ctx.optimizer = eval(params.optim)(model.parameters(), **params.optim_params)
 
 metrics = OrderedDict({
     'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
@@ -136,12 +150,16 @@ eval_event = ignite.engine.Events.ITERATION_COMPLETED if findLR else ignite.engi
 eval_duty_cycle = 2 if findLR else 5
 train_epochs = params.lr_finder.iters_num*len(train_loader) if findLR else max_epochs
 
-trainer = ovotools.ignite_tools.create_supervised_trainer(model, optimizer, loss, metrics=trainer_metrics, device = device)
+trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, loss, metrics=trainer_metrics, device = device)
 evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metrics, device = device)
 
+if findLR:
+    best_model_buffer = None
+else:
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_dsbi:loss', minimize=True, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
-                                                                best_model_buffer=None,
+                                                                best_model_buffer=best_model_buffer,
                                                                 params = params,
                                                                 duty_cycles = eval_duty_cycle)
 trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
@@ -152,14 +170,26 @@ if findLR:
     def upd_lr(engine):
         log_lr = params.lr_finder.log_lr_start + (params.lr_finder.log_lr_end - params.lr_finder.log_lr_start) * (engine.state.iteration-1)/params.lr_finder.iters_num
         lr = math.pow(10, log_lr)
-        optimizer.param_groups[0]['lr'] = lr
-        engine.state.metrics['lr'] = optimizer.param_groups[0]['lr']
+        ctx.optimizer.param_groups[0]['lr'] = lr
+        engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
         if engine.state.iteration > params.lr_finder.iters_num:
             print('done')
             engine.terminate()
 else:
-    clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, optimizer, target_metric, params,
+    if params.lr_scheduler.type == 'clr':
+        clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, ctx.optimizer, target_metric, params,
                                                        engine=trainer)
+    else:
+        ctx.create_lr_scheduler()
+
+        @trainer.on(Events.EPOCH_COMPLETED)
+        def lr_scheduler_step(engine):
+            call_params = {'epoch': engine.state.epoch}
+            if ctx.params.lr_scheduler.type.split('.')[-1] == 'ReduceLROnPlateau':
+                call_params['metrics'] = engine.state.metrics['val_dsbi:loss']
+            engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
+            ctx.lr_scheduler.step(**call_params)
+
 #@trainer.on(Events.EPOCH_COMPLETED)
 #def save_model(engine):
 #    if save_every and (engine.state.epoch % save_every) == 0:
