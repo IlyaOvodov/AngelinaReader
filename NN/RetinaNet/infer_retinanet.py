@@ -140,7 +140,9 @@ class BrailleInference:
             print("Model pth loaded")
         self.impl.to(device)
 
-    def run(self, img_fn, lang, draw_refined = DRAW_NONE, attempts_number = 8):
+    def run(self, img_fn, lang, draw_refined = DRAW_NONE, attempts_number = 8, gt_rects=[]):
+        if gt_rects:
+            assert attempts_number == 1, "gt_rects можно передавать только если ориентация задана"
         if verbose:
             print("run.preprocess")
         t = time.clock()
@@ -151,7 +153,7 @@ class BrailleInference:
         t = time.clock()
 
         np_img = np.asarray(img)
-        aug_img = self.preprocessor.preprocess_and_augment(np_img)[0]
+        aug_img, aug_gt_rects = self.preprocessor.preprocess_and_augment(np_img, gt_rects)
         aug_img = data.unify_shape(aug_img)
         input_tensor = self.preprocessor.to_normalized_tensor(aug_img).to(device)
         input_tensor_rotated = torch.tensor(0).to(device)
@@ -169,6 +171,7 @@ class BrailleInference:
         t = time.clock()
         boxes = boxes.tolist()
         labels = labels.tolist()
+        scores = scores.tolist()
         lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
 
         if verbose:
@@ -214,7 +217,11 @@ class BrailleInference:
             'text': out_text,
             'dict': self.to_dict(aug_img, lines, draw_refined),
             'best_idx': best_idx,
-            'err_scores': list([ten.cpu().data.tolist() for ten in err_score])
+            'err_scores': list([ten.cpu().data.tolist() for ten in err_score]),
+            'boxes': boxes,
+            'labels': labels,
+            'scores': scores,
+            'gt_rects': aug_gt_rects,
         }
 
     def to_dict(self, img, lines, draw_refined = DRAW_NONE):
@@ -311,8 +318,8 @@ class BrailleInference:
 if __name__ == '__main__':
 
     #img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика\list.txt' #
-    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика_ч1кн3\*.jpg'
-    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\Математика_ч1кн3'
+    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Лит чтение_ч2\*.jpg'
+    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\Лит чтение_ч2'
     remove_labeled_from_filename = True
     attempts_number = 8
 

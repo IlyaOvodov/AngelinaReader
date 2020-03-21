@@ -1,25 +1,40 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import torch
+from PIL import Image, ImageDraw
+
 """
 evaluate levenshtein distance as recognition error for dataset using various model(s)
 """
 
+# Для отладки
+# models = [
+#     ('NN_saved/retina_chars_eced60', '/models/clr.008'),
+# ]
+
 models = [
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.021.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.018.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.019.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.020.t7'),
 
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.029.t7'),
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.030.t7'),
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.031.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.034.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.035.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.036.t7'),
 
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.038.t7'),
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.039.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.041.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.042.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.043.t7'),
+
+    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/best.t7'),
+
+    ('NN_results/retina_DSBI_TEST_noaugm_x100_21c9a8', '/models/best.t7'),
 ]
 
 datasets = {
-    'DSBI_train': [
-                    r'DSBI\data\train.txt',
-                 ],
+    # 'DSBI_train': [
+    #                 r'DSBI\data\train.txt',
+    #              ],
     'DSBI_test': [
                     r'DSBI\data\test.txt',
                   ],
@@ -45,7 +60,7 @@ params = AttrDict(data=AttrDict(rect_margin=0.3))
 
 def prepare_data():
     """
-    data (datasets defined above as global) -> dict: key - list of (image filename, groundtruth pseudotext)
+    data (datasets defined above as global) -> dict: key - list of dict (image_fn":full image filename, "gt_text": groundtruth pseudotext, "gt_rects": groundtruth rects + label 0..64)
     :return:
     """
     res_dict = dict()
@@ -85,7 +100,7 @@ def prepare_data():
                         labels = [r[4] for r in rects]
                         lines = postprocess.boxes_to_lines(boxes, labels, lang=lang)
                         gt_text = lines_to_pseudotext(lines)
-                        data_list.append((full_fn, gt_text))
+                        data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})
     return res_dict
 
 
@@ -118,7 +133,17 @@ def pseudo_char_to_label010(ch):
     return label010
 
 
-def count_dots(s):
+def count_dots_lbl(lbl):
+    n = 0
+    label010 = label_tools.int_to_label010(lbl)
+    for c01 in label010:
+        if c01 == '1':
+            n += 1
+        else:
+            assert c01 == '0'
+    return n
+
+def count_dots_str(s):
     n = 0
     for ch in s:
         if ch in " \n":
@@ -139,20 +164,20 @@ def dot_metrics(res, gt):
     opcodes = Levenshtein.opcodes(res, gt)
     for op, i1, i2, j1, j2 in opcodes:
         if op == 'delete':
-            fp += count_dots(res[i1:i2])
+            fp += count_dots_str(res[i1:i2])
         elif op == 'insert':
-            fn += count_dots(gt[j1:j2])
+            fn += count_dots_str(gt[j1:j2])
         elif op == 'equal':
-            tp += count_dots(res[i1:i2])
+            tp += count_dots_str(res[i1:i2])
         elif op == 'replace':
             res_substr = res[i1:i2].replace(" ", "").replace("\n", "")
             gt_substr = gt[j1:j2].replace(" ", "").replace("\n", "")
             d = len(res_substr) - len(gt_substr)
             if d > 0:
-                fp += count_dots(res_substr[-d:])
+                fp += count_dots_str(res_substr[-d:])
                 res_substr = res_substr[:-d]
             elif d < 0:
-                fn += count_dots(gt_substr[d:])
+                fn += count_dots_str(gt_substr[d:])
                 gt_substr = gt_substr[:d]
             assert len(res_substr) == len(gt_substr)
             for i, res_i in enumerate(res_substr):
@@ -171,6 +196,75 @@ def dot_metrics(res, gt):
     return tp, fp, fn
 
 
+def dot_metrics_rects(boxes, labels, gt_rects, image_wh):
+    gt_labels = [r[4] for r in gt_rects]
+    gt_rec_labels = [-1] * len(gt_rects)  # recognized label for gt, -1 - missed
+    rec_is_false = [1] * len(labels)  # recognized is false
+
+    if len(gt_rects) and len(labels):
+        boxes = torch.tensor(boxes)
+        gt_boxes = torch.tensor([r[:4] for r in gt_rects]) * torch.tensor([image_wh[0], image_wh[1], image_wh[0], image_wh[1]])
+
+        # Для отладки
+        # labels = torch.tensor(labels)
+        # gt_labels = torch.tensor(gt_labels)
+        #
+        # _, rec_order = torch.sort(boxes[:, 1], dim=0)
+        # boxes = boxes[rec_order][:15]
+        # labels = labels[rec_order][:15]
+        # _, gt_order = torch.sort(gt_boxes[:, 1], dim=0)
+        # gt_boxes = gt_boxes[gt_order][:15]
+        # gt_labels = gt_labels[gt_order][:15]
+        #
+        # _, rec_order = torch.sort(labels, dim=0)
+        # boxes = boxes[rec_order]
+        # labels = labels[rec_order]
+        # _, gt_order = torch.sort(-gt_labels, dim=0)
+        # gt_boxes = gt_boxes[gt_order]
+        # gt_labels = gt_labels[gt_order]
+        #
+        # labels = torch.tensor(labels)
+        # gt_labels = torch.tensor(gt_labels)
+
+        areas = (boxes[:, 2] - boxes[:, 0])*(boxes[:, 3] - boxes[:, 1])
+        gt_areas = (gt_boxes[:, 2] - gt_boxes[:, 0])*(gt_boxes[:, 3] - gt_boxes[:, 1])
+        x1 = torch.max(gt_boxes[:, 0].unsqueeze(1), boxes[:, 0].unsqueeze(0))
+        y1 = torch.max(gt_boxes[:, 1].unsqueeze(1), boxes[:, 1].unsqueeze(0))
+        x2 = torch.min(gt_boxes[:, 2].unsqueeze(1), boxes[:, 2].unsqueeze(0))
+        y2 = torch.min(gt_boxes[:, 3].unsqueeze(1), boxes[:, 3].unsqueeze(0))
+        intersect_area = (x2-x1).clamp(min=0)*(y2-y1).clamp(min=0)
+        iou = intersect_area / (gt_areas.unsqueeze(1) + areas.unsqueeze(0) - intersect_area)
+        for gt_i in range(len(gt_labels)):
+            rec_i = iou[gt_i, :].argmax()
+            if iou[gt_i, rec_i] > 0:
+                gt_i2 = iou[:, rec_i].argmax()
+                if gt_i2 == gt_i:
+                    gt_rec_labels[gt_i] = labels[rec_i]
+                    rec_is_false[rec_i] = 0
+
+    tp = 0
+    fp = 0
+    fn = 0
+    for gt_label, rec_label in zip(gt_labels, gt_rec_labels):
+        if rec_label == -1:
+            fn += count_dots_lbl(gt_label)
+        else:
+            res010 = label_tools.int_to_label010(rec_label)
+            gt010 = label_tools.int_to_label010(gt_label)
+            for p in range(6):
+                if res010[p] == '1' and gt010[p] == '0':
+                    fp += 1
+                elif res010[p] == '0' and gt010[p] == '1':
+                    fn += 1
+                elif res010[p] == '1' and gt010[p] == '1':
+                    tp += 1
+    for label, is_false in zip(labels, rec_is_false):
+        if is_false:
+            fp += count_dots_lbl(label)
+    return tp, fp, fn
+
+
+
 def validate_model(recognizer, data_list):
     """
     :param recognizer: infer_retinanet.BrailleInference instance
@@ -180,28 +274,47 @@ def validate_model(recognizer, data_list):
     sum_d = 0
     sum_d1 = 0.
     sum_len = 0
+    # по тексту
     tp = 0
     fp = 0
     fn = 0
-    for img_fn, gt_text in data_list:
-        res_dict = recognizer.run(img_fn, lang=lang, attempts_number=1)
+    # по rect
+    tp_r = 0
+    fp_r = 0
+    fn_r = 0
+
+    for gt_dict in data_list:
+        img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
+        res_dict = recognizer.run(img_fn, lang=lang, attempts_number=1, gt_rects = gt_rects)
+
+        tpi, fpi, fni = dot_metrics_rects(boxes = res_dict['boxes'], labels = res_dict['labels'],
+                                          gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height))
+        tp_r += tpi
+        fp_r += fpi
+        fn_r += fni
+
         res_text = lines_to_pseudotext(res_dict['lines'])
         d = Levenshtein.distance(res_text, gt_text)
         sum_d += d
         if len(gt_text):
             sum_d1 += d/len(gt_text)
         sum_len += len(gt_text)
-
         tpi, fpi, fni = dot_metrics(res_text, gt_text)
         tp += tpi
         fp += fpi
         fn += fni
-    precesion = tp/(tp+fp)
+
+    precision = tp/(tp+fp)
     recall = tp/(tp+fn)
+    precision_r = tp_r/(tp_r+fp_r)
+    recall_r = tp_r/(tp_r+fn_r)
     return {
-        'precesion': precesion,
+        'precision': precision,
         'recall': recall,
-        'f1': 2*precesion*recall/(precesion+recall),
+        'f1': 2*precision*recall/(precision+recall),
+        'precision_r': precision_r,
+        'recall_r': recall_r,
+        'f1_r': 2*precision_r*recall_r/(precision_r+recall_r),
         'd_by_doc': sum_d/len(data_list),
         'd_by_char': sum_d/sum_len,
         'd_by_char_avg': sum_d1/len(data_list)
@@ -211,16 +324,21 @@ def validate_model(recognizer, data_list):
 def main():
     # make data list
     data_set = prepare_data()
+    prev_model_root = None
 
     for model_root, model_weights in models:
         print('evaluating ', (model_root, model_weights))
         model_fn = os.path.join(local_config.data_path, model_root)
         recognizer = infer_retinanet.BrailleInference(model_fn=model_fn, model_weights=model_weights,
                                                       create_script=None)
+        if model_root != prev_model_root:
+            print('model: ', model_root)
         for key, data_list in data_set.items():
             res = validate_model(recognizer, data_list)
-            print(model_root, model_weights, key, res)
-
+            print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
+                  'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
+                  'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
+                  'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
 
 if __name__ == '__main__':
     main()
