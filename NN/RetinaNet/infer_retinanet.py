@@ -16,8 +16,6 @@ device = 'cuda:0'
 cls_thresh = 0.3
 nms_thresh = 0.
 
-verbose = False
-
 import os
 import json
 import glob
@@ -45,8 +43,9 @@ import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
 class BraileInferenceImpl(torch.nn.Module):
-    def __init__(self, params, model_weights_fn, label_is_valid):
+    def __init__(self, params, model_weights_fn, label_is_valid, verbose=1):
         super(BraileInferenceImpl, self).__init__()
+        self.verbose = verbose
         self.model_weights_fn = model_weights_fn
 
         #self.model = model
@@ -92,6 +91,7 @@ class BraileInferenceImpl(torch.nn.Module):
                 input_data.append(torch.flip(input_data[-1], [2,3])) # 5 - rotate 270
             if attempts_number > 6:
                 input_data.extend([-input_data[-2], -input_data[-1]])   # 6 - rotate 90 inverted, 7 - rotate 270 inverted
+        if self.verbose >= 2:
             print("run.model")
         loc_preds: List[Tensor] = []
         cls_preds: List[Tensor] = []
@@ -113,8 +113,9 @@ class BrailleInference:
     DRAW_REFINED = 1
     DRAW_BOTH = 2
 
-    def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = None):
-        params = AttrDict.load(model_fn + '.param.txt', verbose = True)
+    def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = None, verbose=1):
+        self.verbose = verbose
+        params = AttrDict.load(model_fn + '.param.txt', verbose=verbose)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
         params.data.batch_size = 1 #######
         params.augmentation = AttrDict(
@@ -127,27 +128,30 @@ class BrailleInference:
         model_script_fn = model_weights_fn + '.pth'
 
         if create_script != False:
-            self.impl = BraileInferenceImpl(params, model_weights_fn, lt.label_is_valid).cuda()
+            self.impl = BraileInferenceImpl(params, model_weights_fn, lt.label_is_valid, verbose=verbose).cuda()
             if create_script is not None:
                 self.impl = torch.jit.script(self.impl)
             if isinstance(self.impl, torch.jit.ScriptModule):
                 torch.jit.save(self.impl, model_script_fn)
-                print("Model loaded and saved to " + model_script_fn)
+                if verbose >= 1:
+                    print("Model loaded and saved to " + model_script_fn)
             else:
-                print("Model loaded")
+                if verbose >= 1:
+                    print("Model loaded")
         else:
             self.impl = torch.jit.load(model_script_fn)
-            print("Model pth loaded")
+            if verbose >= 1:
+                print("Model pth loaded")
         self.impl.to(device)
 
     def run(self, img_fn, lang, draw_refined = DRAW_NONE, attempts_number = 8, gt_rects=[]):
         if gt_rects:
             assert attempts_number == 1, "gt_rects можно передавать только если ориентация задана"
-        if verbose:
+        if self.verbose >= 2:
             print("run.preprocess")
         t = time.clock()
         img = PIL.Image.open(img_fn)
-        if verbose:
+        if self.verbose >= 2:
             print("run.preprocess", time.clock() - t)
             print("run.make_batch")
         t = time.clock()
@@ -174,7 +178,7 @@ class BrailleInference:
         scores = scores.tolist()
         lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
 
-        if verbose:
+        if self.verbose >= 2:
             print("run.postprocess", time.clock() - t)
             print("run.draw")
         t = time.clock()
@@ -208,7 +212,7 @@ class BrailleInference:
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
-        if verbose:
+        if self.verbose >= 2:
             print("run.draw", time.clock() - t)
         return {
             'image': raw_image,
@@ -252,11 +256,11 @@ class BrailleInference:
 
     def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_NONE,
                      remove_labeled_from_filename = False, attempts_number = 8):
-        if verbose:
+        if self.verbose >= 2:
             print("recognizer.run")
         t = time.clock()
         result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined, attempts_number = attempts_number)
-        if verbose:
+        if self.verbose >= 2:
             print("recognizer.run", time.clock() - t)
             print("save results")
         t = time.clock()
@@ -293,7 +297,7 @@ class BrailleInference:
                 info.update(extra_info)
             json.dump(info, f, sort_keys=False, indent=4)
 
-        if verbose:
+        if self.verbose >= 2:
             print("save results", time.clock() - t)
         return marked_image_path, result_dict['text']
 

@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-import torch
-from PIL import Image, ImageDraw
-
 """
 evaluate levenshtein distance as recognition error for dataset using various model(s)
 """
+import torch
 
 # Для отладки
 # models = [
@@ -14,21 +11,49 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 # ]
 
 models = [
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.018.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.019.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.020.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.003.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.004.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.005.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.009.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.010.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.011.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.012.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.013.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.014.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.015.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.021.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.029.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.030.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.031.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.038.t7'),
+    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.039.t7'),
 
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.034.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.035.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.036.t7'),
+    ('NN_results/retina_DSBI_TEST_RLrPl_9ad218', '/models/best.t7'),
 
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.041.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.042.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.043.t7'),
+    ('NN_results/retina_DSBI_TEST_RLrPl_5ebd88', '/models/best.t7'),
 
-    ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/best.t7'),
-
-    ('NN_results/retina_DSBI_TEST_noaugm_x100_21c9a8', '/models/best.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.028.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.029.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.030.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.031.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.032.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.033.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.034.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.035.t7'),
+    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/best.t7'),
+    #
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100_21c9a8', '/models/best.t7'),
+    #
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.018.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.019.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.020.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.034.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.035.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.036.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.041.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.042.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.043.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/best.t7'),
 ]
 
 datasets = {
@@ -322,17 +347,20 @@ def validate_model(recognizer, data_list):
 
 
 def main():
+    verbose = 0
     # make data list
     data_set = prepare_data()
     prev_model_root = None
 
     for model_root, model_weights in models:
-        print('evaluating ', (model_root, model_weights))
-        model_fn = os.path.join(local_config.data_path, model_root)
-        recognizer = infer_retinanet.BrailleInference(model_fn=model_fn, model_weights=model_weights,
-                                                      create_script=None)
         if model_root != prev_model_root:
             print('model: ', model_root)
+            prev_model_root = model_root
+        if verbose:
+            print('evaluating weights: ', model_weights)
+        model_fn = os.path.join(local_config.data_path, model_root)
+        recognizer = infer_retinanet.BrailleInference(model_fn=model_fn, model_weights=model_weights,
+                                                      create_script=None, verbose=verbose)
         for key, data_list in data_set.items():
             res = validate_model(recognizer, data_list)
             print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
