@@ -21,7 +21,7 @@ from config import Config
 
 print("infer_retinanet.BrailleInference()")
 t = time.clock()
-recognizer = infer_retinanet.BrailleInference()
+recognizer = infer_retinanet.BrailleInference(create_script = None)
 print(time.clock()-t)
 
 app = Flask(__name__)
