@@ -3,7 +3,6 @@
 """
 evaluate levenshtein distance as recognition error for dataset using various model(s)
 """
-import torch
 
 # Для отладки
 # models = [
@@ -27,11 +26,11 @@ models = [
     # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.031.t7'),
     # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.038.t7'),
     # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.039.t7'),
-
-    ('NN_results/retina_DSBI_TEST_RLrPl_9ad218', '/models/best.t7'),
-
-    ('NN_results/retina_DSBI_TEST_RLrPl_5ebd88', '/models/best.t7'),
-
+    #
+    # ('NN_results/retina_DSBI_TEST_RLrPl_9ad218', '/models/best.t7'),
+    #
+    # ('NN_results/retina_DSBI_TEST_RLrPl_5ebd88', '/models/best.t7'),
+    #
     ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.028.t7'),
     ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.029.t7'),
     ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.030.t7'),
@@ -71,6 +70,7 @@ import os
 import sys
 import Levenshtein
 import PIL
+import torch
 sys.path.append(r'../..')
 sys.path.append('../NN/RetinaNet')
 import local_config
@@ -221,7 +221,36 @@ def dot_metrics(res, gt):
     return tp, fp, fn
 
 
-def dot_metrics_rects(boxes, labels, gt_rects, image_wh):
+def filter_lonely_rects(boxes, labels, img):
+    dx_to_h = 2.35 # расстояние от края до центра 3го символа
+    res_boxes = []
+    res_labels = []
+    filtered = []
+    for i in range(len(boxes)):
+        box = boxes[i]
+        cy = (box[1] + box[3])/2
+        dx = (box[3]-box[1])*dx_to_h
+        for j in range(len(boxes)):
+            if i == j:
+                continue
+            box2 = boxes[j]
+            if (box2[0] < box[2] + dx) and (box2[2] > box[0] - dx) and (box2[1] < cy) and (box2[3] > cy):
+                res_boxes.append(boxes[i])
+                res_labels.append(labels[i])
+                break
+        else:
+            filtered.append(box)
+    if filtered:
+        draw = PIL.ImageDraw.Draw(img)
+        for b in filtered:
+            draw.rectangle(b, fill="red")
+        img.show()
+
+    return res_boxes, res_labels
+
+def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_rects):
+	if do_filter_lonely_rects:
+	    boxes, labels = filter_lonely_rects(boxes, labels, img)
     gt_labels = [r[4] for r in gt_rects]
     gt_rec_labels = [-1] * len(gt_rects)  # recognized label for gt, -1 - missed
     rec_is_false = [1] * len(labels)  # recognized is false
@@ -290,7 +319,7 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh):
 
 
 
-def validate_model(recognizer, data_list):
+def validate_model(recognizer, data_list, do_filter_lonely_rects):
     """
     :param recognizer: infer_retinanet.BrailleInference instance
     :param data_list:  list of (image filename, groundtruth pseudotext)
@@ -313,7 +342,8 @@ def validate_model(recognizer, data_list):
         res_dict = recognizer.run(img_fn, lang=lang, attempts_number=1, gt_rects = gt_rects)
 
         tpi, fpi, fni = dot_metrics_rects(boxes = res_dict['boxes'], labels = res_dict['labels'],
-                                          gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height))
+                                          gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
+										  img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects)
         tp_r += tpi
         fp_r += fpi
         fn_r += fni
@@ -334,9 +364,9 @@ def validate_model(recognizer, data_list):
     precision_r = tp_r/(tp_r+fp_r)
     recall_r = tp_r/(tp_r+fn_r)
     return {
-        'precision': precision,
-        'recall': recall,
-        'f1': 2*precision*recall/(precision+recall),
+        # 'precision': precision,
+        # 'recall': recall,
+        # 'f1': 2*precision*recall/(precision+recall),
         'precision_r': precision_r,
         'recall_r': recall_r,
         'f1_r': 2*precision_r*recall_r/(precision_r+recall_r),
@@ -351,6 +381,7 @@ def main():
     # make data list
     data_set = prepare_data()
     prev_model_root = None
+	do_filter_lonely_rects = True
 
     for model_root, model_weights in models:
         if model_root != prev_model_root:
@@ -362,8 +393,12 @@ def main():
         recognizer = infer_retinanet.BrailleInference(model_fn=model_fn, model_weights=model_weights,
                                                       create_script=None, verbose=verbose)
         for key, data_list in data_set.items():
-            res = validate_model(recognizer, data_list)
-            print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
+            res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects)
+            # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
+            #       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
+            #       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
+            #       'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
+            print('{model_weights} {key} '
                   'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
                   'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
                   'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
