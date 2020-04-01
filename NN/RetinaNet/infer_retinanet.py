@@ -113,7 +113,7 @@ class BrailleInference:
     DRAW_REFINED = 1
     DRAW_BOTH = 2
 
-    def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = True):
+    def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = None):
         params = AttrDict.load(model_fn + '.param.txt', verbose = True)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
         params.data.batch_size = 1 #######

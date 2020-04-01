@@ -36,17 +36,22 @@ def common_aug(mode, params):
                                                 always_apply=True))
     if mode == 'train':
         augs_list.append(albumentations.RandomCrop(height=params.data.net_hw[0], width=params.data.net_hw[1], always_apply=True))
-        augs_list.append(T.Rotate(limit=params.augmentation.rotate_limit, border_mode=cv2.BORDER_CONSTANT, always_apply=True))
+        if params.augmentation.rotate_limit:
+            augs_list.append(T.Rotate(limit=params.augmentation.rotate_limit, border_mode=cv2.BORDER_CONSTANT, always_apply=True))
         # augs_list.append(T.OpticalDistortion(border_mode=cv2.BORDER_CONSTANT)) - can't handle boundboxes
     elif mode == 'debug':
         augs_list.append(albumentations.CenterCrop(height=params.data.net_hw[0], width=params.data.net_hw[1], always_apply=True))
     if mode != 'inference':
-        augs_list.append(T.Blur(blur_limit=4))
-        augs_list.append(T.RandomBrightnessContrast())
+        if params.augmentation.get('blur_limit', 4):
+            augs_list.append(T.Blur(blur_limit=params.augmentation.get('blur_limit', 4)))
+        if params.augmentation.get('RandomBrightnessContrast', True):
+            augs_list.append(T.RandomBrightnessContrast())
         #augs_list.append(T.MotionBlur())
-        augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
+        if params.augmentation.get('JpegCompression', True):
+            augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
         #augs_list.append(T.VerticalFlip())
-        augs_list.append(T.HorizontalFlip())
+        if params.augmentation.get('HorizontalFlip', True):
+            augs_list.append(T.HorizontalFlip())
 
     return albumentations.Compose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 
