@@ -381,7 +381,7 @@ def main():
     # make data list
     data_set = prepare_data()
     prev_model_root = None
-	do_filter_lonely_rects = True
+	do_filter_lonely_rects = False
 
     for model_root, model_weights in models:
         if model_root != prev_model_root:

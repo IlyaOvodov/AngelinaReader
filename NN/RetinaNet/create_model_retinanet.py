@@ -5,6 +5,7 @@ import numpy as np
 import sys
 sys.path.append(r'..')
 import local_config
+import braille_utils.label_tools as label_tools
 
 def create_model_retinanet(params, phase, device):
     sys.path.append(local_config.global_3rd_party)
@@ -12,7 +13,8 @@ def create_model_retinanet(params, phase, device):
     from pytorch_retinanet.retinanet import RetinaNet
     from pytorch_retinanet.encoder import DataEncoder
 
-    num_classes = 1 if params.data.get_points else 64
+    use_multiple_class_groups = params.data.get('class_as_6pt', False)
+    num_classes = 1 if params.data.get_points else ([1]*6 if use_multiple_class_groups else 64)
     encoder = DataEncoder(**params.model_params.encoder_params)
     model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
                       num_classes=num_classes).to(device)
@@ -39,6 +41,11 @@ def create_model_retinanet(params, phase, device):
         labels = [torch.tensor(b[1][:, 4], dtype = torch.long) for b in batch]
         if params.data.get_points:
             labels = [torch.tensor([0]*len(lb), dtype = torch.long) for lb in labels]
+        elif use_multiple_class_groups:
+            # классы нумеруются с 0, отсутствие класса = -1, далее в encode cls_targets=1+labels
+            labels = [torch.tensor([[int(ch)-1 for ch in label_tools.int_to_label010(int_lbl.item())] for int_lbl in lb],
+                                   dtype=torch.long) for lb in labels]
+
         original_images = [b[2] for b in batch if len(b)>2] # batch contains augmented image if not in train mode
 
         imgs = [x[0] for x in batch]
@@ -51,7 +58,10 @@ def create_model_retinanet(params, phase, device):
         cls_targets = []
         for i in range(num_imgs):
             inputs[i] = imgs[i]
-            loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels[i], input_size=(w,h))
+            labels_i = labels[i]
+            if use_multiple_class_groups and len(labels_i.shape) != 2:  # it can happen if no labels are on image
+                labels_i = labels_i.reshape((0, len(num_classes)))
+            loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels_i, input_size=(w,h))
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
         if original_images: # inference mode

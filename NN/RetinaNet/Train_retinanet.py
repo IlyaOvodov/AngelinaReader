@@ -7,9 +7,10 @@ from ovotools import AttrDict
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/retina_DSBI_TEST_noaugm',
+    model_name = 'NN_results/retina_DSBI_6pt_noaugm',
     data = AttrDict(
         get_points = False,
+        class_as_6pt=True,    # классификация присутствия каждой точки в рамке отдельно
         batch_size = 12,
         #mean = (0.4138001444901419, 0.4156750182887099, 0.3766904444889663),
         #std = (0.2965651186330059, 0.2801510185680299, 0.2719146471588908),
@@ -38,13 +39,13 @@ params = AttrDict(
         }
     ),
     augmentation = AttrDict(
-        img_width_range=(1024, 1024),  # 768*0.8, 1536*1.2
-        stretch_limit = 0,
-        rotate_limit = 0,
-        blur_limit = 0,
+        img_width_range=(920, 1126),  # 768*0.8, 1536*1.2
+        stretch_limit = 0.02,
+        rotate_limit = 1,
+        blur_limit = 1,
         RandomBrightnessContrast = False,
         JpegCompression = False,
-        HorizontalFlip = False,
+        HorizontalFlip = True,
     ),
     model = 'retina',
     model_params = AttrDict(
@@ -94,7 +95,7 @@ max_epochs = 100000
 tensorboard_port = 6006
 device = 'cuda:0'
 findLR = False
-can_overwrite = False
+can_overwrite = True
 
 if findLR:
     params.model_name += '_findLR'
