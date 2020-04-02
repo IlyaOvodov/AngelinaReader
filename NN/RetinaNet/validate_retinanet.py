@@ -249,8 +249,8 @@ def filter_lonely_rects(boxes, labels, img):
     return res_boxes, res_labels
 
 def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_rects):
-	if do_filter_lonely_rects:
-	    boxes, labels = filter_lonely_rects(boxes, labels, img)
+    if do_filter_lonely_rects:
+        boxes, labels = filter_lonely_rects(boxes, labels, img)
     gt_labels = [r[4] for r in gt_rects]
     gt_rec_labels = [-1] * len(gt_rects)  # recognized label for gt, -1 - missed
     rec_is_false = [1] * len(labels)  # recognized is false
@@ -343,7 +343,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects):
 
         tpi, fpi, fni = dot_metrics_rects(boxes = res_dict['boxes'], labels = res_dict['labels'],
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
-										  img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects)
+                                          img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects)
         tp_r += tpi
         fp_r += fpi
         fn_r += fni
@@ -381,7 +381,7 @@ def main():
     # make data list
     data_set = prepare_data()
     prev_model_root = None
-	do_filter_lonely_rects = False
+    do_filter_lonely_rects = False
 
     for model_root, model_weights in models:
         if model_root != prev_model_root:
