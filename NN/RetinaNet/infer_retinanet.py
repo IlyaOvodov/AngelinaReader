@@ -60,6 +60,7 @@ class BraileInferenceImpl(torch.nn.Module):
         self.valid_mask = torch.tensor(label_is_valid).long()
         self.cls_thresh = cls_thresh
         self.nms_thresh = nms_thresh
+        self.num_classes = [] if not params.data.get('class_as_6pt', False) else [1]*6
 
     def calc_letter_statistics(self, cls_preds, cls_thresh):
         # type: (List[Tensor], float)->Tuple[int, Tuple[Tensor, Tensor, Tensor]]
@@ -79,6 +80,8 @@ class BraileInferenceImpl(torch.nn.Module):
 
     def forward(self, input_tensor, input_tensor_rotated, attempts_number = 8):
         # type: (Tensor, Tensor, int)->Tuple[Tensor,Tensor,Tensor,int, Tuple[Tensor, Tensor, Tensor]]
+        if len(self.num_classes) > 1:
+            assert attempts_number == 1
         input_data = []
         input_data.append(input_tensor.unsqueeze(0)) # 0 - as is
         if attempts_number > 1:
@@ -99,10 +102,15 @@ class BraileInferenceImpl(torch.nn.Module):
             (loc_pred, cls_pred) = self.model(input_data_i)
             loc_preds.append(loc_pred)
             cls_preds.append(cls_pred)
-        best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh)
+        if attempts_number > 1:
+            best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh)
+        else:
+            best_idx, err_score = 0, (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
         h,w = input_data[best_idx].shape[2:]
         boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
-                                      cls_thresh = self.cls_thresh, nms_thresh = self.nms_thresh)
+                                      cls_thresh = self.cls_thresh, nms_thresh = self.nms_thresh, num_classes=self.num_classes)
+        if len(self.num_classes) > 1:
+            labels = torch.tensor([lt.label010_to_int([str(s.item()+1) for s in lbl101]) for lbl101 in labels])
         return boxes, labels, scores, best_idx, err_score
 
 
@@ -325,7 +333,7 @@ if __name__ == '__main__':
     img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Лит чтение_ч2\*.jpg'
     results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\Лит чтение_ч2'
     remove_labeled_from_filename = True
-    attempts_number = 8
+    attempts_number = 2
 
     recognizer = BrailleInference()
     recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_NONE,

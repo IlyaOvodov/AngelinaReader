@@ -7,7 +7,7 @@ from ovotools import AttrDict
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/retina_DSBI_6pt_noaugm',
+    model_name = 'NN_results/retina_DSBI_6pt',
     data = AttrDict(
         get_points = False,
         class_as_6pt=True,    # классификация присутствия каждой точки в рамке отдельно
@@ -39,13 +39,9 @@ params = AttrDict(
         }
     ),
     augmentation = AttrDict(
-        img_width_range=(920, 1126),  # 768*0.8, 1536*1.2
-        stretch_limit = 0.02,
-        rotate_limit = 1,
-        blur_limit = 1,
-        RandomBrightnessContrast = False,
-        JpegCompression = False,
-        HorizontalFlip = True,
+        img_width_range=( 614, 1840, ),  # 768*0.8, 1536*1.2
+        stretch_limit = 0.1,
+        rotate_limit = 5,
     ),
     model = 'retina',
     model_params = AttrDict(
@@ -65,7 +61,7 @@ params = AttrDict(
     #load_model_from = 'NN_results/retina_chars_7ec096/models/clr.012',
     optim = 'torch.optim.Adam',
     optim_params = AttrDict(
-        lr=0.0002,
+        lr=0.0001,
         #momentum=0.9,
         #weight_decay = 0, #0.001,
         #nesterov = False,
@@ -87,8 +83,8 @@ params = AttrDict(
        min_lr=1e-05,
        max_lr=0.0002,
        period_epochs=500,
-       scale_max_lr=0.9,
-       scale_min_lr=0.9,
+       scale_max_lr=0.98,
+       scale_min_lr=0.98,
     ),
 )
 max_epochs = 100000

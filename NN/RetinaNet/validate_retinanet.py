@@ -31,15 +31,15 @@ models = [
     #
     # ('NN_results/retina_DSBI_TEST_RLrPl_5ebd88', '/models/best.t7'),
     #
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.028.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.029.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.030.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.031.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.032.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.033.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.034.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.035.t7'),
-    ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/best.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.028.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.029.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.030.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.031.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.032.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.033.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.034.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.035.t7'),
+    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/best.t7'),
     #
     # ('NN_results/retina_DSBI_TEST_noaugm_x100_21c9a8', '/models/best.t7'),
     #
@@ -52,7 +52,14 @@ models = [
     # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.041.t7'),
     # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.042.t7'),
     # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.043.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/best.t7'),
+
+    #('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/best.t7'),
+    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.026.t7'),
+    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.027.t7'),
+    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.028.t7'),
+    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.034.t7'),
+    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.035.t7'),
+    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.036.t7'),
 ]
 
 datasets = {
@@ -257,7 +264,7 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_r
 
     if len(gt_rects) and len(labels):
         boxes = torch.tensor(boxes)
-        gt_boxes = torch.tensor([r[:4] for r in gt_rects]) * torch.tensor([image_wh[0], image_wh[1], image_wh[0], image_wh[1]])
+        gt_boxes = torch.tensor([r[:4] for r in gt_rects], dtype=torch.float32) * torch.tensor([image_wh[0], image_wh[1], image_wh[0], image_wh[1]])
 
         # Для отладки
         # labels = torch.tensor(labels)
