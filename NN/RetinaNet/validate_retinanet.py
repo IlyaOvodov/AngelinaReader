@@ -52,14 +52,43 @@ models = [
     # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.041.t7'),
     # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.042.t7'),
     # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.043.t7'),
+]
+models = [
+    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.003.t7'),
 
-    #('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/best.t7'),
-    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.026.t7'),
-    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.027.t7'),
-    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.028.t7'),
-    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.034.t7'),
-    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.035.t7'),
-    ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.036.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/best.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.026.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.027.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.028.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.034.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.035.t7'),
+    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.036.t7'),
+
+    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.028.t7'),
+    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.032.t7'),
+    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.034.t7'),
+    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.036.t7'),
+    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.038.t7'),
+    ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/best.t7'),
+    ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.040.t7'),
+
+    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.005.t7'),
+    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.006.t7'),
+    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/best.t7'),
+    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.007.t7'),
+    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.008.t7'),
+    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.009.t7'), #22500
+
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.028.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.032.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.034.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/best.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.036.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.038.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.040.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.041.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.042.t7'),
+    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.043.t7'), #21500
 ]
 
 datasets = {
@@ -346,7 +375,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects):
 
     for gt_dict in data_list:
         img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
-        res_dict = recognizer.run(img_fn, lang=lang, attempts_number=1, gt_rects = gt_rects)
+        res_dict = recognizer.run(img_fn, lang=lang, orientation_attempts={0}, gt_rects = gt_rects)
 
         tpi, fpi, fni = dot_metrics_rects(boxes = res_dict['boxes'], labels = res_dict['labels'],
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
