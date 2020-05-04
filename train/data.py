@@ -17,10 +17,10 @@ import local_config
 
 
 def rect_vflip(b):
-    return b[:4] + [lt.label_vflip(b[4]),]
+    return b[:4] + (lt.label_vflip(b[4]),)
 
 def rect_hflip(b):
-    return b[:4] + [lt.label_hflip(b[4]),]
+    return b[:4] + (lt.label_hflip(b[4]),)
 
 
 def common_aug(mode, params):
@@ -53,7 +53,7 @@ def common_aug(mode, params):
         if params.augmentation.get('HorizontalFlip', True):
             augs_list.append(T.HorizontalFlip())
 
-    return albumentations.Compose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
+    return albumentations.ReplayCompose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 
 
 class ImagePreprocessor:
@@ -76,10 +76,10 @@ class ImagePreprocessor:
                       b[2] > 0 and b[2] < 1 and
                       b[3] > 0 and b[3] < 1]
         if not self.get_points:
-            for t in self.albumentations.transforms:
-                if isinstance(t, T.VerticalFlip) and t.was_applied:
+            for t in aug_res['replay']['transforms']:
+                if t['__class_fullname__'].endswith('.VerticalFlip') and t['applied']:
                     aug_bboxes = [rect_vflip(b) for b in aug_bboxes]
-                if isinstance(t, T.HorizontalFlip) and t.was_applied:
+                if t['__class_fullname__'].endswith('.HorizontalFlip') and t['applied']:
                     aug_bboxes = [rect_hflip(b) for b in aug_bboxes]
         return aug_img, aug_bboxes
 
