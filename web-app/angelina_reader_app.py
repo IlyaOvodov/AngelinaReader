@@ -3,7 +3,7 @@
 from flask import Flask, render_template, redirect, request, url_for, flash
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField, SelectField
 from wtforms.validators import DataRequired
 from flask_uploads import UploadSet, configure_uploads, IMAGES
 from flask_mobility import Mobility
@@ -79,6 +79,7 @@ def index(template, is_mobile=False):
         file = FileField()
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
+        lang = SelectField(choices=[('RU', 'RU'), ('EN', 'EN')])
     form = MainForm()
     if form.validate_on_submit():
         file_data = form.camera_file.data or form.file.data
@@ -92,10 +93,11 @@ def index(template, is_mobile=False):
         filename = photos.save(file_data)
         img_path = IMG_ROOT + "/" + filename
         has_public_confirm = form.agree.data
+        lang = form.lang.data
 
         if not form.agree.data:
-            return redirect(url_for('confirm', img_path=img_path))
-        return redirect(url_for('results', img_path=img_path, has_public_confirm=has_public_confirm))
+            return redirect(url_for('confirm', img_path=img_path, lang=lang))
+        return redirect(url_for('results', img_path=img_path, has_public_confirm=has_public_confirm, lang=lang))
 
     return render_template(template, form=form)
 
@@ -115,7 +117,8 @@ def confirm(template):
             flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template(template, form=form)
         has_public_confirm = form.agree.data
-        return redirect(url_for('results', img_path=request.form['img_path'], has_public_confirm=has_public_confirm))
+        return redirect(url_for('results', img_path=request.form['img_path'], has_public_confirm=has_public_confirm,
+                                lang=request.values['lang']))
     form = Form(img_path = request.values['img_path'])
     return render_template(template, form=form)
 
@@ -138,9 +141,11 @@ def results(template):
         flash('СПАСИБО!')
         return redirect(url_for('index'))
 
-    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm']}
-    marked_image_path, out_text = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT, lang='RU', extra_info=extra_info,
-                                                          draw_refined=recognizer.DRAW_REFINED)  # TODO  accept lang
+    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm'],
+                  'lang': request.values['lang']}
+    marked_image_path, out_text = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
+                                                          lang=request.values['lang'], extra_info=extra_info,
+                                                          draw_refined=recognizer.DRAW_NONE)
     out_text = '\n'.join(out_text)
     form = ResultsForm(marked_image_path=marked_image_path,
                        text = out_text)
@@ -171,7 +176,7 @@ def login(template):
     if form.validate_on_submit():
         user = all_users.get(form.e_mail.data, None)
         if user is None:
-            flash('Пользователь не найден. Если Вы - новый пользователь, зарегистрируйтесь')
+            flash('Пользователь не найден. Если вы - новый пользователь, зарегистрируйтесь')
             return redirect(url_for('register'))
         user = User(form.e_mail.data, user['name'], is_new=False)
         #if user is None or not user.check_password(form.password.data):

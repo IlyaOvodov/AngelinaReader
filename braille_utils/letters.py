@@ -113,7 +113,7 @@ num_map = {
 }
 
 num_denominator_map = {
-    # digins in denominator:
+    # digits in denominator:
     '2': '/1',
     '23': '/2',
     '25': '/3',
@@ -128,11 +128,10 @@ num_denominator_map = {
 
 math_RU = {
     '2': ',', # decimal separator
-    '3': '..',  # postprocess to ".". Thousand separator.
+    '3': '..',  # postprocess to "." (thousand separator) if between digits else to * (multiplication).
     '235': '+',
     '36': '-',
     '236': '*',
-    #'??': '*', # also mul., by dot.
     '256': '::',  # postprocess to ":".
     '246': '<',
     '135': '>',

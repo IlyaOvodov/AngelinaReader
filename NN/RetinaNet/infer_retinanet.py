@@ -123,10 +123,11 @@ class BraileInferenceImpl(torch.nn.Module):
 
 class BrailleInference:
 
-    DRAW_NONE = -1
-    DRAW_ORIGINAL = 0
-    DRAW_REFINED = 1
-    DRAW_BOTH = 2
+    DRAW_NONE = 0
+    DRAW_ORIGINAL = 1
+    DRAW_REFINED = 2
+    DRAW_BOTH = DRAW_ORIGINAL | DRAW_REFINED  # 3
+    DRAW_FULL_CHARS = 4
 
     def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = None, verbose=1):
         self.verbose = verbose
@@ -213,13 +214,15 @@ class BrailleInference:
                 out_text.append('')
             s = ''
             for ch in ln.chars:
+                if ch.char.startswith('~') and not (draw_refined & self.DRAW_FULL_CHARS):
+                    ch.char = '~?~'
                 s += ' ' * ch.spaces_before + ch.char
-                if draw_refined != self.DRAW_REFINED and draw_refined != self.DRAW_NONE:
+                if draw_refined & self.DRAW_ORIGINAL:
                     ch_box = ch.original_box
-                    draw.rectangle(list(ch_box), outline='blue' if draw_refined == self.DRAW_BOTH else 'green')
-                if draw_refined != self.DRAW_ORIGINAL:
+                    draw.rectangle(list(ch_box), outline='blue')
+                if (draw_refined & self.DRAW_BOTH) != self.DRAW_ORIGINAL:
                     ch_box = ch.refined_box
-                    if draw_refined != self.DRAW_NONE:
+                    if draw_refined & self.DRAW_REFINED:
                         draw.rectangle(list(ch_box), outline='green')
                 if ch.char.startswith('~'):
                     draw.text((ch_box[0], ch_box[3]), ch.char, font=fntErr, fill="black")
@@ -255,7 +258,7 @@ class BrailleInference:
         shapes = []
         for ln in lines:
             for ch in ln.chars:
-                ch_box = ch.refined_box if draw_refined != self.DRAW_ORIGINAL else ch.original_box
+                ch_box = ch.refined_box if (draw_refined & self.DRAW_BOTH) != self.DRAW_ORIGINAL else ch.original_box
                 shape = {
                     "label": ch.labeling_char,
                     "points": [[ch_box[0], ch_box[1]],

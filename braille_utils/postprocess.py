@@ -187,20 +187,25 @@ def interpret_line_RU(line, lang, mode = None):
                             ch.char = ch.char.upper()
                     else:
                         math_lang = ''
-                if not math_lang and ch.spaces_before: # без spaces_before точка и запятая после числа интерпретируется как математический знак :
+                if not math_lang and (ch.spaces_before or lt.int_to_letter(ch.label, ['MATH_RU']) == '..'):
+                    # без spaces_before точка и запятая после числа интерпретируется как математический знак :
+                    # перед умножением точкой (..) пробел не ставится
                     ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['MATH_RU'])
                     if ch.char is not None:
                         if ch.char in {'en','EN'}:
                             math_lang = ch.char
                             ch.char = ''
                         elif ch.char == '..':
-                            ch.char = '.'
+                            if i < len(line.chars)-1 and line.chars[i+1].spaces_before == 0 and lt.int_to_letter(line.chars[i+1].label, ['NUM']) is not None:
+                                ch.char = '.'
+                            else:
+                                ch.char = '*'
                         elif ch.char == '::':
                             ch.char = ':'
                         ch.spaces_before = max(0, ch.spaces_before-1)
             if ch.char is None:
                 ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM', lang])
-                if ch.char not in {',', '.'}:
+                if ch.char not in {',', '.', '(', ')'}:
                     math_mode = False
                     math_lang = ''
                     digit_mode = False
@@ -209,12 +214,12 @@ def interpret_line_RU(line, lang, mode = None):
                 if prev_ch and prev_ch.char == ",":
                     prev_ch.char = ", "
             if ch.char == '()':
-                if ch.spaces_before or prev_ch is None or prev_ch.char in {',', '.'}:
+                if brackets_on['(('] == 0:
                     ch.char = '('
-                    brackets_on['(('] += 1
-                elif brackets_on['(('] > 0:
-                        ch.char = ')'
-                        brackets_on['(('] -= 1
+                    brackets_on['(('] = 1
+                else:
+                    ch.char = ')'
+                    brackets_on['(('] = 0
             elif ch.char == 'ъ' and (ch.spaces_before or prev_ch is None or not prev_ch.char.isalpha()):
                 ch.char = '['
                 brackets_on['['] += 1
@@ -377,6 +382,7 @@ def validate_postprocess(in_text, out_text):
 
 if __name__ == '__main__':
     #OK
+    validate_postprocess('''(~##~1) =~##~1''', '''(1)=1''')
     validate_postprocess('''а ~((~б~))~,''', '''а (б),''')
     validate_postprocess('''~((~в~))~,''', '''(в),''')
     validate_postprocess('''~()~~##~1~()~,''', '''(1),''')
