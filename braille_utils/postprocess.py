@@ -22,7 +22,7 @@ class LineChar:
 
 class Line:
     STEP_TO_W = 1.25
-    LINE_THR = 0.5
+    LINE_THR = 0.8
     AVG_PERIOD = 5 # для аппроксимации при коррекции
     AVG_APPROX_DIST = 3 # берутся точки с интервалос не менее 2, т.е. 0я и 3я или 1я и 4я
 
@@ -236,6 +236,9 @@ def interpret_line_RU(line, lang, mode = None):
             if ch.char == letters.caps_sign:
                 caps_mode = True
                 ch.char = ''
+            if ch.char == 'EN':
+                caps_mode = True
+                ch.char = ''  # TODO
         prev_ch = ch
 
     return {

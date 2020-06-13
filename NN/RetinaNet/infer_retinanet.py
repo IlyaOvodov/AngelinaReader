@@ -14,7 +14,7 @@ model_weights = '/models/clr.008'
 device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
-nms_thresh = 0.
+nms_thresh = 0.05
 
 import os
 import json
