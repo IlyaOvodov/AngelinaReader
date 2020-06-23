@@ -34,6 +34,7 @@ import time
 import copy
 import PIL.ImageDraw
 import PIL.ImageFont
+from pathlib import Path
 import train.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
@@ -331,21 +332,26 @@ class BrailleInference:
             img_files = [os.path.join(data_dir, fn[:-1] if fn[-1] == '\n' else fn) for fn in files]
             img_folders = [os.path.split(fn)[0] for fn in files]
         else:
-            img_files = glob.glob(img_filename_mask)
-            img_folders = [''] * len(img_files)
-        for img_file,img_folder  in zip(img_files, img_folders):
-            print('processing '+img_file)
+            root_dir, mask = img_filename_mask.split('*', 1)
+            mask = '*' + mask
+            img_files = list(Path(root_dir).glob(mask))
+            img_folders = [os.path.split(fn)[0].replace(str(Path(root_dir)), '')[1:] for fn in img_files]
+        for img_file, img_folder in zip(img_files, img_folders):
+            print('processing '+str(img_file))
             self.run_and_save(img_file, os.path.join(results_dir, img_folder), lang = lang, extra_info = None, draw_refined = draw_refined,
 			                  remove_labeled_from_filename = remove_labeled_from_filename,
                               orientation_attempts = orientation_attempts)
 
 if __name__ == '__main__':
 
-    #img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика\list.txt' #
     img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика_ч2\*.jpg'
     results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\Математика_ч2'
+
+    img_filename_mask = 'D:/Programming.Data/Braille/ASI/**/*.jpeg'
+    results_dir =       r'D:\Programming.Data\Braille\ASI\res'
+
     remove_labeled_from_filename = True
-    orientation_attempts = {0,1,4,5}
+    orientation_attempts = {0}  #,1,4,5}
 
     recognizer = BrailleInference()
     recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_NONE,
