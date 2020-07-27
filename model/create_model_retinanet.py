@@ -2,27 +2,26 @@ import os
 import torch
 import numpy as np
 
-import sys
-sys.path.append(r'..')
+from pytorch_retinanet.loss import FocalLoss
+from pytorch_retinanet.retinanet import RetinaNet
+from pytorch_retinanet.encoder import DataEncoder
+
 import local_config
-import braille_utils.label_tools as label_tools
+from braille_utils import label_tools
 
-def create_model_retinanet(params, phase, device):
-    sys.path.append(local_config.global_3rd_party)
-    from pytorch_retinanet.loss import FocalLoss
-    from pytorch_retinanet.retinanet import RetinaNet
-    from pytorch_retinanet.encoder import DataEncoder
-
+def create_model_retinanet(params, device):
+    '''
+    Creates model and auxiliary functions
+    :param params: OvoTools.AttrDict with parameters
+    :param device: 'cuda'/'cpu'
+    :return: model, detection_collate function, loss function
+    '''
     use_multiple_class_groups = params.data.get('class_as_6pt', False)
     num_classes = 1 if params.data.get_points else ([1]*6 if use_multiple_class_groups else 64)
     encoder = DataEncoder(**params.model_params.encoder_params)
     model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
                       num_classes=num_classes).to(device)
     retina_loss = FocalLoss(num_classes=num_classes, **params.model_params.get('loss_params', dict()))
-
-    if 'load_model_from' in params.keys():
-        preloaded_weights = torch.load(os.path.join(local_config.data_path, params.load_model_from))
-        model.load_state_dict(preloaded_weights)
 
 
     def detection_collate(batch):

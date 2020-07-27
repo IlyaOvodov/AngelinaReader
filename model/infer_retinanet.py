@@ -1,47 +1,40 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-# # Ïðîâåðêà ðàáîòû íåéðîñåòè äëÿ îáëàñòåé îäèíàêîâûõ òîâàðîâ
-# ðèñîâàíèå êàðòèíîê
-# âû÷èñëåíèå symmetric_best_dice
-
-# In[1]:
-
-inference_width = 1024
-model_root = 'NN_saved/retina_chars_eced60'
-model_weights = '/models/clr.008'
-
-device = 'cuda:0'
-#device = 'cpu'
-cls_thresh = 0.3
-nms_thresh = 0.05
-
 import os
 import json
 import glob
 import sys
-sys.path.append('../..')
 import local_config
 sys.path.append(local_config.global_3rd_party)
 from os.path import join
-model_fn = join(local_config.data_path, model_root)
-
 from ovotools.params import AttrDict
 import numpy as np
 from collections import OrderedDict
 import torch
 import time
 import copy
+from pathlib import Path
 import PIL.ImageDraw
 import PIL.ImageFont
 from pathlib import Path
-import train.data as data
+import data_utils.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
-import create_model_retinanet
+from . import create_model_retinanet
 import pytorch_retinanet
 import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
+
+inference_width = 1024
+model_root = 'results/retina_chars_eced60'
+model_weights = '/models/clr.008'
+model_fn = join(local_config.data_path, model_root)
+params_fn = model_fn + '.param.txt'
+model_weights_fn = model_fn + model_weights
+device = 'cuda:0'
+#device = 'cpu'
+cls_thresh = 0.3
+nms_thresh = 0.05
 
 class BraileInferenceImpl(torch.nn.Module):
     def __init__(self, params, model_weights_fn, label_is_valid, verbose=1):
@@ -50,7 +43,7 @@ class BraileInferenceImpl(torch.nn.Module):
         self.model_weights_fn = model_weights_fn
 
         #self.model = model
-        self.model, _, _ = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
+        self.model, _, _ = create_model_retinanet.create_model_retinanet(params, device=device)
         self.model = self.model.to(device)
         self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
         self.model.eval()
@@ -130,9 +123,9 @@ class BrailleInference:
     DRAW_BOTH = DRAW_ORIGINAL | DRAW_REFINED  # 3
     DRAW_FULL_CHARS = 4
 
-    def __init__(self, model_fn = model_fn, model_weights = model_weights, create_script = None, verbose=1):
+    def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None, verbose=1):
         self.verbose = verbose
-        params = AttrDict.load(model_fn + '.param.txt', verbose=verbose)
+        params = AttrDict.load(params_fn, verbose=verbose)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
         params.data.batch_size = 1 #######
         params.augmentation = AttrDict(
@@ -141,7 +134,6 @@ class BrailleInference:
             rotate_limit=0,
         )
         self.preprocessor = data.ImagePreprocessor(params, mode = 'inference')
-        model_weights_fn = model_fn + model_weights
         model_script_fn = model_weights_fn + '.pth'
 
         if create_script != False:
@@ -292,21 +284,21 @@ class BrailleInference:
             filename_stem = filename_stem[: -len('.labeled')]
 
         labeled_image_filename = filename_stem + '.labeled' + '.jpg'
-        json_path = results_dir + "/" + filename_stem + '.labeled' + '.json'
-        result_dict['image'].save(results_dir + "/" + labeled_image_filename)
+        json_path = Path(results_dir) / (filename_stem + '.labeled' + '.json')
+        result_dict['image'].save(Path(results_dir) / labeled_image_filename)
         result_dict['dict']['imagePath'] = labeled_image_filename
         with open(json_path, 'w') as opened_json:
             json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=4)
 
-        marked_image_path = results_dir + "/" + filename_stem + '.marked' + '.jpg'
-        recognized_text_path = results_dir + "/" + filename_stem + '.marked' + '.txt'
+        marked_image_path = Path(results_dir) / (filename_stem + '.marked' + '.jpg')
+        recognized_text_path = Path(results_dir) / (filename_stem + '.marked' + '.txt')
         result_dict['labeled_image'].save(marked_image_path)
         with open(recognized_text_path, 'w') as f:
             for s in result_dict['text']:
                 f.write(s)
                 f.write('\n')
 
-        protocol_text_path = results_dir + "/" + filename_stem + '.protocol' + '.txt'
+        protocol_text_path = Path(results_dir) / (filename_stem + '.protocol' + '.txt')
         with open(protocol_text_path, 'w') as f:
             info = OrderedDict(
                 ver = '3',
@@ -320,7 +312,7 @@ class BrailleInference:
 
         if self.verbose >= 2:
             print("save results", time.clock() - t)
-        return marked_image_path, result_dict['text']
+        return str(marked_image_path), result_dict['text']
 
     def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_NONE,
                              remove_labeled_from_filename = False, orientation_attempts = 8):

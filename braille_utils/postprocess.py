@@ -1,8 +1,8 @@
 from functools import cmp_to_key
 from collections import defaultdict
 
-import braille_utils.letters as letters
-import braille_utils.label_tools as lt
+from . import letters
+from . import label_tools as lt
 
 
 class LineChar:

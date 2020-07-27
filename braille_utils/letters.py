@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
-from collections import defaultdict
+'''
+Braille symbols declaration
+'''
 
+# constants for special symbols label
 num_sign = '##'
 caps_sign = 'CC'
 markout_sign = 'XX'
 
+# general symbols common for various languages
 sym_map = {
     '256': '.',
     '2'  : ',',
@@ -20,9 +24,10 @@ sym_map = {
     '34' : '/',
     '3456': num_sign,
     '123456': markout_sign,
-    '46': "EN",  # TODO only for Russian
+    '46': "EN",  # TODO only for Russian ?
 }
 
+# RU symbols
 alpha_map_RU = {
     '1'  : 'а',
     '12' : 'б',
@@ -66,6 +71,7 @@ alpha_map_RU = {
     '346': '§',  # mark as &&
 }
 
+# EN symbols
 alpha_map_EN = {
     '1': 'a',
     '12': 'b',
@@ -100,6 +106,7 @@ alpha_map_EN = {
     '356': '"',  # mark as >>
 }
 
+# Digit symbols (after num_sign)
 num_map = {
     '1': '1',
     '12': '2',
@@ -113,8 +120,8 @@ num_map = {
     '245': '0',
 }
 
+# Digits in denominators of fraction
 num_denominator_map = {
-    # digits in denominator:
     '2': '/1',
     '23': '/2',
     '25': '/3',
@@ -124,16 +131,17 @@ num_denominator_map = {
     '2356': '/7',
     '236': '/8',
     '35': '/9',
-    '356': '/0', # postprocess num 0 0 to %
+    '356': '/0', # postprocess num 0 /0 to %
 }
 
+# Symbols for Math Braille (in Russian braille, I suppose)
 math_RU = {
-    '2': ',', # decimal separator
+    '2': ',',  # decimal separator
     '3': '..',  # postprocess to "." (thousand separator) if between digits else to * (multiplication).
     '235': '+',
     '36': '-',
     '236': '*',
-    '256': '::',  # postprocess to ":".
+    '256': '::',  # postprocess to ":" (division).
     '246': '<',
     '135': '>',
     '2356': '=',
@@ -148,7 +156,7 @@ math_RU = {
     '46': "EN",
 }
 
-
+# Codes for dicts
 letter_dicts = {
     'SYM': sym_map,
     'EN': alpha_map_EN,

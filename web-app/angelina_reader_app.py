@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+"""
+web application Angelina Braille reader
+"""
 from flask import Flask, render_template, redirect, request, url_for, flash
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from flask_wtf import FlaskForm
@@ -14,14 +17,20 @@ import os
 import json
 import sys
 import argparse
-sys.path.insert(1, '..')
-sys.path.insert(2, '../NN/RetinaNet')
-import infer_retinanet
-from config import Config
+from pathlib import Path
+import local_config
+import model.infer_retinanet as infer_retinanet
+from .config import Config
+
+model_root = 'weights/retina_chars_eced60'
+model_weights = '.clr.008'
 
 print("infer_retinanet.BrailleInference()")
 t = time.clock()
-recognizer = infer_retinanet.BrailleInference(create_script = None)
+recognizer = infer_retinanet.BrailleInference(
+    params_fn=os.path.join(local_config.data_path, model_root + '.param.txt'),
+    model_weights_fn=os.path.join(local_config.data_path, model_root + model_weights),
+    create_script=None)
 print(time.clock()-t)
 
 app = Flask(__name__)
@@ -29,17 +38,16 @@ Mobility(app)
 app.config.from_object(Config)
 login_manager = LoginManager(app)
 
-IMG_ROOT = app.config['DATA_ROOT'] + '/raw'
-RESULTS_ROOT = app.config['DATA_ROOT'] + '/results'
-CORR_RESULTS_ROOT = app.config['DATA_ROOT'] + '/corrected'
-os.makedirs(app.config['DATA_ROOT'], exist_ok=True)
+IMG_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'raw'
+RESULTS_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'results'
+os.makedirs(Path(app.root_path) / app.config['DATA_ROOT'], exist_ok=True)
 
 photos = UploadSet('photos', IMAGES)
 
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
 
-users_file = app.config['DATA_ROOT'] + '/all_users.json'
+users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.json'
 if os.path.isfile(users_file):
     with open(users_file) as f:
         all_users = json.load(f)
@@ -91,7 +99,7 @@ def index(template, is_mobile=False):
             return render_template(template, form=form)
         os.makedirs(IMG_ROOT, exist_ok=True)
         filename = photos.save(file_data)
-        img_path = IMG_ROOT + "/" + filename
+        img_path = IMG_ROOT / filename
         has_public_confirm = form.agree.data
         lang = form.lang.data
 
@@ -132,23 +140,19 @@ def results(template):
         text = TextAreaField()
         submit = SubmitField('Записать!')
     form = ResultsForm()
-    if form.validate_on_submit():
-        filename_stem = os.path.splitext(os.path.basename(form.marked_image_path.data))[0]
-        os.makedirs(CORR_RESULTS_ROOT, exist_ok=True)
-        path = CORR_RESULTS_ROOT + "/" + filename_stem + '.txt'
-        with open(path, 'w') as f:
-            f.write(form.text.data)
-        flash('СПАСИБО!')
-        return redirect(url_for('index'))
-
     extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm'],
                   'lang': request.values['lang']}
     marked_image_path, out_text = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
                                                           lang=request.values['lang'], extra_info=extra_info,
                                                           draw_refined=recognizer.DRAW_NONE)
+    # convert OS path to flask html path
+    root_dir = str(Path(app.root_path))
+    marked_image_path = str(Path(marked_image_path))
+    assert(marked_image_path[:len(root_dir)]) == root_dir
+    marked_image_path = marked_image_path[len(root_dir):].replace("\\", "/")
     out_text = '\n'.join(out_text)
     form = ResultsForm(marked_image_path=marked_image_path,
-                       text = out_text)
+                       text=out_text)
     return render_template(template, form=form)
 
 
@@ -215,7 +219,7 @@ def logout():
     return redirect(url_for('index'))
 
 
-if __name__ == "__main__":
+def run():
     parser = argparse.ArgumentParser(description='Angelina Braille reader web app.')
     parser.add_argument('--debug', dest='debug', action='store_true',
                         help='enable debug mode (default: off)')
@@ -231,3 +235,7 @@ if __name__ == "__main__":
         app.run(debug=True, port=5001)
     else:
         app.run(host='0.0.0.0', threaded=True)
+
+
+if __name__ == "__main__":
+    run()

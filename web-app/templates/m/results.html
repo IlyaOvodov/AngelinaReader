@@ -6,7 +6,7 @@
     <div class="wrapper" style="font-size: 60%;">
 		Картинку можно сохранить (правой кнопкой мыши "Cохранить картинку как...").
 	</div>
-	<img src="/{{form.marked_image_path.data}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
+	<img src="{{form.marked_image_path.data}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
     <div class="wrapper">{{ form.text(rows=30, cols=40, style="width:100%") }}</div>
     <div class="wrapper">
         Для распознавания нового листа вернитесь на <a href="{{ url_for('index') }}">главную страницу</a>

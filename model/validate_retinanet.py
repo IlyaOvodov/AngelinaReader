@@ -425,9 +425,11 @@ def main():
             prev_model_root = model_root
         if verbose:
             print('evaluating weights: ', model_weights)
-        model_fn = os.path.join(local_config.data_path, model_root)
-        recognizer = infer_retinanet.BrailleInference(model_fn=model_fn, model_weights=model_weights,
-                                                      create_script=None, verbose=verbose)
+        recognizer = infer_retinanet.BrailleInference(
+            params_fn=os.path.join(local_config.data_path, model_root + '.param.txt'),
+            model_weights_fn=os.path.join(local_config.data_path, model_root + model_weights),
+            create_script=None,
+            verbose=verbose)
         for key, data_list in data_set.items():
             res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects)
             # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '

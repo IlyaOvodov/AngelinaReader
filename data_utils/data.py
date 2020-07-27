@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# coding: utf-8
+'''
+class BrailleDataset: loads indexed dataset from DSBI dataset or LabelMe annotated dataset
+(see https://github.com/IlyaOvodov/labelme labelling tool)
+'''
 import os
 import random
 import json
@@ -10,16 +16,25 @@ import torch
 import torchvision.transforms.functional as F
 import cv2
 
-from DSBI_invest.dsbi import read_txt
-import braille_utils.label_tools as lt
-import ovotools.pytorch_tools
+from data_utils import dsbi
+from braille_utils import label_tools as lt
 import local_config
 
 
 def rect_vflip(b):
+    '''
+    Flips symbol box converting label
+    :param b: tuple (left, top, right, bottom, label)
+    :return: converted tuple (left, top, right, bottom, label)
+    '''
     return b[:4] + (lt.label_vflip(b[4]),)
 
 def rect_hflip(b):
+    '''
+    Flips symbol box converting label
+    :param b: tuple (left, top, right, bottom, label)
+    :return: converted tuple (left, top, right, bottom, label)
+    '''
     return b[:4] + (lt.label_hflip(b[4]),)
 
 
@@ -57,11 +72,13 @@ def common_aug(mode, params):
 
 
 class ImagePreprocessor:
+    '''
+    Preprocess image and it's annotation
+    '''
     def __init__(self, params, mode):
         assert mode in {'train', 'debug', 'inference'}
         self.params = params
         self.albumentations = common_aug(mode, params)
-        self.get_points = params.data.get('get_points', True)
 
     def preprocess_and_augment(self, img, rects=[]):
         aug_img = self.random_resize_and_stretch(img,
@@ -75,7 +92,7 @@ class ImagePreprocessor:
                       b[1] > 0 and b[1] < 1 and
                       b[2] > 0 and b[2] < 1 and
                       b[3] > 0 and b[3] < 1]
-        if not self.get_points:
+        if not self.params.data.get('get_points', False):
             for t in aug_res['replay']['transforms']:
                 if t['__class_fullname__'].endswith('.VerticalFlip') and t['applied']:
                     aug_bboxes = [rect_vflip(b) for b in aug_bboxes]
@@ -94,7 +111,6 @@ class ImagePreprocessor:
         new_width = ((new_width+31)//32)*32
         new_height = int(img.shape[0]*stretch*new_sz/img_max_sz)
         new_height = ((new_height+31)//32)*32
-
         return albu_f.resize(img, height=new_height, width=new_width, interpolation=cv2.INTER_LINEAR)
 
     def to_normalized_tensor(self, img):
@@ -120,12 +136,16 @@ def unify_shape(img):
 
 class BrailleDataset:
     '''
-    return annotated images as: ( img: Tensor CxHxW, np.array(Nx5 - left (0..1), top, right, bottom, class ) )
+    Indexed assess to annotated images listed in a txt file
+    Returns annotated images as tuple: ( img: Tensor CxHxW,
+        symbols: np.array(Nx5 i.e. Nx(left, top, right, bottom [0..1), class [1..63]))
+        If get_points mode is on, class is always 0
     '''
     def __init__(self, params, list_file_names, mode, verbose):
         '''
         :param params:  params dict
-        :param list_file: file with image files list (relative to local_config.data_path)
+        :param list_file_names: list of files with image files list (relative to local_config.data_path)
+            each file should contain list of image file paths relative to that list file location
         :param mode: augmentation and output mode ('train', 'debug', 'inference')
         :param verbose: if != 0 enables debug print
         '''
@@ -156,17 +176,16 @@ class BrailleDataset:
         self.aug_images = [None] * len(self.image_files)
         self.aug_bboxes = [None] * len(self.image_files)
         self.REPEAT_PROBABILITY = 0.6
-        self.get_points = params.data.get('get_points', True)
         self.verbose = verbose
 
     def __len__(self):
         return len(self.image_files)
+
     def __getitem__(self, item):
-        img_fn = self.image_files[item]
-        lbl_fn = self.label_files[item]
         img = self.images[item]
         if img is None:
-            img = PIL.Image.open(img_fn) #cv2.imread(img_fn) #PIL.Image.open(img_fn)
+            img_fn = self.image_files[item]
+            img = PIL.Image.open(img_fn)
             img = np.asarray(img)
             img= unify_shape(img)
             assert len(img.shape) == 3 and img.shape[2] == 3, (img_fn, img.shape)
@@ -175,7 +194,8 @@ class BrailleDataset:
         height = img.shape[0]
         rects = self.rects[item]
         if rects is None:
-            rects = self.read_annotation(lbl_fn, self.get_points, width, height)
+            lbl_fn = self.label_files[item]
+            rects = self.read_annotation(lbl_fn, width, height)
             self.rects[item] = rects
 
         if (self.aug_images[item] is not None) and (random.random() < self.REPEAT_PROBABILITY):
@@ -187,7 +207,7 @@ class BrailleDataset:
             self.aug_bboxes[item] = aug_bboxes
 
         if self.verbose >= 2:
-            print('BrailleDataset: preparing file '+img_fn + '. Total rects: ' + str(len(aug_bboxes)))
+            print('BrailleDataset: preparing file '+ self.image_files[item] + '. Total rects: ' + str(len(aug_bboxes)))
 
         if self.mode == 'train':
             return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
@@ -196,10 +216,10 @@ class BrailleDataset:
 
     def filenames_of_item(self, data_dir, fn):
         '''
-        finds appropriate image and label full filenames for list item and validates these files exists
+        Finds appropriate image and label full filenames for list item and validates these files exists
         :param data_dir: dir base for filename from list
-        :param fn: filename from list
-        :return: image filename, label filename or None, None
+        :param fn: filename of image file relative to data_dir
+        :return: image filename, label filename or None, None if no label file exists
         '''
         def check_label_ext(image_fn, ext):
             if not os.path.isfile(image_fn):
@@ -222,101 +242,69 @@ class BrailleDataset:
             return full_fn, lbl_fn
         return None, None
 
-    def read_annotation(self, label_filename, get_points, width, height):
+    def read_annotation(self, label_filename, width, height):
         '''
-        :param label_filename:
-        :param get_points: if True, returns list of points, label is always 1
-        :return: list: [(left,top,right,bottom,label), ...] where coords are (0..1), label is int (0..63)
+        Reads annotation file (DSBI or LabelMe)
+        :param label_filename: annotation file (txt for DSBI or JSON for LabelMe
+        :return: list: [(left,top,right,bottom,label), ...] where coords are (0..1), label is int [1..63]
         '''
         ext = label_filename.rsplit('.', 1)[-1]
         if ext == 'txt':
-            return read_DSBI_annotation(self.params, label_filename, get_points, width, height)
+            return dsbi.read_DSBI_annotation(label_filename, width, height,
+                                             self.params.data.get('rect_margin', 0.3),
+                                             self.params.data.get('get_points', False))
         elif ext == 'json':
-            return read_LabelMe_annotation(label_filename, get_points)
+            return read_LabelMe_annotation(label_filename, self.params.data.get('get_points', False))
         else:
             raise ValueError("unsupported label file type: " + ext)
 
 
-def read_DSBI_annotation(params, label_filename, get_points, width, height):
-    _, _, _, cells = read_txt(label_filename, binary_label=True)
-    if cells is not None:
-        if get_points:
-            dy = 0.15
-            dx = 0.3
-            rects = []
-            for cl in cells:
-                w = int((cl.right - cl.left) * dx)
-                h = int((cl.bottom - cl.top) * dy)
-                for i in range(6):
-                    if cl.label[i] == '1':
-                        iy = i % 3
-                        ix = i - iy
-                        if ix == 0:
-                            xc = cl.left
-                        else:
-                            xc = cl.right
-                        lf, rt = xc - w, xc + w
-                        if iy == 0:
-                            yc = cl.top
-                        elif iy == 1:
-                            yc = (cl.top + cl.bottom) // 2
-                        else:
-                            yc = cl.bottom
-                        tp, bt = yc - h, yc + h
-                        rects.append([lf / width, tp / height, rt / width, bt / height, 0])  # class is always same
-        else:
-            rm = params.data.rect_margin
-            rects = [[(c.left - rm * (c.right - c.left)) / width,
-                      (c.top - rm * (c.right - c.left)) / height,
-                      (c.right + rm * (c.right - c.left)) / width,
-                      (c.bottom + rm * (c.right - c.left)) / height,
-                      lt.label010_to_int(c.label)] for c in cells if c.label != '000000']
-    else:
-        rects = []
-    return rects
-
 def limiting_scaler(source, dest):
+    '''
+    Creates function to convert coordinates from source scale to dest with limiting to [0..dest)
+    :param source: source scale
+    :param dest: dest scale
+    :return: function f(x) for linear conversion [0..sousce)->[0..dest) so that
+        f(0) = 0, f(source-1) = (source-1)/source*dest, f(x<0)=0, f(x>=source) = (source-1)/source*dest
+    '''
     def scale(x):
         return int(min(max(0, x), source-1)) * dest/source
     return scale
 
+
 def read_LabelMe_annotation(label_filename, get_points):
+    '''
+    Reads LabelMe (see https://github.com/IlyaOvodov/labelme labelling tool) annotation JSON file.
+    :param label_filename: path to LabelMe annotation JSON file
+    :return: list of rect objects. Each rect object is a tuple (left, top, right, bottom, label) where
+        left..bottom are in [0,1), label is int in [1..63]
+    '''
+    if get_points:
+        raise NotImplementedError("read_annotation get_point mode not implemented for LabelMe annotation")
     with open(label_filename, 'r') as opened_json:
         loaded = json.load(opened_json)
     convert_x = limiting_scaler(loaded["imageWidth"], 1.0)
     convert_y = limiting_scaler(loaded["imageHeight"], 1.0)
-    rects = [[convert_x(min(xvals)),
+    rects = [(convert_x(min(xvals)),
               convert_y(min(yvals)),
               convert_x(max(xvals)),
               convert_y(max(yvals)),
-              lt.human_label_to_int(label)
-             ] for label, xvals, yvals in
+              lt.human_label_to_int(label),
+              ) for label, xvals, yvals in
                     ((shape["label"],
                       [coords[0] for coords in shape["points"]],
                       [coords[1] for coords in shape["points"]]
                      ) for shape in loaded["shapes"]
                     )
             ]
-
-    if get_points:
-        raise NotImplementedError("read_annotation get_point mode not implemented for LabelMe annotation")
-    else:
-        return rects
+    return rects
 
 
 def create_dataloader(params, collate_fn, list_file_names, shuffle, mode = 'train', verbose = 0):
     '''
-    :param params:
-    :param collate_fn: converts batch from BrailleDataset to format required by model
-    :return: train_loader, (val_loader1, val_loader2)
-    '''
-
-    '''
-    datasets = [BrailleDataset(params, list_file_name=file_name, mode=mode, verbose=verbose)
-                for file_name in list_file_names]
-    loader = torch.utils.data.DataLoader(torch.utils.data.ConcatDataset(datasets),
-                                               params.data.batch_size,
-                                               shuffle=shuffle, num_workers=0, collate_fn=collate_fn)
+    :param params: params AttrDict
+    :param collate_fn: converts batch from BrailleDataset output to format required by model
+    :return: pytorch DataLoader
     '''
     dataset = BrailleDataset(params, list_file_names=list_file_names, mode=mode, verbose=verbose)
     loader = torch.utils.data.DataLoader(dataset, params.data.batch_size, shuffle=shuffle, num_workers=0, collate_fn=collate_fn)
@@ -324,11 +312,24 @@ def create_dataloader(params, collate_fn, list_file_names, shuffle, mode = 'trai
 
 
 if __name__ == '__main__':
-    assert rect_hflip( [0,1,2,3, lt.label010_to_int('111000'),] ) == [0,1,2,3, lt.label010_to_int('000111'),]
-    assert rect_hflip( [0,1,2,3, lt.label010_to_int('000011'),] ) == [0,1,2,3, lt.label010_to_int('011000'),]
-    assert rect_hflip( [0,1,2,3, lt.label010_to_int('001100'),] ) == [0,1,2,3, lt.label010_to_int('100001'),]
+    from ovotools import AttrDict
 
-    assert rect_vflip( [0,1,2,3, lt.label010_to_int('111100'),] ) == [0,1,2,3, lt.label010_to_int('111001'),]
-    assert rect_vflip( [0,1,2,3, lt.label010_to_int('001011'),] ) == [0,1,2,3, lt.label010_to_int('100110'),]
+    assert rect_hflip( (0,1,2,3, lt.label010_to_int('111000'),) ) == (0,1,2,3, lt.label010_to_int('000111'),)
+    assert rect_hflip( (0,1,2,3, lt.label010_to_int('000011'),) ) == (0,1,2,3, lt.label010_to_int('011000'),)
+    assert rect_hflip( (0,1,2,3, lt.label010_to_int('001100'),) ) == (0,1,2,3, lt.label010_to_int('100001'),)
+
+    assert rect_vflip( (0,1,2,3, lt.label010_to_int('111100'),) ) == (0,1,2,3, lt.label010_to_int('111001'),)
+    assert rect_vflip( (0,1,2,3, lt.label010_to_int('001011'),) ) == (0,1,2,3, lt.label010_to_int('100110'),)
+
+    params = AttrDict(data=AttrDict(
+        batch_size=2,
+        get_points=False,
+        rect_margin=0.3
+    ))
+    data_loader = create_dataloader(params, collate_fn = None,
+                                    list_file_names = [os.path.join(local_config.data_path, r"DSBI\data\train.txt")],
+                                    shuffle=False)
+    print(len(data_loader))
+
 
     print('OK')

@@ -1,122 +1,43 @@
-from collections import OrderedDict
-import sys
-sys.path.append(r'../..')
+#!/usr/bin/env python
+# coding: utf-8
+"""
+Trains model using parameters and setting defined in model.params
+Results are stored in local_config.data_path / params.model_name
+"""
 import local_config
-
-from ovotools import AttrDict
-
-params = AttrDict(
-    data_root = local_config.data_path,
-    model_name = 'NN_results/retina_DSBI_6pt',
-    data = AttrDict(
-        get_points = False,
-        class_as_6pt=True,    # классификация присутствия каждой точки в рамке отдельно
-        batch_size = 12,
-        #mean = (0.4138001444901419, 0.4156750182887099, 0.3766904444889663),
-        #std = (0.2965651186330059, 0.2801510185680299, 0.2719146471588908),
-        net_hw = (416, 416),
-        rect_margin = 0.3, #  every of 4 margions to char width
-        train_list_file_names = [
-            r'DSBI\data\train.txt',
-            # r'My\labeled\labeled2\train_books.txt',
-            # r'My\labeled\labeled2\train_withtext.txt',
-            # r'My\labeled\labeled2\train_pupils.txt',
-            # r'My\labeled\labeled2\train_pupils.txt',
-            # r'My\labeled\not_braille\_not_braille.txt',
-        ],
-        val_list_file_names = {
-            'val_dsbi' :  [
-                           r'DSBI\data\test.txt',
-                           #r'DSBI\data\my_val2.txt',
-                          ],
-            # 'val_books' : [
-            #                r'My\labeled\labeled2\val_books.txt',
-            #                r'My\labeled\labeled2\val_withtext.txt',
-            #               ],
-            # 'val_pupils' : [
-            #                 r'My\labeled\labeled2\val_pupils.txt',
-            #                ],
-        }
-    ),
-    augmentation = AttrDict(
-        img_width_range=( 614, 1840, ),  # 768*0.8, 1536*1.2
-        stretch_limit = 0.1,
-        rotate_limit = 5,
-    ),
-    model = 'retina',
-    model_params = AttrDict(
-        encoder_params = AttrDict(
-            #anchor_areas = [5*5., 6*6., 10*10.,],
-            anchor_areas = [8*16., 12*24., 16*32.,],
-            aspect_ratios=[1 / 2.,],
-            #aspect_ratios=[1.,],
-            #scale_ratios=[1., pow(2, 1 / 3.), pow(2, 2 / 3.)]
-            iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
-            iuo_nofit_thr = 0,
-        ),
-        loss_params=AttrDict(
-            # class_loss_scale = 100,
-        ),
-    ),
-    #load_model_from = 'NN_results/retina_chars_7ec096/models/clr.012',
-    optim = 'torch.optim.Adam',
-    optim_params = AttrDict(
-        lr=0.0001,
-        #momentum=0.9,
-        #weight_decay = 0, #0.001,
-        #nesterov = False,
-    ),
-    lr_finder=AttrDict(
-        iters_num=400,
-        log_lr_start=-4,
-        log_lr_end=-0.3,
-    ),
-    lr_scheduler=AttrDict(
-        type='clr',
-        params=AttrDict(
-            milestones=[5000, 10000,],
-            gamma=0.1,
-        ),
-    ),
-    clr=AttrDict(
-       warmup_epochs=10,
-       min_lr=1e-05,
-       max_lr=0.0002,
-       period_epochs=500,
-       scale_max_lr=0.98,
-       scale_min_lr=0.98,
-    ),
-)
-max_epochs = 100000
-tensorboard_port = 6006
-device = 'cuda:0'
-findLR = False
-can_overwrite = True
-
-if findLR:
-    params.model_name += '_findLR'
-
-params.save(can_overwrite = can_overwrite)
-
+import sys
+sys.path.append(local_config.global_3rd_party)
+from collections import OrderedDict
 import torch
 import ignite
 from ignite.engine import Events
+
 import ovotools.ignite_tools
 import ovotools.pytorch_tools
 import ovotools.pytorch
 
-import train.data
-import create_model_retinanet
+from data_utils import data
+from model import create_model_retinanet
+from model.params import params, settings
+
+if settings.findLR:
+    params.model_name += '_findLR'
+params.save(can_overwrite=settings.can_overwrite)
+
 
 ctx = ovotools.pytorch.Context(settings=None, params=params)
 
-model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, phase='train', device=device)
+model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
+if 'load_model_from' in params.keys():
+    preloaded_weights = torch.load(os.path.join(local_config.data_path, params.load_model_from))
+    model.load_state_dict(preloaded_weights)
+
 ctx.net  = model
 ctx.loss = loss
 
-train_loader = train.data.create_dataloader(params, collate_fn,
+train_loader = data.create_dataloader(params, collate_fn,
                                             list_file_names=params.data.train_list_file_names, shuffle=True)
-val_loaders = { k: train.data.create_dataloader(params, collate_fn, list_file_names=v, shuffle=False)
+val_loaders = { k: data.create_dataloader(params, collate_fn, list_file_names=v, shuffle=False)
                 for k,v in params.data.val_list_file_names.items() }
 print('data loaded. train:{} batches'.format(len(train_loader)))
 for k,v in val_loaders.items():
@@ -138,19 +59,19 @@ eval_metrics = OrderedDict({
 
 target_metric = 'train:loss'
 
-trainer_metrics = {} if findLR else metrics
+trainer_metrics = {} if settings.findLR else metrics
 eval_loaders = {}
-if findLR:
+if settings.findLR:
     eval_loaders['train'] = train_loader
 eval_loaders.update(val_loaders)
-eval_event = ignite.engine.Events.ITERATION_COMPLETED if findLR else ignite.engine.Events.EPOCH_COMPLETED
-eval_duty_cycle = 2 if findLR else 5
-train_epochs = params.lr_finder.iters_num*len(train_loader) if findLR else max_epochs
+eval_event = ignite.engine.Events.ITERATION_COMPLETED if settings.findLR else ignite.engine.Events.EPOCH_COMPLETED
+eval_duty_cycle = 2 if settings.findLR else 5
+train_epochs = params.lr_finder.iters_num*len(train_loader) if settings.findLR else settings.max_epochs
 
-trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, loss, metrics=trainer_metrics, device = device)
-evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metrics, device = device)
+trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, loss, metrics=trainer_metrics, device=settings.device)
+evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metrics, device=settings.device)
 
-if findLR:
+if settings.findLR:
     best_model_buffer = None
 else:
     best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_dsbi:loss', minimize=True, params=ctx.params)
@@ -161,7 +82,7 @@ log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = eval
                                                                 duty_cycles = eval_duty_cycle)
 trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
 
-if findLR:
+if settings.findLR:
     import math
     @trainer.on(Events.ITERATION_STARTED)
     def upd_lr(engine):
@@ -198,8 +119,8 @@ timer = ovotools.ignite_tools.IgniteTimes(trainer, count_iters = False, measured
     'val:time.epoch': (evaluator, Events.EPOCH_STARTED, Events.EPOCH_COMPLETED),
 })
 
-tb_logger = ovotools.ignite_tools.TensorBoardLogger(trainer,params,count_iters = findLR)
-tb_logger.start_server(tensorboard_port, start_it = False)
+tb_logger = ovotools.ignite_tools.TensorBoardLogger(trainer,params,count_iters=settings.findLR)
+tb_logger.start_server(settings.tensorboard_port, start_it = False)
 
 @trainer.on(Events.ITERATION_COMPLETED)
 def reset_resources(engine):

@@ -1,22 +1,44 @@
 #!/usr/bin/env python
 # coding: utf-8
+'''
+Utilities to handle braille labels in various formats:
+    int_label: label as int [0..63]
+    label010: label as str of six 0 and 1s: '010101' etc.
+    label123: label as str like '246'
+    human_labels: labels in a manual annotation
+'''
 from collections import defaultdict
-import copy
-import braille_utils.letters as letters
+from . import letters
 
 def validate_int(int_label):
+    '''
+    Validate int_label is in [0..63]
+    Raise exception otherwise
+    '''
+    assert isinstance(int_label, int)
     assert int_label >= 0 and int_label < 64, "Ошибочная метка: " + str(int_label)
 
 def label010_to_int(label010):
+    '''
+    Convert label in label010 format to int_label
+    '''
     v = [1,2,4,8,16,32]
     r = sum([v[i] for i in range(6) if label010[i]=='1'])
     validate_int(r)
     return r
 
 def label_vflip(int_lbl):
+    '''
+    convert int_label in case of vertical flip
+    '''
+    validate_int(int_lbl)
     return ((int_lbl&(1+8))<<2) + ((int_lbl&(4+32))>>2) + (int_lbl&(2+16))
 
 def label_hflip(int_lbl):
+    '''
+    convert int_label in case of horizontal flip
+    '''
+    validate_int(int_lbl)
     return ((int_lbl&(1+2+4))<<3) + ((int_lbl&(8+16+32))>>3)
 
 def int_to_label010(int_lbl):
@@ -41,12 +63,12 @@ def label123_to_int(label123):
     return r
 
 
-# acceptable chars for labeling -> output chars in letters.py
+# acceptable strings for manual labeling -> output chars in letters.py (acceptable synonyms)
 labeling_synonyms = {
     "xx": "XX",
-    "хх": "XX", # russian х
+    "хх": "XX",  # russian х on the left
     "cc": "CC",
-    "сс": "CC", # russian с
+    "сс": "CC",  # russian с on the left
     "<<": "«",
     ">>": "»",
     "((": "()",
@@ -58,8 +80,7 @@ labeling_synonyms = {
 
 def human_label_to_int(label):
     '''
-    :param label: label from labelme
-    :return: int label
+    Convert label from manual annotations to int_label
     '''
     label = label.lower()
     if label[0] == '~':
@@ -78,6 +99,12 @@ def human_label_to_int(label):
 
 
 def int_to_letter(int_lbl, langs):
+    '''
+    Gets letter corresponding to int_lbl in a first language dict that contains it
+    :param int_lbl:
+    :param langs: list of language dict codes (see letters.letter_dicts)
+    :return: letter or string (for special symbols that need postprocessing) or None
+    '''
     label123 = int_to_label123(int_lbl)
     for lang in langs:
         d = letters.letter_dicts[lang]
@@ -87,11 +114,13 @@ def int_to_letter(int_lbl, langs):
     return None
 
 
-reverce_dict = defaultdict(set) # char -> set of labels123 from different dicts
+# global dict: letter (or spec. string) -> set of labels123 from different dicts from letters.letter_dicts
+reverce_dict = defaultdict(set)
 for d in letters.letter_dicts.values():
     for lbl123, char in d.items():
         reverce_dict[char].add(lbl123)
 
+# global list of 64 bools indicating what labels are valid in most common language dicts
 label_is_valid = [
     True if (int_to_letter(int_label, ['SYM','RU', 'EN', 'NUM']) is not None) else False
     for int_label in range(64)
@@ -124,7 +153,7 @@ if __name__ == '__main__':
     assert int_to_label010(human_label_to_int('1')) == '100000'
     assert int_to_label010(human_label_to_int('CC')) == '000110'
     assert int_to_label010(human_label_to_int('xx')) == '111111'
-    assert int_to_label010(human_label_to_int('Хх')) == '111111' # русский
+    assert int_to_label010(human_label_to_int('Хх')) == '111111'  # русский
     assert int_to_label010(human_label_to_int('##')) == '001111'
     assert int_to_label010(human_label_to_int('а')) == '100000'
     assert int_to_label010(human_label_to_int('Б')) == '110000'
