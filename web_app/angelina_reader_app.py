@@ -24,6 +24,7 @@ from .config import Config
 
 model_root = 'weights/retina_chars_eced60'
 model_weights = '.clr.008'
+orientation_attempts = {0,1,4,5}
 
 print("infer_retinanet.BrailleInference()")
 t = time.clock()
@@ -144,7 +145,8 @@ def results(template):
                   'lang': request.values['lang']}
     marked_image_path, out_text = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
                                                           lang=request.values['lang'], extra_info=extra_info,
-                                                          draw_refined=recognizer.DRAW_NONE)
+                                                          draw_refined=recognizer.DRAW_NONE,
+                                                          orientation_attempts=orientation_attempts)
     # convert OS path to flask html path
     root_dir = str(Path(app.root_path))
     marked_image_path = str(Path(marked_image_path))

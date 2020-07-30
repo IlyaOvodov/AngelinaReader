@@ -26,7 +26,7 @@ import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
 inference_width = 1024
-model_root = 'results/retina_chars_eced60'
+model_root = 'NN_results/retina_chars_eced60'
 model_weights = '/models/clr.008'
 model_fn = join(local_config.data_path, model_root)
 params_fn = model_fn + '.param.txt'
@@ -339,15 +339,15 @@ if __name__ == '__main__':
     img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\Математика_ч2\*.jpg'
     results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\Математика_ч2'
 
-    img_filename_mask = 'D:/Programming.Data/Braille/ASI/**/*.jpeg'
-    results_dir =       r'D:\Programming.Data\Braille\ASI\res'
+    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\3 класс\Математика_1/**/*.jpg'
+    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\3 класс\Математика_1'
 
     remove_labeled_from_filename = True
-    orientation_attempts = {0}  #,1,4,5}
+    orientation_attempts = {0,1,4,5}
 
-    recognizer = BrailleInference()
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang = 'RU', draw_refined = recognizer.DRAW_NONE,
-                                    remove_labeled_from_filename = remove_labeled_from_filename,
-                                    orientation_attempts = orientation_attempts)
+    recognizer = BrailleInference(create_script=None)
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', draw_refined=recognizer.DRAW_NONE,
+                                    remove_labeled_from_filename=remove_labeled_from_filename,
+                                    orientation_attempts=orientation_attempts)
 
     #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi', lang = 'RU')
