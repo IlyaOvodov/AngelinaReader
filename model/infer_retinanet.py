@@ -199,8 +199,9 @@ class BrailleInference:
             aug_img = aug_img.transpose(PIL.Image.ROTATE_180)
         raw_image = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
-        fntA = PIL.ImageFont.truetype("arial.ttf", 20)
-        fntErr = PIL.ImageFont.truetype("arial.ttf", 12)
+        font_fn = str(Path(__file__).parent / "arial.ttf")
+        fntA = PIL.ImageFont.truetype(font_fn, 20)
+        fntErr = PIL.ImageFont.truetype(font_fn, 12)
         out_text = []
         for ln in lines:
             if ln.has_space_before:
@@ -293,7 +294,7 @@ class BrailleInference:
         marked_image_path = Path(results_dir) / (filename_stem + '.marked' + '.jpg')
         recognized_text_path = Path(results_dir) / (filename_stem + '.marked' + '.txt')
         result_dict['labeled_image'].save(marked_image_path)
-        with open(recognized_text_path, 'w') as f:
+        with open(recognized_text_path, encoding='utf-8', mode='w') as f:
             for s in result_dict['text']:
                 f.write(s)
                 f.write('\n')
