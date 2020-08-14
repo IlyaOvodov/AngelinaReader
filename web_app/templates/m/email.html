@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form  class="container" action="" method="post">
+    {{ form.hidden_tag() }}
+   	<div class="title">Отправить результат на e-mail:</div>
+    <div class="wrapper">
+		<div>{{ form.e_mail.label }}</div>
+	    <div>{{ form.e_mail() }}</div>
+	</div>
+    <div class="wrapper">
+		<div>{{ form.title.label }}</div>
+		<div>{{ form.title() }}</div>
+	</div>
+    <div class="wrapper">
+	    {{ form.as_attachment() }}
+    	<label for="as_attachment">{{ form.as_attachment.label }}</label>
+	</div>
+	{{ flashed_messages() }}
+    <div class="button_wrapper">{{ form.submit(style="width:80%") }}</div>
+</form>
+
+{% endblock %}

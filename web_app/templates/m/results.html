@@ -4,8 +4,11 @@
 <form class="container" action="" method="post">
     {{ form.hidden_tag() }}
     <div class="wrapper" style="font-size: 60%;">
-		Картинку можно сохранить (правой кнопкой мыши "Cохранить картинку как...").
+		Картинку можно сохранить (прижать пальцем и выбрать "Скачать изображение") или
 	</div>
+    <div class="button_wrapper">
+        {{ form.submit(style="width:80%") }}
+    </div>
 	<img src="{{form.marked_image_path.data}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
     <div class="wrapper">{{ form.text(rows=30, cols=40, style="width:100%") }}</div>
     <div class="wrapper">

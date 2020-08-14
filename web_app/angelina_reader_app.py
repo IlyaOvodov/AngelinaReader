@@ -12,6 +12,11 @@ from flask_uploads import UploadSet, configure_uploads, IMAGES
 from flask_mobility import Mobility
 from flask_mobility.decorators import mobile_template
 
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
+import smtplib
+
 import time
 import os
 import json
@@ -89,7 +94,9 @@ def index(template, is_mobile=False):
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
         lang = SelectField(choices=[('RU', 'RU'), ('EN', 'EN')])
-    form = MainForm()
+    form = MainForm(agree=request.values.get('has_public_confirm', False),
+                    disgree=not request.values.get('has_public_confirm', True),
+                    lang=request.values.get('lang', 'RU'))
     if form.validate_on_submit():
         file_data = form.camera_file.data or form.file.data
         if not file_data:
@@ -138,9 +145,17 @@ def confirm(template):
 def results(template):
     class ResultsForm(FlaskForm):
         marked_image_path = HiddenField()
+        lang = HiddenField()
+        has_public_confirm = HiddenField()
         text = TextAreaField()
-        submit = SubmitField('Записать!')
+        submit = SubmitField('отправить на e-mail')
     form = ResultsForm()
+    if form.validate_on_submit():
+        return redirect(url_for('email',
+                                marked_image_path=request.form['marked_image_path'],
+                                lang=request.form['lang'],
+                                has_public_confirm=request.form['has_public_confirm']))
+
     extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm'],
                   'lang': request.values['lang']}
     marked_image_path, out_text = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
@@ -154,8 +169,41 @@ def results(template):
     marked_image_path = marked_image_path[len(root_dir):].replace("\\", "/")
     out_text = '\n'.join(out_text)
     form = ResultsForm(marked_image_path=marked_image_path,
-                       text=out_text)
+                       text=out_text,
+                       lang=request.values['lang'],
+                       has_public_confirm=request.values['has_public_confirm'])
     return render_template(template, form=form)
+
+@app.route("/email", methods=['GET', 'POST'])
+@login_required
+@mobile_template('{m/}email.html')
+def email(template):
+    class Form(FlaskForm):
+        marked_image_path = HiddenField()
+        lang = HiddenField()
+        has_public_confirm = HiddenField()
+        e_mail = StringField('E-mail', validators=[DataRequired()])
+        title = StringField('Заголовок письма')
+        as_attachment = BooleanField("отправить как вложение")
+        submit = SubmitField('Отправить')
+    form = Form()
+    if form.validate_on_submit():
+        results_list = [
+            # flask use marked_image_path started with \, so 1st char should be excluded
+            (Path(app.root_path) / request.form['marked_image_path'][1:]).with_suffix('.txt'),
+            Path(app.root_path) / request.form['marked_image_path'][1:]
+        ]
+        title = form.title.data or "Распознанный Брайль: " + Path(request.form['marked_image_path']).with_suffix('').with_suffix('').name
+        send_mail(form.e_mail.data, results_list, title)
+        return redirect(url_for('index',
+                                has_public_confirm=request.values['has_public_confirm'],
+                                lang=request.values['lang']))
+    form = Form(e_mail=current_user.e_mail,
+                marked_image_path=request.values['marked_image_path'],
+                lang=request.values['lang'],
+                has_public_confirm=request.values['has_public_confirm'])
+    return render_template(template, form=form)
+
 
 
 @app.route("/help")
@@ -221,6 +269,39 @@ def logout():
     return redirect(url_for('index'))
 
 
+def send_mail(to_address, results_list, subject):
+    """
+    Sends results to e-mail as text(s) + image(s)
+    :param to_address: destination email as str
+    :param results_list: list of files to send (txt or jpg)
+    :param subject: message subject or None
+    """
+    # create message object instance
+    msg = MIMEMultipart()
+    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
+    msg['To'] = to_address
+    msg['Subject'] = subject if subject else "Распознанный Брайль"
+    # attach image to message body
+    for file_name in results_list:
+        if Path(file_name).suffix == ".txt":
+            txt = Path(file_name).read_text(encoding="utf-8")
+            attachment = MIMEText(txt, _charset="utf-8")
+            attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+        elif Path(file_name).suffix == ".jpg":
+            attachment = MIMEImage(Path(file_name).read_bytes())
+            attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+        else:
+            assert False, str(file_name)
+        msg.attach(attachment)
+
+    # create server and send
+    server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
+    server.starttls()
+    server.login(Config.SMTP_FROM, Config.SMTP_PWD)
+    server.sendmail(msg['From'], msg['To'], msg.as_string())
+    server.quit()
+
+
 def run():
     parser = argparse.ArgumentParser(description='Angelina Braille reader web app.')
     parser.add_argument('--debug', dest='debug', action='store_true',
@@ -234,7 +315,7 @@ def run():
     app.jinja_env.cache = {}
     if debug:
         app.config['TEMPLATES_AUTO_RELOAD'] = True
-        app.run(debug=True, port=5001)
+        app.run(debug=True, host='0.0.0.0', port=5001)
     else:
         app.run(host='0.0.0.0', threaded=True)
 
