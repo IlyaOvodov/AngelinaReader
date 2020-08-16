@@ -6,23 +6,29 @@
     <table width="100%" valign="top">
     <tr>
         <td width="60%" valign="top">
-            <img src="{{form.marked_image_path.data}}" alt="Recognized image" style="width:100%; object-fit:contain" align="top">
+			<div class="wrapper">
+                Результат можно сохранить (правой кнопкой мыши "Cохранить картинку как...") или отправить на e-mail.<p/>
+				Для распознавания нового листа вернитесь на <a href="{{ url_for('index') }}">главную страницу</a>.
+			</div>
         </td>
         <td width="40%" valign="top">
-			<div class="wrapper">
-				Картинку можно сохранить (правой кнопкой мыши "Cохранить картинку как...") или
-			</div>
             <div class="button_wrapper">
                 {{ form.submit(style="width:80%") }}
             </div>
-			<div class="wrapper">
-        	    Для распознавания нового листа вернитесь на <a href="{{ url_for('index') }}">главную страницу</a>
-			</div>
+        </td>
+    </tr>
+    {% for image_path, text in image_paths_and_texts %}
+    <tr>
+        <td width="60%" valign="top">
+            <img src="{{image_path}}" alt="Recognized image" style="width:100%; object-fit:contain" align="top">
+        </td>
+        <td width="40%" valign="top">
 			<div class="button_wrapper">
-	            {{ form.text(rows=30, cols=40) }}
+                <textarea cols="40" id="text" name="text" rows="30">{{ text }}</textarea>
 			</div>
         </td>
     </tr>
+    {% endfor %}
     </table>
 </form>
 {% endblock %}

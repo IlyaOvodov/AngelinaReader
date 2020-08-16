@@ -36,7 +36,16 @@ function set_onchange() {
                 <table class="centered" width="100%"><tr>
                     <td>{{ form.agree() }} <label for="agree">{{ form.agree.label }}</label></td>
                     <td>{{ form.disgree() }} <label for="disgree">{{ form.disgree.label }}</label></td>
-                    <td>{{ form.lang }}</td>
+                </tr></table>
+            </div>
+            <div class="wrapper">
+                Настройки:
+            </div>
+            <div>
+                <table class="centered" width="100%"><tr>
+                    <td>{{ form.lang }} <label for="lang">{{ form.lang.label }}</label></td>
+                    <td>{{ form.find_orientation() }} <label for="find_orientation">{{ form.find_orientation.label }}</label></td>
+                    <td>{{ form.process_2_sides() }} <label for="process_2_sides">{{ form.process_2_sides.label }}</label></td>
                 </tr></table>
             </div>
             {{ flashed_messages() }}

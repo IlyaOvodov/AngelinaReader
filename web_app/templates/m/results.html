@@ -9,10 +9,9 @@
     <div class="button_wrapper">
         {{ form.submit(style="width:80%") }}
     </div>
-	<img src="{{form.marked_image_path.data}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
-    <div class="wrapper">{{ form.text(rows=30, cols=40, style="width:100%") }}</div>
-    <div class="wrapper">
-        Для распознавания нового листа вернитесь на <a href="{{ url_for('index') }}">главную страницу</a>
-	</div>
+    {% for image_path, text in image_paths_and_texts %}
+	<img src="{{image_path}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
+    <div class="wrapper"><textarea cols="40" id="text" name="text" rows="30">{{ text }}</textarea></div>
+    {% endfor %}
 </form>
 {% endblock %}

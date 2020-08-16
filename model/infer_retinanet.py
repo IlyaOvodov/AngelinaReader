@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+import enum
 import os
 import json
 import glob
@@ -20,14 +21,14 @@ from pathlib import Path
 import data_utils.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
-from . import create_model_retinanet
+from model import create_model_retinanet
 import pytorch_retinanet
 import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
 inference_width = 1024
-model_root = 'NN_results/retina_chars_eced60'
-model_weights = '/models/clr.008'
+model_root = 'weights/retina_chars_eced60'
+model_weights = '.clr.008'
 model_fn = join(local_config.data_path, model_root)
 params_fn = model_fn + '.param.txt'
 model_weights_fn = model_fn + model_weights
@@ -35,6 +36,18 @@ device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
 nms_thresh = 0.05
+
+
+class OrientationAttempts(enum.IntEnum):
+    NONE = 0
+    ROT180 = 1
+    INV = 2
+    INV_ROT180 = 3
+    ROT90 = 4
+    ROT270 = 5
+    INV_ROT90 = 6
+    INV_ROT270 = 7
+
 
 class BraileInferenceImpl(torch.nn.Module):
     def __init__(self, params, model_weights_fn, label_is_valid, verbose=1):
@@ -75,25 +88,29 @@ class BraileInferenceImpl(torch.nn.Module):
         best_idx = torch.argmin(err_score/(sum_valid+1)) # эвристика так себе придуманная
         return best_idx.item(), (err_score, sum_valid, sum_invalid)
 
-    def forward(self, input_tensor, input_tensor_rotated, orientation_attempts=8):
+    def forward(self, input_tensor, input_tensor_rotated, find_orientation, process_2_sides):
         # type: (Tensor, Tensor, int)->Tuple[Tensor,Tensor,Tensor,int, Tuple[Tensor, Tensor, Tensor]]
-        if isinstance(orientation_attempts, int):
-            orientation_attempts = set(range(orientation_attempts))
+        orientation_attempts = [OrientationAttempts.NONE]
+        if find_orientation:
+            orientation_attempts += [OrientationAttempts.ROT180, OrientationAttempts.ROT90, OrientationAttempts.ROT270]
+        if process_2_sides:
+            orientation_attempts += [OrientationAttempts.INV]
+            if find_orientation:
+                orientation_attempts += [OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]
         if len(self.num_classes) > 1:
-            assert orientation_attempts == {0}
-        assert len(orientation_attempts) >= 1
-        input_data = []
-        input_data.append(input_tensor.unsqueeze(0)) # 0 - as is
-        if orientation_attempts.intersection({1, 2, 3, 4, 5, 6, 7}):
-            input_data.append(torch.flip(input_data[-1], [2,3]))    # 1 - rotate 180
-        if orientation_attempts.intersection({2, 3, 4, 5, 6, 7}):
-            input_data.extend([-input_data[-2], -input_data[-1]])   # 2 - inverted, 3 - inverted and rotated 180
-        if orientation_attempts.intersection({4, 5, 6, 7}):
-            input_data.append(input_tensor_rotated.unsqueeze(0))  # 4 - rotate 90
-            if orientation_attempts.intersection({5, 6, 7}):
-                input_data.append(torch.flip(input_data[-1], [2,3])) # 5 - rotate 270
-            if orientation_attempts.intersection({6, 7}):
-                input_data.extend([-input_data[-2], -input_data[-1]])   # 6 - rotate 90 inverted, 7 - rotate 270 inverted
+            assert not find_orientation and not process_2_sides
+        input_data = [None]*8
+        input_data[OrientationAttempts.NONE]= input_tensor.unsqueeze(0)
+        if find_orientation:
+            input_data[OrientationAttempts.ROT180] = torch.flip(input_data[OrientationAttempts.NONE], [2,3])
+            input_data[OrientationAttempts.ROT90] = input_tensor_rotated.unsqueeze(0)
+            input_data[OrientationAttempts.ROT270] = torch.flip(input_data[OrientationAttempts.ROT90], [2, 3])
+        if process_2_sides:
+            input_data[OrientationAttempts.INV] = torch.flip(-input_data[OrientationAttempts.NONE], [3])
+            if find_orientation:
+                input_data[OrientationAttempts.INV_ROT180] = torch.flip(-input_data[OrientationAttempts.ROT180], [3])
+                input_data[OrientationAttempts.INV_ROT90] = torch.flip(-input_data[OrientationAttempts.ROT90], [3])
+                input_data[OrientationAttempts.INV_ROT270] = torch.flip(-input_data[OrientationAttempts.ROT270], [3])
         if self.verbose >= 2:
             print("run.model")
         loc_preds: List[Tensor] = [torch.tensor(0)]*8
@@ -103,16 +120,27 @@ class BraileInferenceImpl(torch.nn.Module):
                 loc_pred, cls_pred = self.model(input_data_i)
                 loc_preds[i] = loc_pred
                 cls_preds[i] = cls_pred
-        if len(orientation_attempts) > 1:
+        if find_orientation:
             best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh, orientation_attempts)
         else:
-            best_idx, err_score = min(orientation_attempts), (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
+            best_idx, err_score = OrientationAttempts.NONE, (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
+        if best_idx in [OrientationAttempts.INV, OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]:
+            best_idx -= 2
         h,w = input_data[best_idx].shape[2:]
-        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data, cls_preds[best_idx][0].cpu().data, (w,h),
-                                      cls_thresh = self.cls_thresh, nms_thresh = self.nms_thresh, num_classes=self.num_classes)
+        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data,
+                                                    cls_preds[best_idx][0].cpu().data, (w,h),
+                                                    cls_thresh = self.cls_thresh, nms_thresh = self.nms_thresh,
+                                                    num_classes=self.num_classes)
         if len(self.num_classes) > 1:
             labels = torch.tensor([lt.label010_to_int([str(s.item()+1) for s in lbl101]) for lbl101 in labels])
-        return boxes, labels, scores, best_idx, err_score
+        if process_2_sides:
+            boxes2, labels2, scores2 = self.encoder.decode(loc_preds[best_idx+2][0].cpu().data,
+                                                           cls_preds[best_idx+2][0].cpu().data, (w, h),
+                                                           cls_thresh=self.cls_thresh, nms_thresh=self.nms_thresh,
+                                                           num_classes=self.num_classes)
+        else:
+            boxes2, labels2, scores2 = None, None, None
+        return boxes, labels, scores, best_idx, err_score, boxes2, labels2, scores2
 
 
 class BrailleInference:
@@ -153,11 +181,9 @@ class BrailleInference:
                 print("Model pth loaded")
         self.impl.to(device)
 
-    def run(self, img_fn, lang, draw_refined = DRAW_NONE, orientation_attempts=8, gt_rects=[]):
-        if isinstance(orientation_attempts, int):
-            orientation_attempts = set(range(orientation_attempts))
+    def run(self, img_fn, lang, draw_refined, find_orientation, process_2_sides, gt_rects=[]):
         if gt_rects:
-            assert orientation_attempts == {0}, "gt_rects можно передавать только если ориентация задана"
+            assert find_orientation == False, "gt_rects можно передавать только если ориентация задана"
         if self.verbose >= 2:
             print("run.preprocess")
         t = time.clock()
@@ -174,30 +200,57 @@ class BrailleInference:
         input_tensor_rotated = torch.tensor(0).to(device)
 
         aug_img_rot = None
-        if orientation_attempts.intersection({4, 5, 6, 7}):
+        if find_orientation:
             np_img_rot = np.rot90(np_img, 1, (0,1))
             aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0]
             aug_img_rot = data.unify_shape(aug_img_rot)
             input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot).to(device)
 
         with torch.no_grad():
-            boxes, labels, scores, best_idx, err_score = self.impl(input_tensor, input_tensor_rotated, orientation_attempts)
+            boxes, labels, scores, best_idx, err_score, boxes2, labels2, scores2 = self.impl(
+                input_tensor, input_tensor_rotated, find_orientation=find_orientation, process_2_sides=process_2_sides)
 
         t = time.clock()
         boxes = boxes.tolist()
         labels = labels.tolist()
         scores = scores.tolist()
         lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
+        if process_2_sides:
+            boxes2 = boxes2.tolist()
+            labels2 = labels2.tolist()
+            scores2 = scores2.tolist()
+            lines2 = postprocess.boxes_to_lines(boxes2, labels2, lang=lang)
 
         if self.verbose >= 2:
             print("run.postprocess", time.clock() - t)
             print("run.draw")
         t = time.clock()
 
-        aug_img = PIL.Image.fromarray(aug_img if best_idx < 4 else aug_img_rot)
-        if best_idx in (1,3,5,7):
+        aug_img = PIL.Image.fromarray(aug_img if best_idx < OrientationAttempts.ROT90 else aug_img_rot)
+        if best_idx in (OrientationAttempts.ROT180, OrientationAttempts.ROT270):
             aug_img = aug_img.transpose(PIL.Image.ROTATE_180)
-        raw_image = copy.deepcopy(aug_img)
+
+        raw_image = aug_img
+
+        results_dict = {
+            'image': raw_image,
+            'best_idx': best_idx,
+            'err_scores': list([ten.cpu().data.tolist() for ten in err_score]),
+            'gt_rects': aug_gt_rects,
+        }
+
+        results_dict.update(self.draw_results(aug_img, boxes, lines, labels, scores, False, draw_refined))
+        if process_2_sides:
+            aug_img = aug_img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            results_dict.update(self.draw_results(aug_img, boxes2, lines2, labels2, scores2, True, draw_refined))
+
+        if self.verbose >= 2:
+            print("run.draw", time.clock() - t)
+        return results_dict
+
+    def draw_results(self, aug_img, boxes, lines, labels, scores, reverse_page, draw_refined):
+        suff = '.rev' if reverse_page else ''
+        aug_img = copy.deepcopy(aug_img)
         draw = PIL.ImageDraw.Draw(aug_img)
         font_fn = str(Path(__file__).parent / "arial.ttf")
         fntA = PIL.ImageFont.truetype(font_fn, 20)
@@ -226,21 +279,17 @@ class BrailleInference:
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
-        if self.verbose >= 2:
-            print("run.draw", time.clock() - t)
         return {
-            'image': raw_image,
-            'labeled_image': aug_img,
-            'lines': lines,
-            'text': out_text,
-            'dict': self.to_dict(aug_img, lines, draw_refined),
-            'best_idx': best_idx,
-            'err_scores': list([ten.cpu().data.tolist() for ten in err_score]),
-            'boxes': boxes,
-            'labels': labels,
-            'scores': scores,
-            'gt_rects': aug_gt_rects,
+            'labeled_image' + suff: aug_img,
+            'lines' + suff: lines,
+            'text' + suff: out_text,
+            'dict' + suff: self.to_dict(aug_img, lines, draw_refined),
+            'boxes' + suff: boxes,
+            'labels' + suff: labels,
+            'scores' + suff: scores,
         }
+
+
 
     def to_dict(self, img, lines, draw_refined = DRAW_NONE):
         '''
@@ -268,12 +317,33 @@ class BrailleInference:
                }
         return res
 
-    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined = DRAW_NONE,
-                     remove_labeled_from_filename = False, orientation_attempts = 8):
+    def save_results(self, result_dict, reverse_page, results_dir, filename_stem):
+        suff = '.rev' if reverse_page else ''
+        if not reverse_page:
+            labeled_image_filename = filename_stem + '.labeled' + suff + '.jpg'
+            result_dict['image' + suff].save(Path(results_dir) / labeled_image_filename)
+            json_path = Path(results_dir) / (filename_stem + '.labeled' + suff + '.json')
+            result_dict['dict']['imagePath'] = labeled_image_filename
+            with open(json_path, 'w') as opened_json:
+                json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=4)
+        marked_image_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.jpg')
+        recognized_text_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.txt')
+        result_dict['labeled_image' + suff].save(marked_image_path)
+        with open(recognized_text_path, encoding='utf-8', mode='w') as f:
+            for s in result_dict['text' + suff]:
+                f.write(s)
+                f.write('\n')
+        return str(marked_image_path), str(recognized_text_path), result_dict['text' + suff]
+
+
+    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined,
+                     remove_labeled_from_filename, find_orientation, process_2_sides):
         if self.verbose >= 2:
             print("recognizer.run")
         t = time.clock()
-        result_dict = self.run(img_path, lang = lang, draw_refined = draw_refined, orientation_attempts = orientation_attempts)
+        result_dict = self.run(img_path, lang=lang, draw_refined=draw_refined,
+                               find_orientation=find_orientation,
+                               process_2_sides=process_2_sides)
         if self.verbose >= 2:
             print("recognizer.run", time.clock() - t)
             print("save results")
@@ -284,25 +354,10 @@ class BrailleInference:
         if remove_labeled_from_filename and filename_stem.endswith('.labeled'):
             filename_stem = filename_stem[: -len('.labeled')]
 
-        labeled_image_filename = filename_stem + '.labeled' + '.jpg'
-        json_path = Path(results_dir) / (filename_stem + '.labeled' + '.json')
-        result_dict['image'].save(Path(results_dir) / labeled_image_filename)
-        result_dict['dict']['imagePath'] = labeled_image_filename
-        with open(json_path, 'w') as opened_json:
-            json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=4)
-
-        marked_image_path = Path(results_dir) / (filename_stem + '.marked' + '.jpg')
-        recognized_text_path = Path(results_dir) / (filename_stem + '.marked' + '.txt')
-        result_dict['labeled_image'].save(marked_image_path)
-        with open(recognized_text_path, encoding='utf-8', mode='w') as f:
-            for s in result_dict['text']:
-                f.write(s)
-                f.write('\n')
-
         protocol_text_path = Path(results_dir) / (filename_stem + '.protocol' + '.txt')
         with open(protocol_text_path, 'w') as f:
             info = OrderedDict(
-                ver = '3',
+                ver = '20200816',
                 best_idx = result_dict['best_idx'],
                 err_scores = result_dict['err_scores'],
                 model_weights = self.impl.model_weights_fn,
@@ -311,12 +366,16 @@ class BrailleInference:
                 info.update(extra_info)
             json.dump(info, f, sort_keys=False, indent=4)
 
+        results = [self.save_results(result_dict, False, results_dir, filename_stem)]
+        if process_2_sides:
+            results += [self.save_results(result_dict, True, results_dir, filename_stem)]
+
         if self.verbose >= 2:
             print("save results", time.clock() - t)
-        return str(marked_image_path), result_dict['text']
+        return results
 
-    def process_dir_and_save(self, img_filename_mask, results_dir, lang, draw_refined = DRAW_NONE,
-                             remove_labeled_from_filename = False, orientation_attempts = 8):
+    def process_dir_and_save(self, img_filename_mask, results_dir, lang, extra_info, draw_refined,
+                             remove_labeled_from_filename, find_orientation, process_2_sides):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
             data_dir = os.path.dirname(list_file)
@@ -329,11 +388,38 @@ class BrailleInference:
             mask = '*' + mask
             img_files = list(Path(root_dir).glob(mask))
             img_folders = [os.path.split(fn)[0].replace(str(Path(root_dir)), '')[1:] for fn in img_files]
+        result_list = list()
         for img_file, img_folder in zip(img_files, img_folders):
             print('processing '+str(img_file))
-            self.run_and_save(img_file, os.path.join(results_dir, img_folder), lang = lang, extra_info = None, draw_refined = draw_refined,
-			                  remove_labeled_from_filename = remove_labeled_from_filename,
-                              orientation_attempts = orientation_attempts)
+            ith_result = self.run_and_save(
+                img_file, os.path.join(results_dir, img_folder), lang=lang, extra_info=extra_info,
+                draw_refined=draw_refined,
+			    remove_labeled_from_filename=remove_labeled_from_filename,
+                find_orientation=find_orientation,
+                process_2_sides=process_2_sides)
+            result_list += ith_result
+        return result_list
+
+    def run_and_save_archive(self, arch_path, results_dir, lang, extra_info, draw_refined,
+                    remove_labeled_from_filename, find_orientation, process_2_sides):
+        if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
+            list_file = os.path.join(local_config.data_path, img_filename_mask)
+            data_dir = os.path.dirname(list_file)
+            with open(list_file, 'r') as f:
+                files = f.readlines()
+            img_files = [os.path.join(data_dir, fn[:-1] if fn[-1] == '\n' else fn) for fn in files]
+            img_folders = [os.path.split(fn)[0] for fn in files]
+        else:
+            root_dir, mask = img_filename_mask.split('*', 1)
+            mask = '*' + mask
+            img_files = list(Path(root_dir).glob(mask))
+            img_folders = [os.path.split(fn)[0].replace(str(Path(root_dir)), '')[1:] for fn in img_files]
+        return process_dir_and_save(self, img_filename_mask, results_dir, lang, extra_info=extra_info,
+                                    draw_refined=draw_refined,
+                                    remove_labeled_from_filename=remove_labeled_from_filename,
+                                    find_orientation=find_orientation,
+                                    process_2_sides=process_2_sides)
+
 
 if __name__ == '__main__':
 
@@ -344,11 +430,13 @@ if __name__ == '__main__':
     results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\3 класс\Математика_1'
 
     remove_labeled_from_filename = True
-    orientation_attempts = {0,1,4,5}
+    find_orientation = True
+    process_2_sides = True
 
-    recognizer = BrailleInference(create_script=None)
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', draw_refined=recognizer.DRAW_NONE,
+    recognizer = BrailleInference()
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined = recognizer.DRAW_NONE,
                                     remove_labeled_from_filename=remove_labeled_from_filename,
-                                    orientation_attempts=orientation_attempts)
+                                    find_orientation=find_orientation,
+                                    process_2_sides=process_2_sides)
 
     #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi', lang = 'RU')

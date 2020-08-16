@@ -29,7 +29,6 @@ from .config import Config
 
 model_root = 'weights/retina_chars_eced60'
 model_weights = '.clr.008'
-orientation_attempts = {0,1,4,5}
 
 print("infer_retinanet.BrailleInference()")
 t = time.clock()
@@ -93,10 +92,15 @@ def index(template, is_mobile=False):
         file = FileField()
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
-        lang = SelectField(choices=[('RU', 'RU'), ('EN', 'EN')])
-    form = MainForm(agree=request.values.get('has_public_confirm', False),
-                    disgree=not request.values.get('has_public_confirm', True),
-                    lang=request.values.get('lang', 'RU'))
+        lang = SelectField("Язык текста", choices=[('RU', 'RU'), ('EN', 'EN')])
+        find_orientation = BooleanField("Авто ориентация")
+        process_2_sides = BooleanField("Обе стороны")
+    form = MainForm(agree=request.values.get('has_public_confirm', '') == 'True',
+                    disgree=request.values.get('has_public_confirm', '') == 'False',
+                    lang=request.values.get('lang', 'RU'),
+                    find_orientation=request.values.get('find_orientation', 'False') == 'True',
+                    process_2_sides=request.values.get('process_2_sides', 'False') == 'True',
+                    )
     if form.validate_on_submit():
         file_data = form.camera_file.data or form.file.data
         if not file_data:
@@ -108,12 +112,19 @@ def index(template, is_mobile=False):
         os.makedirs(IMG_ROOT, exist_ok=True)
         filename = photos.save(file_data)
         img_path = IMG_ROOT / filename
-        has_public_confirm = form.agree.data
-        lang = form.lang.data
 
         if not form.agree.data:
-            return redirect(url_for('confirm', img_path=img_path, lang=lang))
-        return redirect(url_for('results', img_path=img_path, has_public_confirm=has_public_confirm, lang=lang))
+            return redirect(url_for('confirm',
+                                    img_path=img_path,
+                                    lang=form.lang.data,
+                                    find_orientation=form.find_orientation.data,
+                                    process_2_sides=form.process_2_sides.data))
+        return redirect(url_for('results',
+                                img_path=img_path,
+                                has_public_confirm=form.agree.data,
+                                lang=form.lang.data,
+                                find_orientation=form.find_orientation.data,
+                                process_2_sides=form.process_2_sides.data))
 
     return render_template(template, form=form)
 
@@ -123,7 +134,6 @@ def index(template, is_mobile=False):
 @mobile_template('{m/}confirm.html')
 def confirm(template):
     class Form(FlaskForm):
-        img_path = HiddenField()
         agree = BooleanField("Я согласен на публикацию.")
         disgree = BooleanField("Возражаю. Это приватный текст.", default=True)
         submit = SubmitField('Распознать')
@@ -133,9 +143,12 @@ def confirm(template):
             flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template(template, form=form)
         has_public_confirm = form.agree.data
-        return redirect(url_for('results', img_path=request.form['img_path'], has_public_confirm=has_public_confirm,
-                                lang=request.values['lang']))
-    form = Form(img_path = request.values['img_path'])
+        return redirect(url_for('results',
+                                img_path=request.values['img_path'],
+                                has_public_confirm=has_public_confirm,
+                                lang=request.values['lang'],
+                                find_orientation=request.values['find_orientation'],
+                                process_2_sides=request.values['process_2_sides']))
     return render_template(template, form=form)
 
 
@@ -144,64 +157,69 @@ def confirm(template):
 @mobile_template('{m/}results.html')
 def results(template):
     class ResultsForm(FlaskForm):
-        marked_image_path = HiddenField()
-        lang = HiddenField()
-        has_public_confirm = HiddenField()
-        text = TextAreaField()
+        results_list = HiddenField()
         submit = SubmitField('отправить на e-mail')
     form = ResultsForm()
     if form.validate_on_submit():
         return redirect(url_for('email',
-                                marked_image_path=request.form['marked_image_path'],
-                                lang=request.form['lang'],
-                                has_public_confirm=request.form['has_public_confirm']))
+                                results_list=request.form['results_list'],
+                                has_public_confirm=request.values['has_public_confirm'],
+                                lang=request.values['lang'],
+                                find_orientation=request.values['find_orientation'],
+                                process_2_sides=request.values['process_2_sides']))
 
-    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm'],
+    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm']=='True',
                   'lang': request.values['lang']}
-    marked_image_path, out_text = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
-                                                          lang=request.values['lang'], extra_info=extra_info,
-                                                          draw_refined=recognizer.DRAW_NONE,
-                                                          orientation_attempts=orientation_attempts)
+    ext = Path(request.values['img_path']).suffix
+    if ext in {'.jpg', '.jpeg', '.png'}:
+        results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
+                                               lang=request.values['lang'], extra_info=extra_info,
+                                               draw_refined=recognizer.DRAW_NONE,
+                                               remove_labeled_from_filename=False,
+                                               find_orientation=request.values['find_orientation']=='True',
+                                               process_2_sides=request.values['process_2_sides']=='True')
+    # elif ext in {'.zip', '.rar', '.gz'}:  TODO
+    #     results_list = recognizer.run_and_save_archive(request.values['img_path'], RESULTS_ROOT,
+    #                                                           lang=request.values['lang'], extra_info=extra_info,
+    #                                                           draw_refined=recognizer.DRAW_NONE,
+    #                                                           find_orientation=request.values['find_orientation']=='True',
+    #                                          process_2_sides=request.values['process_2_sides']=='True')
+    else:
+        assert False, "incorrect file type: " + str(request.values['img_path'])
     # convert OS path to flask html path
     root_dir = str(Path(app.root_path))
-    marked_image_path = str(Path(marked_image_path))
-    assert(marked_image_path[:len(root_dir)]) == root_dir
-    marked_image_path = marked_image_path[len(root_dir):].replace("\\", "/")
-    out_text = '\n'.join(out_text)
-    form = ResultsForm(marked_image_path=marked_image_path,
-                       text=out_text,
-                       lang=request.values['lang'],
-                       has_public_confirm=request.values['has_public_confirm'])
-    return render_template(template, form=form)
+    image_paths_and_texts = list()
+    file_names = list()
+    for marked_image_path, recognized_text_path, out_text in results_list:
+        flask_image_path = str(Path(marked_image_path))
+        assert(flask_image_path[:len(root_dir)]) == root_dir
+        flask_image_path = flask_image_path[len(root_dir):].replace("\\", "/")
+        out_text = '\n'.join(out_text)
+        image_paths_and_texts.append((flask_image_path, out_text,))
+        file_names.append((marked_image_path, recognized_text_path))
+    form = ResultsForm(results_list=json.dumps(file_names))
+    return render_template(template, form=form, image_paths_and_texts=image_paths_and_texts)
 
 @app.route("/email", methods=['GET', 'POST'])
 @login_required
 @mobile_template('{m/}email.html')
 def email(template):
     class Form(FlaskForm):
-        marked_image_path = HiddenField()
-        lang = HiddenField()
-        has_public_confirm = HiddenField()
         e_mail = StringField('E-mail', validators=[DataRequired()])
         title = StringField('Заголовок письма')
         as_attachment = BooleanField("отправить как вложение")
         submit = SubmitField('Отправить')
     form = Form()
     if form.validate_on_submit():
-        results_list = [
-            # flask use marked_image_path started with \, so 1st char should be excluded
-            (Path(app.root_path) / request.form['marked_image_path'][1:]).with_suffix('.txt'),
-            Path(app.root_path) / request.form['marked_image_path'][1:]
-        ]
-        title = form.title.data or "Распознанный Брайль: " + Path(request.form['marked_image_path']).with_suffix('').with_suffix('').name
+        results_list = json.loads(request.values['results_list'])
+        title = form.title.data or "Распознанный Брайль: " + Path(results_list[0][0]).with_suffix('').with_suffix('').name
         send_mail(form.e_mail.data, results_list, title)
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
-                                lang=request.values['lang']))
-    form = Form(e_mail=current_user.e_mail,
-                marked_image_path=request.values['marked_image_path'],
-                lang=request.values['lang'],
-                has_public_confirm=request.values['has_public_confirm'])
+                                lang=request.values['lang'],
+                                find_orientation=request.values['find_orientation'],
+                                process_2_sides=request.values['process_2_sides']))
+    form = Form(e_mail=current_user.e_mail)
     return render_template(template, form=form)
 
 
@@ -273,7 +291,7 @@ def send_mail(to_address, results_list, subject):
     """
     Sends results to e-mail as text(s) + image(s)
     :param to_address: destination email as str
-    :param results_list: list of files to send (txt or jpg)
+    :param results_list: list of tuples with file names(txt or jpg)
     :param subject: message subject or None
     """
     # create message object instance
@@ -282,17 +300,18 @@ def send_mail(to_address, results_list, subject):
     msg['To'] = to_address
     msg['Subject'] = subject if subject else "Распознанный Брайль"
     # attach image to message body
-    for file_name in results_list:
-        if Path(file_name).suffix == ".txt":
-            txt = Path(file_name).read_text(encoding="utf-8")
-            attachment = MIMEText(txt, _charset="utf-8")
-            attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-        elif Path(file_name).suffix == ".jpg":
-            attachment = MIMEImage(Path(file_name).read_bytes())
-            attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-        else:
-            assert False, str(file_name)
-        msg.attach(attachment)
+    for file_names in results_list:
+        for file_name in reversed(file_names):  # txt before jpg
+            if Path(file_name).suffix == ".txt":
+                txt = Path(file_name).read_text(encoding="utf-8")
+                attachment = MIMEText(txt, _charset="utf-8")
+                attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+            elif Path(file_name).suffix == ".jpg":
+                attachment = MIMEImage(Path(file_name).read_bytes())
+                attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+            else:
+                assert False, str(file_name)
+            msg.attach(attachment)
 
     # create server and send
     server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
