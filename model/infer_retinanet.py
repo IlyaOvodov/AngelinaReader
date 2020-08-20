@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 import enum
+import fitz
 import os
 import json
 import glob
@@ -181,13 +182,32 @@ class BrailleInference:
                 print("Model pth loaded")
         self.impl.to(device)
 
+    def load_pdf(self, img_fn):
+        pdf = fitz.open(img_fn)
+        pdf = pdf.loadPage(0)
+        pdf = pdf.getPixmap()
+        cspace = pdf.colorspace
+        if cspace is None:
+            mode = "L"
+        elif cspace.n == 1:
+            mode = "L" if pdf.alpha == 0 else "LA"
+        elif cspace.n == 3:
+            mode = "RGB" if pdf.alpha == 0 else "RGBA"
+        else:
+            mode = "CMYK"
+        img = PIL.Image.frombytes(mode, (pdf.width, pdf.height), pdf.samples)
+        return img
+
     def run(self, img_fn, lang, draw_refined, find_orientation, process_2_sides, gt_rects=[]):
         if gt_rects:
             assert find_orientation == False, "gt_rects можно передавать только если ориентация задана"
         if self.verbose >= 2:
             print("run.preprocess")
         t = time.clock()
-        img = PIL.Image.open(img_fn)
+        if Path(img_fn).suffix=='.pdf':
+            img = self.load_pdf(img_fn)
+        else:
+            img = PIL.Image.open(img_fn)
         if self.verbose >= 2:
             print("run.preprocess", time.clock() - t)
             print("run.make_batch")

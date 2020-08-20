@@ -8,7 +8,7 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField, SelectField
 from wtforms.validators import DataRequired
-from flask_uploads import UploadSet, configure_uploads, IMAGES
+from flask_uploads import UploadSet, configure_uploads, IMAGES, ARCHIVES
 from flask_mobility import Mobility
 from flask_mobility.decorators import mobile_template
 
@@ -47,7 +47,7 @@ IMG_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'raw'
 RESULTS_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'results'
 os.makedirs(Path(app.root_path) / app.config['DATA_ROOT'], exist_ok=True)
 
-photos = UploadSet('photos', IMAGES)
+photos = UploadSet('photos', extensions=IMAGES + ('pdf',) + ARCHIVES)
 
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
@@ -170,15 +170,15 @@ def results(template):
 
     extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm']=='True',
                   'lang': request.values['lang']}
-    ext = Path(request.values['img_path']).suffix
-    if ext in {'.jpg', '.jpeg', '.png'}:
+    ext = Path(request.values['img_path']).suffix[1:]  # exclude leading dot
+    if ext in IMAGES or ext == 'pdf':
         results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
                                                lang=request.values['lang'], extra_info=extra_info,
                                                draw_refined=recognizer.DRAW_NONE,
                                                remove_labeled_from_filename=False,
                                                find_orientation=request.values['find_orientation']=='True',
                                                process_2_sides=request.values['process_2_sides']=='True')
-    # elif ext in {'.zip', '.rar', '.gz'}:  TODO
+    # elif ext in ARCHIVES:  TODO
     #     results_list = recognizer.run_and_save_archive(request.values['img_path'], RESULTS_ROOT,
     #                                                           lang=request.values['lang'], extra_info=extra_info,
     #                                                           draw_refined=recognizer.DRAW_NONE,
