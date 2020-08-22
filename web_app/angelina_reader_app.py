@@ -54,7 +54,7 @@ configure_uploads(app, photos)
 
 users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.json'
 if os.path.isfile(users_file):
-    with open(users_file) as f:
+    with open(users_file, encoding='utf-8') as f:
         all_users = json.load(f)
 else:
     all_users = dict()
@@ -69,8 +69,8 @@ class User:
         if is_new:
             assert e_mail not in all_users.keys()
             all_users[e_mail] = {'name':name}
-            with open(users_file, 'w') as f:
-                json.dump(all_users, f, sort_keys=True, indent=4)
+            with open(users_file, 'w', encoding='utf8') as f:
+                json.dump(all_users, f, sort_keys=True, indent=4, ensure_ascii=False)
     def get_id(self):
         return self.e_mail
 
@@ -177,7 +177,8 @@ def results(template):
                                                draw_refined=recognizer.DRAW_NONE,
                                                remove_labeled_from_filename=False,
                                                find_orientation=request.values['find_orientation']=='True',
-                                               process_2_sides=request.values['process_2_sides']=='True')
+                                               process_2_sides=request.values['process_2_sides']=='True',
+                                               repeat_on_aligned=False)
     # elif ext in ARCHIVES:  TODO
     #     results_list = recognizer.run_and_save_archive(request.values['img_path'], RESULTS_ROOT,
     #                                                           lang=request.values['lang'], extra_info=extra_info,
@@ -186,6 +187,13 @@ def results(template):
     #                                          process_2_sides=request.values['process_2_sides']=='True')
     else:
         assert False, "incorrect file type: " + str(request.values['img_path'])
+    if results_list is None:
+        flash('Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
+        return redirect(url_for('index',
+                                has_public_confirm=request.values['has_public_confirm'],
+                                lang=request.values['lang'],
+                                find_orientation=request.values['find_orientation'],
+                                process_2_sides=request.values['process_2_sides']))
     # convert OS path to flask html path
     root_dir = str(Path(app.root_path))
     image_paths_and_texts = list()
