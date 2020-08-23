@@ -625,7 +625,7 @@ def find_transformation(lines):
     return hom
 
 
-def transform(img, lines, rects, hom):
+def transform_image(img, hom):
     """
     transforms img and refined_box'es and original_box'es for chars at lines using homography matrix found by
     find_transformation(lines)
@@ -636,13 +636,17 @@ def transform(img, lines, rects, hom):
     """
     if hom.shape[0] == 3:
         img_transform = cv2.warpPerspective
-        pts_transform = cv2.perspectiveTransform
     else:
         img_transform = cv2.warpAffine
-        pts_transform = cv2.transform
     img = img_transform(np.asarray(img), hom, img.size, flags=cv2.INTER_LINEAR )
     img = PIL.Image.fromarray(img)
+    return img
 
+def transform_lines(lines, hom):
+    if hom.shape[0] == 3:
+        pts_transform = cv2.perspectiveTransform
+    else:
+        pts_transform = cv2.transform
     old_centers = np.array([[center_of_char(ch) for ln in lines for ch in ln.chars]])
     new_centers = pts_transform(old_centers, hom)
     shifts = (new_centers - old_centers)[0]
@@ -658,8 +662,14 @@ def transform(img, lines, rects, hom):
             ch.original_box[2] += shifts[i, 0]
             ch.original_box[3] += shifts[i, 1]
             i += 1
+    return lines
 
+def transform_rects(rects, hom):
     if len(rects):
+        if hom.shape[0] == 3:
+            pts_transform = cv2.perspectiveTransform
+        else:
+            pts_transform = cv2.transform
         old_centers = np.array([[((r[2]-r[0])/2, (r[3]-r[1])/2) for r in rects]])
         new_centers = pts_transform(old_centers, hom)
         shifts = (new_centers - old_centers)[0].tolist()
@@ -667,7 +677,7 @@ def transform(img, lines, rects, hom):
             (x[0][0] + x[1][0], x[0][1] + x[1][1], x[0][2] + x[1][0], x[0][3] + x[1][1])
             for x in zip(rects, shifts)
         ]
-    return img, lines, rects
+    return rects
 
 
 if __name__ == '__main__':

@@ -252,6 +252,30 @@ class BrailleInference:
         return results_dict
 
 
+    def refine_boxes(self, boxes):
+        """
+        GVNC. Эмпирическая коррекция получившихся размеров чтобы исправить неточность результатов для последующей разметки
+        :param boxes:
+        :return:
+        """
+        h = boxes[:, 3:4] - boxes[:, 1:2]
+        coefs = torch.tensor([[0.083, 0.092, -0.083, -0.013]])
+        deltas = h * coefs
+        return boxes + deltas
+		
+    def refine_lines(self, lines):
+        """
+        GVNC. Эмпирическая коррекция получившихся размеров чтобы исправить неточность результатов для последующей разметки
+        :param boxes:
+        :return:
+        """
+        for ln in lines:
+            for ch in ln.chars:
+                h = ch.refined_box[3] - ch.refined_box[1]
+                coefs = np.array([0.083, 0.092, -0.083, -0.013])
+                deltas = h * coefs
+                ch.refined_box = (np.array(ch.refined_box) + deltas).tolist()
+
     def run_impl(self, img, lang, draw_refined, find_orientation, process_2_sides, align, draw, gt_rects=[]):
         t = time.clock()
         np_img = np.asarray(img)
@@ -278,16 +302,20 @@ class BrailleInference:
             print("    run_impl.impl", time.clock() - t)
             t = time.clock()
 
+        #boxes = self.refine_boxes(boxes)
         boxes = boxes.tolist()
         labels = labels.tolist()
         scores = scores.tolist()
         lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
+        self.refine_lines(lines)
 
         if process_2_sides:
+            #boxes2 = self.refine_boxes(boxes2)
             boxes2 = boxes2.tolist()
             labels2 = labels2.tolist()
             scores2 = scores2.tolist()
             lines2 = postprocess.boxes_to_lines(boxes2, labels2, lang=lang)
+            self.refine_lines(lines2)
 
         aug_img = PIL.Image.fromarray(aug_img if best_idx < OrientationAttempts.ROT90 else aug_img_rot)
         if best_idx in (OrientationAttempts.ROT180, OrientationAttempts.ROT270):
@@ -302,7 +330,11 @@ class BrailleInference:
         if align and not process_2_sides:
             hom = postprocess.find_transformation(lines)
             if hom is not None:
-                aug_img, lines, aug_gt_rects = postprocess.transform(aug_img, lines, aug_gt_rects, hom)
+                aug_img = postprocess.transform_image(aug_img, hom)
+                boxes = postprocess.transform_rects(boxes, hom)
+                lines = postprocess.boxes_to_lines(boxes, labels, lang=lang)
+                self.refine_lines(lines)
+                aug_gt_rects = postprocess.transform_rects(aug_gt_rects, hom)
             if self.verbose >= 2:
                 print("    run_impl.align", time.clock() - t)
                 aug_img.save(Path(results_dir) / 'aligned_{}.jpg'.format(align))
@@ -513,10 +545,13 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
-    img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
+    #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
-    results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200821'
+    img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\**\*.*'
+
+    #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
+    results_dir =       r'D:\Programming.Data\Braille\ASI_results\Student_Book'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
     remove_labeled_from_filename = False
@@ -524,9 +559,10 @@ if __name__ == '__main__':
     process_2_sides = False
     repeat_on_aligned = False
     verbose = 0
+    draw_redined = BrailleInference.DRAW_REFINED
 
     recognizer = BrailleInference(verbose=verbose)
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined = recognizer.DRAW_NONE,
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined=draw_redined,
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,
                                     process_2_sides=process_2_sides,
