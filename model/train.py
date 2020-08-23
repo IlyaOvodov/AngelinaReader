@@ -11,6 +11,7 @@ from collections import OrderedDict
 import torch
 import ignite
 from ignite.engine import Events
+from pathlib import Path
 
 import ovotools.ignite_tools
 import ovotools.pytorch_tools
@@ -29,7 +30,7 @@ ctx = ovotools.pytorch.Context(settings=None, params=params)
 
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
 if 'load_model_from' in params.keys():
-    preloaded_weights = torch.load(os.path.join(local_config.data_path, params.load_model_from))
+    preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from)
     model.load_state_dict(preloaded_weights)
 
 ctx.net  = model
@@ -74,7 +75,7 @@ evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metric
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_dsbi:loss', minimize=True, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_3_asi_scan:loss', minimize=True, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,

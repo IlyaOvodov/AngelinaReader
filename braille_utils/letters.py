@@ -101,7 +101,7 @@ alpha_map_EN = {
     '1356': 'z',
 
     #'6': caps_sign, # TODO duplicate оа RU caps_sign
-    '3': "'",
+    #'3': "'",
     '236': '"',  # mark as <<
     '356': '"',  # mark as >>
 }

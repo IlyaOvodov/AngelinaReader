@@ -152,11 +152,12 @@ def select_outliers(dir, mask, what, min_v, max_v):
 
 
 if __name__=="__main__":
-    data_dir = r"D:\Programming.Data\Braille\web_uploaded\re-processed200821"
-    mask = "" # "labeled*/**/"
+    data_dir = r"D:\Programming.Data\Braille\web_uploaded\re-processed200823"
+    mask = ""
     #dir_statistics(data_dir, mask)
+
     what = "h"
-    min_v = 22 #25
+    min_v = 20 #25
     max_v = 7000 #50
 
     # what = "w2h"
