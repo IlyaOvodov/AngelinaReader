@@ -66,7 +66,7 @@ if settings.findLR:
     eval_loaders['train'] = train_loader
 eval_loaders.update(val_loaders)
 eval_event = ignite.engine.Events.ITERATION_COMPLETED if settings.findLR else ignite.engine.Events.EPOCH_COMPLETED
-eval_duty_cycle = 2 if settings.findLR else 5
+eval_duty_cycle = 2 if settings.findLR else 1
 train_epochs = params.lr_finder.iters_num*len(train_loader) if settings.findLR else settings.max_epochs
 
 trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, loss, metrics=trainer_metrics, device=settings.device)
@@ -75,7 +75,7 @@ evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metric
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_3_asi_scan:loss', minimize=True, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_2:loss', minimize=True, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,
