@@ -6,7 +6,7 @@ settings = AttrDict(
     tensorboard_port=6006,
     device='cuda:0',
     findLR=False,
-    can_overwrite=True,
+    can_overwrite=False,
 )
 
 params = AttrDict(
@@ -19,32 +19,32 @@ params = AttrDict(
         net_hw = (416, 416),
         rect_margin = 0.3, #  every of 4 margions to char width
         train_list_file_names = [
-            r'DSBI\data\my_train.txt',
-            r'My\labeled\labeled2\train_books.txt',
-            r'My\labeled\labeled2\train_withtext.txt',
-            r'My\labeled\labeled2\train_pupils.txt',
-            r'My\labeled\labeled2\train_pupils.txt',
-            r'My\labeled\not_braille\_not_braille.txt',
-            r'My\labeled\ASI\student_book_p1.txt',
-            r'My\labeled\ASI\turlom_c2.txt',
-            r'My\labeled\ASI\turlom_c2.txt',
-            r'My\labeled\ASI\turlom_c2.txt',
+            r'DSBI/data/my_train.txt',
+            r'My/labeled/labeled2/train_books.txt',
+            r'My/labeled/labeled2/train_withtext.txt',
+            r'My/labeled/labeled2/train_pupils.txt',
+            r'My/labeled/labeled2/train_pupils.txt',
+            r'My/labeled/not_braille/_not_braille.txt',
+            r'My/labeled/ASI/student_book_p1.txt',
+            r'My/labeled/ASI/turlom_c2.txt',
+            r'My/labeled/ASI/turlom_c2.txt',
+            r'My/labeled/ASI/turlom_c2.txt',
         ],
         val_list_file_names = {
             'val_dsbi' :  [
-                           r'DSBI\data\my_val1.txt',
-                           r'DSBI\data\my_val1.txt',
+                           r'DSBI/data/my_val1.txt',
+                           r'DSBI/data/my_val1.txt',
                           ],
             'val_2' : [
-                            r'My\labeled\labeled2\val_books.txt',
-                            r'My\labeled\labeled2\val_withtext.txt',
-                            r'My\labeled\labeled2\val_pupils.txt',
+                            r'My/labeled/labeled2/val_books.txt',
+                            r'My/labeled/labeled2/val_withtext.txt',
+                            r'My/labeled/labeled2/val_pupils.txt',
                            ],
             'val_3_asi': [
-                r'My\labeled\ASI\turlom_c15_photo_1p.txt',
+                r'My/labeled/ASI/turlom_c15_photo_1p.txt',
             ],
             'val_3_asi_scan': [
-                r'My\labeled\ASI\turlom_c15_scan_1p.txt',
+                r'My/labeled/ASI/turlom_c15_scan_1p.txt',
             ],
         }
     ),
@@ -65,7 +65,7 @@ params = AttrDict(
             iuo_nofit_thr = 0,
         ),
         loss_params=AttrDict(
-            class_loss_scale = 100,
+            #class_loss_scale = 100,
         ),
     ),
     load_model_from = 'NN_saved/retina_chars_eced60/models/clr.008',
@@ -91,7 +91,7 @@ params = AttrDict(
     clr=AttrDict(
         warmup_epochs=10,
         min_lr=1e-3,
-        max_lr=0.09,
+        max_lr=0.01,
         period_epochs=500,
         scale_max_lr=0.95,
         scale_min_lr=0.95,
