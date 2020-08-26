@@ -35,15 +35,15 @@ def create_model_retinanet(params, device):
         if len(t):
             pass
 
-        boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32)
-                 *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32) for b in batch]
-        labels = [torch.tensor(b[1][:, 4], dtype = torch.long) for b in batch]
+        boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32).cuda()
+                 *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32).cuda() for b in batch]
+        labels = [torch.tensor(b[1][:, 4], dtype = torch.long).cuda() for b in batch]
         if params.data.get_points:
-            labels = [torch.tensor([0]*len(lb), dtype = torch.long) for lb in labels]
+            labels = [torch.tensor([0]*len(lb), dtype = torch.long).cuda() for lb in labels]
         elif use_multiple_class_groups:
             # классы нумеруются с 0, отсутствие класса = -1, далее в encode cls_targets=1+labels
             labels = [torch.tensor([[int(ch)-1 for ch in label_tools.int_to_label010(int_lbl.item())] for int_lbl in lb],
-                                   dtype=torch.long) for lb in labels]
+                                   dtype=torch.long).cuda() for lb in labels]
 
         original_images = [b[2] for b in batch if len(b)>2] # batch contains augmented image if not in train mode
 
@@ -51,7 +51,7 @@ def create_model_retinanet(params, device):
 
         h, w = tuple(params.data.net_hw)
         num_imgs = len(batch)
-        inputs = torch.zeros(num_imgs, 3, h, w)
+        inputs = torch.zeros(num_imgs, 3, h, w).to(imgs[0])
 
         loc_targets = []
         cls_targets = []

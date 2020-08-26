@@ -117,9 +117,11 @@ class ImagePreprocessor:
         '''
         returns image converted to FloatTensor and normalized
         '''
-        ten_img = F.to_tensor(img)
+        assert img.ndim == 3
+        ten_img = torch.from_numpy(img.transpose((2, 0, 1))).cuda().float()
         means = ten_img.view(3, -1).mean(dim=1)
-        std = ten_img.view(3, -1).std(dim=1)
+        std = torch.max(ten_img.view(3, -1).std(dim=1), torch.tensor(0.1*255).to(ten_img))
+                        #(ten_img.view(3, -1).max(dim=1)[0] - ten_img.view(3, -1).min(dim=1)[0])/6)
         ten_img = (ten_img - means.view(-1, 1, 1)) / (3*std.view(-1, 1, 1))
         # decolorize
         ten_img = ten_img.mean(dim=0).expand(3, -1, -1)
@@ -164,6 +166,7 @@ class BrailleDataset:
             for fn in files:
                 if fn[-1] == '\n':
                     fn = fn[:-1]
+                fn = fn.replace('\\', '/')
                 image_fn, labels_fn = self.filenames_of_item(data_dir, fn)
                 if image_fn:
                     self.image_files.append(image_fn)
@@ -281,7 +284,7 @@ def read_LabelMe_annotation(label_filename, get_points):
     '''
     if get_points:
         raise NotImplementedError("read_annotation get_point mode not implemented for LabelMe annotation")
-    with open(label_filename, 'r') as opened_json:
+    with open(label_filename, 'r', encoding='cp1251') as opened_json:
         loaded = json.load(opened_json)
     convert_x = limiting_scaler(loaded["imageWidth"], 1.0)
     convert_y = limiting_scaler(loaded["imageHeight"], 1.0)
