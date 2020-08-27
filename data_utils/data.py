@@ -120,7 +120,7 @@ class ImagePreprocessor:
         assert img.ndim == 3
         ten_img = torch.from_numpy(img.transpose((2, 0, 1))).cuda().float()
         means = ten_img.view(3, -1).mean(dim=1)
-        std = torch.max(ten_img.view(3, -1).std(dim=1), torch.tensor(0.1*255).to(ten_img))
+        std = torch.max(ten_img.view(3, -1).std(dim=1), torch.tensor(self.params.data.max_std*255).to(ten_img))
                         #(ten_img.view(3, -1).max(dim=1)[0] - ten_img.view(3, -1).min(dim=1)[0])/6)
         ten_img = (ten_img - means.view(-1, 1, 1)) / (3*std.view(-1, 1, 1))
         # decolorize
