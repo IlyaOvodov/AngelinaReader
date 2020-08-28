@@ -10,8 +10,21 @@ models = [
 ]
 
 model_dirs = [
-    'NN_results/retina_chars_7e1d4e',
-    'NN_results/retina_chars_d58e5f'
+    # 'NN_results/retina_chars_7e1d4e',
+    # 'NN_results/retina_chars_785e35',
+    # 'NN_results/retina_chars3_0.5_100_5_090399',
+    # 'NN_results/retina_chars3_0.5_100_5_1c2265',
+    # 'NN_results/retina_chars3_0.5_100_5_25be8f', ###
+
+    'NN_results/all_data_0.5_100_5_895449',  ###
+
+    # 'NN_results/retina_chars_d58e5f',
+    'NN_results/retina_chars_ff4ef7',
+    'NN_results/retina_chars3_0.62_100_5_0473d8',
+    'NN_results/retina_chars3_0.62_100_5_75df7f', ###--
+    'NN_results/retina_chars3_0.62_100_5_fdb66e', ###
+
+    'NN_results/all_data_0.62_100_5_19c267',  ###
 ]
 
 datasets = {
@@ -350,33 +363,40 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects):
         fp += fpi
         fn += fni
 
-    precision = tp/(tp+fp)
-    recall = tp/(tp+fn)
-    precision_r = tp_r/(tp_r+fp_r)
-    recall_r = tp_r/(tp_r+fn_r)
+    # precision = tp/(tp+fp)
+    # recall = tp/(tp+fn)
+    precision_r = tp_r/(tp_r+fp_r) if tp_r+fp_r != 0 else 0.
+    recall_r = tp_r/(tp_r+fn_r) if tp_r+fn_r != 0 else 0.
     return {
         # 'precision': precision,
         # 'recall': recall,
         # 'f1': 2*precision*recall/(precision+recall),
         'precision_r': precision_r,
         'recall_r': recall_r,
-        'f1_r': 2*precision_r*recall_r/(precision_r+recall_r),
+        'f1_r': 2*precision_r*recall_r/(precision_r+recall_r) if precision_r+recall_r != 0 else 0.,
         'd_by_doc': sum_d/len(data_list),
         'd_by_char': sum_d/sum_len,
         'd_by_char_avg': sum_d1/len(data_list)
     }
 
 
-def main():
+def main(table_like_format):
     verbose = 0
     # make data list
     data_set = prepare_data()
     prev_model_root = None
     do_filter_lonely_rects = False
 
+    if table_like_format:
+        print('model\tweights\tkey\t'
+              'precision\trecall\tf1\t'
+              'd_by_doc\td_by_char\td_by_char_avg')
     for model_root, model_weights in models:
         if model_root != prev_model_root:
-            print('model: ', model_root)
+            if not table_like_format:
+                print('model: ', model_root)
+            else:
+                print()
             prev_model_root = model_root
         if verbose:
             print('evaluating weights: ', model_weights)
@@ -395,10 +415,16 @@ def main():
             #       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
             #       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
             #       'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
-            print('{model_weights} {key} '
-                  'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
-                  'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
-                  'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
+            if table_like_format:
+                print('{model}\t{weights}\t{key}\t'
+                      '{res[precision_r]:.4}\t{res[recall_r]:.4}\t{res[f1_r]:.4}\t'
+                      '{res[d_by_doc]:.4}\t{res[d_by_char]:.4}\t'
+                      '{res[d_by_char_avg]:.4}'.format(model=model_root, weights=model_weights, key=key, res=res))
+            else:
+                print('{model_weights} {key} '
+                      'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
+                      'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
+                      'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
 
 if __name__ == '__main__':
     import time
@@ -408,5 +434,5 @@ if __name__ == '__main__':
     # for thr in (0.5, 0.6, 0.7, 0.8):
     #     postprocess.Line.LINE_THR = thr
     #     print(thr)
-    main()
+    main(table_like_format=True)
     print(time.clock() - t0)

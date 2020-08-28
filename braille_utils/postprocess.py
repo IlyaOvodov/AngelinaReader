@@ -25,7 +25,7 @@ class LineChar:
 
 class Line:
     STEP_TO_W = 1.25
-    LINE_THR = 0.8
+    LINE_THR = 0.6
     AVG_PERIOD = 5 # для аппроксимации при коррекции
     AVG_APPROX_DIST = 3 # берутся точки с интервалос не менее 2, т.е. 0я и 3я или 1я и 4я
 

@@ -36,7 +36,7 @@ model_weights_fn = model_fn + model_weights
 device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
-nms_thresh = 0.05
+nms_thresh = 0.02
 
 
 class OrientationAttempts(enum.IntEnum):
