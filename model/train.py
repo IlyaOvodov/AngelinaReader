@@ -30,7 +30,7 @@ ctx = ovotools.pytorch.Context(settings=None, params=params)
 
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
 if 'load_model_from' in params.keys():
-    preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from)
+    preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from, map_location='cpu')
     model.load_state_dict(preloaded_weights)
 
 ctx.net  = model

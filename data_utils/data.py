@@ -136,7 +136,7 @@ def unify_shape(img):
     return img
 
 
-class BrailleDataset:
+class BrailleDataset(torch.utils.data.ConcatDataset):
     '''
     Indexed assess to annotated images listed in a txt file
     Returns annotated images as tuple: ( img: Tensor CxHxW,
@@ -151,6 +151,33 @@ class BrailleDataset:
         :param mode: augmentation and output mode ('train', 'debug', 'inference')
         :param verbose: if != 0 enables debug print
         '''
+        sub_datasets = []
+        for list_file_name in list_file_names:
+            if isinstance(list_file_name, (tuple, list)):
+                list_file_name, sample_weight = list_file_name
+            else:
+                sample_weight = 1
+            while sample_weight >= 1:
+                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, 1))
+                sample_weight -= 1
+            if sample_weight > 1e-10:
+                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, sample_weight))
+
+        super(BrailleDataset, self).__init__(sub_datasets)
+
+class BrailleSubDataset:
+    '''
+    Provides subset of data for BrailleSubDataset defined by one list file
+    '''
+
+    def __init__(self, params, list_file_name, mode, verbose, sample_weight):
+        '''
+        :param params:  params dict
+        :param list_file_names: list of files with image files list (relative to local_config.data_path)
+            each file should contain list of image file paths relative to that list file location
+        :param mode: augmentation and output mode ('train', 'debug', 'inference')
+        :param verbose: if != 0 enables debug print
+        '''
         assert mode in {'train', 'debug', 'inference'}
         self.params = params
         self.mode = mode
@@ -158,27 +185,21 @@ class BrailleDataset:
 
         self.image_files = []
         self.label_files = []
-        self.sample_weights = []
-        for list_file_name in list_file_names:
-            if isinstance(list_file_name, (tuple, list)):
-                list_file_name, sample_weight = list_file_name
+
+        list_file = os.path.join(local_config.data_path, list_file_name)
+        data_dir = os.path.dirname(list_file)
+        with open(list_file, 'r') as f:
+            files = f.readlines()
+        for fn in files:
+            if fn[-1] == '\n':
+                fn = fn[:-1]
+            fn = fn.replace('\\', '/')
+            image_fn, labels_fn = self.filenames_of_item(data_dir, fn)
+            if image_fn:
+                self.image_files.append(image_fn)
+                self.label_files.append(labels_fn)
             else:
-                sample_weight = 1.
-            list_file = os.path.join(local_config.data_path, list_file_name)
-            data_dir = os.path.dirname(list_file)
-            with open(list_file, 'r') as f:
-                files = f.readlines()
-            for fn in files:
-                if fn[-1] == '\n':
-                    fn = fn[:-1]
-                fn = fn.replace('\\', '/')
-                image_fn, labels_fn = self.filenames_of_item(data_dir, fn)
-                if image_fn:
-                    self.image_files.append(image_fn)
-                    self.label_files.append(labels_fn)
-                    self.sample_weights.append(sample_weight)
-                else:
-                    print("WARNING: can't load file:", data_dir, fn)
+                print("WARNING: can't load file:", data_dir, fn)
 
         assert len(self.image_files) > 0, list_file
 
@@ -188,11 +209,18 @@ class BrailleDataset:
         self.aug_bboxes = [None] * len(self.image_files)
         self.REPEAT_PROBABILITY = 0.6
         self.verbose = verbose
+        assert sample_weight <= 1
+        if self.sample_weight < 1:
+            self.denominator = int(1/sample_weight)
+            self.call_count = 0
 
     def __len__(self):
-        return len(self.image_files)
+        return len(self.image_files) // self.denominator
 
     def __getitem__(self, item):
+        if self.denominator > 1:
+            self.call_count = (self.call_count + 1) % self.denominator
+            item = item * self.denominator + self.call_count
         img = self.images[item]
         if img is None:
             img_fn = self.image_files[item]
