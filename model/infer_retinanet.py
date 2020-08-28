@@ -213,7 +213,7 @@ class BrailleInference:
             return None
 
 
-    def run(self, img_fn, lang, draw_refined, find_orientation, process_2_sides, repeat_on_aligned=True, gt_rects=[]):
+    def run(self, img_fn, lang, draw_refined, find_orientation, process_2_sides, align_results, repeat_on_aligned=True, gt_rects=[]):
         if gt_rects:
             assert find_orientation == False, "gt_rects можно передавать только если ориентация задана"
         t = time.clock()
@@ -244,7 +244,7 @@ class BrailleInference:
             results_dict['homography'] = results_dict0['homography']
         else:
             results_dict = self.run_impl(img, lang, draw_refined, find_orientation,
-                                         process_2_sides=process_2_sides, align=True, draw=True, gt_rects=gt_rects)
+                                         process_2_sides=process_2_sides, align=align_results, draw=True, gt_rects=gt_rects)
         if self.verbose >= 2:
             results_dict['image'].save(Path(results_dir) / 're2.jpg')
             results_dict['image'].save(Path(results_dir) / 're2_100.jpg', quality=100)
@@ -450,11 +450,11 @@ class BrailleInference:
 
 
     def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined,
-                     remove_labeled_from_filename, find_orientation, process_2_sides, repeat_on_aligned):
+                     remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned):
         t = time.clock()
         result_dict = self.run(img_path, lang=lang, draw_refined=draw_refined,
                                find_orientation=find_orientation,
-                               process_2_sides=process_2_sides, repeat_on_aligned=repeat_on_aligned)
+                               process_2_sides=process_2_sides, align_results=align_results, repeat_on_aligned=repeat_on_aligned)
         if result_dict is None:
             return None
         if self.verbose >= 2:
@@ -488,7 +488,7 @@ class BrailleInference:
         return results
 
     def process_dir_and_save(self, img_filename_mask, results_dir, lang, extra_info, draw_refined,
-                             remove_labeled_from_filename, find_orientation, process_2_sides,
+                             remove_labeled_from_filename, find_orientation, process_2_sides, align_results,
                              repeat_on_aligned):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
@@ -514,6 +514,7 @@ class BrailleInference:
 			    remove_labeled_from_filename=remove_labeled_from_filename,
                 find_orientation=find_orientation,
                 process_2_sides=process_2_sides,
+                align_results=align_results,
                 repeat_on_aligned=repeat_on_aligned)
             if ith_result is None:
                 print('Error processing file: '+ str(img_file))
@@ -522,7 +523,7 @@ class BrailleInference:
         return result_list
 
     def run_and_save_archive(self, arch_path, results_dir, lang, extra_info, draw_refined,
-                    remove_labeled_from_filename, find_orientation, process_2_sides, repeat_on_aligned):
+                    remove_labeled_from_filename, find_orientation, process_2_sides, align_results, repeat_on_aligned):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
             data_dir = os.path.dirname(list_file)
@@ -540,6 +541,7 @@ class BrailleInference:
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,
                                     process_2_sides=process_2_sides,
+                                    align_results=align_results,
                                     repeat_on_aligned=repeat_on_aligned)
 
 
@@ -566,6 +568,7 @@ if __name__ == '__main__':
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,
                                     process_2_sides=process_2_sides,
+                                    align_results=True,
                                     repeat_on_aligned=repeat_on_aligned)
 
     #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi', lang = 'RU')

@@ -674,7 +674,7 @@ def transform_rects(rects, hom):
         new_centers = pts_transform(old_centers, hom)
         shifts = (new_centers - old_centers)[0].tolist()
         rects = [
-            (x[0][0] + x[1][0], x[0][1] + x[1][1], x[0][2] + x[1][0], x[0][3] + x[1][1])
+            (x[0][0] + x[1][0], x[0][1] + x[1][1], x[0][2] + x[1][0], x[0][3] + x[1][1]) + tuple(x[0][4:])
             for x in zip(rects, shifts)
         ]
     return rects

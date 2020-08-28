@@ -178,6 +178,7 @@ def results(template):
                                                remove_labeled_from_filename=False,
                                                find_orientation=request.values['find_orientation']=='True',
                                                process_2_sides=request.values['process_2_sides']=='True',
+                                               align_results=True,
                                                repeat_on_aligned=False)
     # elif ext in ARCHIVES:  TODO
     #     results_list = recognizer.run_and_save_archive(request.values['img_path'], RESULTS_ROOT,

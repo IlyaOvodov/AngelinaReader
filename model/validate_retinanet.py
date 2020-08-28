@@ -5,99 +5,33 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
-# models = [
-#     ('NN_saved/retina_chars_eced60', '/models/clr.008'),
-# ]
-
 models = [
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.003.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.004.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.005.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.009.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.010.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.011.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.012.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.013.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.014.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.015.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.021.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.029.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.030.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.031.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.038.t7'),
-    # ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.039.t7'),
-    #
-    # ('NN_results/retina_DSBI_TEST_RLrPl_9ad218', '/models/best.t7'),
-    #
-    # ('NN_results/retina_DSBI_TEST_RLrPl_5ebd88', '/models/best.t7'),
-    #
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.028.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.029.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.030.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.031.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.032.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.033.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.034.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/clr.035.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_b93fe4', '/models/best.t7'),
-    #
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100_21c9a8', '/models/best.t7'),
-    #
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.018.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.019.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.020.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.034.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.035.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.036.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.041.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.042.t7'),
-    # ('NN_results/retina_DSBI_TEST_noaugm_x100__507927', '/models/clr.043.t7'),
+    # ('NN_saved/retina_chars_eced60', 'models/clr.008'),
 ]
-models = [
-    ('NN_results/retina_DSBI_TEST_fcdca3', '/models/clr.003.t7'),
 
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/best.t7'),
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.026.t7'),
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.027.t7'),
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.028.t7'),
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.034.t7'),
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.035.t7'),
-    # ('NN_results/retina_DSBI_6pt_noaugm_4002ea', '/models/clr.036.t7'),
-
-    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.028.t7'),
-    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.032.t7'),
-    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.034.t7'),
-    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.036.t7'),
-    # ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.038.t7'),
-    ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/best.t7'),
-    ('NN_results/retina_DSBI_6pt_c8cdbc', '/models/clr.040.t7'),
-
-    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.005.t7'),
-    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.006.t7'),
-    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/best.t7'),
-    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.007.t7'),
-    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.008.t7'),
-    ('NN_results/retina_DSBI_6pt_5fdef4', '/models/clr.009.t7'), #22500
-
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.028.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.032.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.034.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/best.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.036.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.038.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.040.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.041.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.042.t7'),
-    ('NN_results/retina_DSBI_6pt_4112ad', '/models/clr.043.t7'), #21500
+model_dirs = [
+    'NN_results/retina_chars_7e1d4e',
+    'NN_results/retina_chars_d58e5f'
 ]
 
 datasets = {
     # 'DSBI_train': [
     #                 r'DSBI\data\train.txt',
     #              ],
-    'DSBI_test': [
-                    r'DSBI\data\test.txt',
-                  ],
+    # 'DSBI_test': [
+    #                 r'DSBI\data\test.txt',
+    #               ],
+    'val_2': [
+        r'My/labeled/labeled2/val_books.txt',
+        r'My/labeled/labeled2/val_withtext.txt',
+        r'My/labeled/labeled2/val_pupils.txt',
+    ],
+    'val_3_asi': [
+        r'My/labeled/ASI/turlom_c15_photo_1p.txt',
+    ],
+    'val_3_asi_scan': [
+        r'My/labeled/ASI/turlom_c15_scan_1p.txt',
+    ],
 }
 
 lang = 'RU'
@@ -105,19 +39,27 @@ lang = 'RU'
 import os
 import sys
 import Levenshtein
+from pathlib import Path
 import PIL
 import torch
 sys.path.append(r'../..')
 sys.path.append('../NN/RetinaNet')
 import local_config
-import train.data as data
+import data_utils.data as data
+import data_utils.dsbi as dsbi
 import braille_utils.postprocess as postprocess
-import infer_retinanet
+import model.infer_retinanet as infer_retinanet
 from braille_utils import label_tools
-from ovotools import AttrDict
 
-params = AttrDict(data=AttrDict(rect_margin=0.3))
+rect_margin=0.3
 
+for md in model_dirs:
+    models += [
+        (str(md), str(Path('models')/m.name))
+        for m in (Path(local_config.data_path)/md/'models').glob('*.t7')
+    ]
+for m in models:
+    print(m)
 
 def prepare_data():
     """
@@ -146,16 +88,22 @@ def prepare_data():
                         lbl_fn = full_fn.rsplit('.', 1)[0] + '.txt'
                         if os.path.isfile(lbl_fn):
                             img = PIL.Image.open(full_fn)
-                            rects = data.read_DSBI_annotation(params=params, label_filename=lbl_fn, get_points=False,
-                                                              width=img.width, height=img.height)
+                            rects = dsbi.read_DSBI_annotation(label_filename=lbl_fn,
+                                                              width=img.width,
+                                                              height=img.height,
+                                                              rect_margin=rect_margin,
+                                                              get_points=False
+                                                              )
                         else:
                             full_fn = full_fn.rsplit('.', 1)[0] + '+recto.jpg'
                             lbl_fn  = full_fn.rsplit('.', 1)[0] + '.txt'
                             if os.path.isfile(lbl_fn):
                                 img = PIL.Image.open(full_fn)
-                                rects = data.read_DSBI_annotation(params=params, label_filename=lbl_fn,
-                                                                  get_points=False,
-                                                                  width=img.width, height=img.height)
+                                rects = dsbi.read_DSBI_annotation(label_filename=lbl_fn,
+                                                                  width=img.width,
+                                                                  height=img.height,
+                                                                  rect_margin=rect_margin,
+                                                                  get_points=False)
                     if rects is not None:
                         boxes = [r[:4] for r in rects]
                         labels = [r[4] for r in rects]
@@ -375,7 +323,14 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects):
 
     for gt_dict in data_list:
         img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
-        res_dict = recognizer.run(img_fn, lang=lang, orientation_attempts={0}, gt_rects = gt_rects)
+        res_dict = recognizer.run(img_fn,
+                                  lang=lang,
+                                  draw_refined=infer_retinanet.BrailleInference.DRAW_NONE,
+                                  find_orientation=False,
+                                  process_2_sides=False,
+                                  align_results=False,
+                                  repeat_on_aligned=False,
+                                  gt_rects=gt_rects)
 
         tpi, fpi, fni = dot_metrics_rects(boxes = res_dict['boxes'], labels = res_dict['labels'],
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
@@ -425,9 +380,13 @@ def main():
             prev_model_root = model_root
         if verbose:
             print('evaluating weights: ', model_weights)
+        params_fn = Path(local_config.data_path) / model_root / 'param.txt'
+        if not params_fn.is_file():
+            params_fn = Path(local_config.data_path) / (model_root + '.param.txt')  # старый вариант
+            assert params_fn.is_file()
         recognizer = infer_retinanet.BrailleInference(
-            params_fn=os.path.join(local_config.data_path, model_root + '.param.txt'),
-            model_weights_fn=os.path.join(local_config.data_path, model_root + model_weights),
+            params_fn=params_fn,
+            model_weights_fn=os.path.join(local_config.data_path, model_root, model_weights),
             create_script=None,
             verbose=verbose)
         for key, data_list in data_set.items():
@@ -442,4 +401,12 @@ def main():
                   'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
 
 if __name__ == '__main__':
+    import time
+    infer_retinanet.nms_thresh = 0.02
+    postprocess.Line.LINE_THR = 0.6
+    t0 = time.clock()
+    # for thr in (0.5, 0.6, 0.7, 0.8):
+    #     postprocess.Line.LINE_THR = thr
+    #     print(thr)
     main()
+    print(time.clock() - t0)
