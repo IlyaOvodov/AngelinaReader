@@ -31,19 +31,21 @@ def create_model_retinanet(params, device):
         copied from RetinaNet, but a) accepts rects as input, b) returns (x,y) where y = (encoded_rects, encoded_labels)
         '''
 
-        t = [b for b in batch if b[1].shape[0]==0]
-        if len(t):
-            pass
+        # t = [b for b in batch if b[1].shape[0]==0]
+        # if len(t):
+        #     pass
 
-        boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32).cuda()
-                 *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32).cuda() for b in batch]
-        labels = [torch.tensor(b[1][:, 4], dtype = torch.long).cuda() for b in batch]
+        device = torch.device('cuda')
+
+        boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32, device=device)
+                 *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32, device=device) for b in batch]
+        labels = [torch.tensor(b[1][:, 4], dtype = torch.long, device=device) for b in batch]
         if params.data.get_points:
-            labels = [torch.tensor([0]*len(lb), dtype = torch.long).cuda() for lb in labels]
+            labels = [torch.tensor([0]*len(lb), dtype = torch.long, device=device) for lb in labels]
         elif use_multiple_class_groups:
             # классы нумеруются с 0, отсутствие класса = -1, далее в encode cls_targets=1+labels
             labels = [torch.tensor([[int(ch)-1 for ch in label_tools.int_to_label010(int_lbl.item())] for int_lbl in lb],
-                                   dtype=torch.long).cuda() for lb in labels]
+                                   dtype=torch.long, device=device) for lb in labels]
 
         original_images = [b[2] for b in batch if len(b)>2] # batch contains augmented image if not in train mode
 

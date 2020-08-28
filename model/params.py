@@ -11,25 +11,27 @@ settings = AttrDict(
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/retina_chars3_{model_params.encoder_params.aspect_ratios[0]}_{model_params.loss_params.class_loss_scale}_{augmentation.rotate_limit}',
+    model_name = 'NN_results/all_data_{model_params.encoder_params.aspect_ratios[0]}_{model_params.loss_params.class_loss_scale}_{augmentation.rotate_limit}',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
         batch_size = 12,
         net_hw = (416, 416),
         rect_margin = 0.3, #  every of 4 margions to char width
-        max_std = 0.01,
+        max_std = 0.1,
         train_list_file_names = [
-            r'DSBI/data/my_train.txt',
+            r'DSBI/data/my_train.txt', #0.5),
             r'My/labeled/labeled2/train_books.txt',
             r'My/labeled/labeled2/train_withtext.txt',
             r'My/labeled/labeled2/train_pupils.txt',
             r'My/labeled/labeled2/train_pupils.txt',
             r'My/labeled/not_braille/_not_braille.txt',
             r'My/labeled/ASI/student_book_p1.txt',
+            r'My/labeled/ASI/turlom_c2.txt', #3),
             r'My/labeled/ASI/turlom_c2.txt',
             r'My/labeled/ASI/turlom_c2.txt',
-            r'My/labeled/ASI/turlom_c2.txt',
+            r'web_uploaded/re-processed200823.txt',
+            r'ASI_results/braile_photos_and_scans.txt',
         ],
         val_list_file_names = {
             # 'val_dsbi' :  [
@@ -62,8 +64,8 @@ params = AttrDict(
     model_params = AttrDict(
         encoder_params = AttrDict(
             #anchor_areas = [5*5., 6*6., 10*10.,],
-            anchor_areas=[22*22*0.62, 33*33*0.62, 45*45*0.62,], # [22*22*0.62, 33*33*0.62, 45*45*0.62,], #[8*16., 12*24., 16*32.,],
-            aspect_ratios=[0.62,],  # [0.62,], #[1 / 2.,],
+            anchor_areas=[8*16., 12*24., 16*32.,], # [22*22*0.62, 33*33*0.62, 45*45*0.62,], #[8*16., 12*24., 16*32.,],
+            aspect_ratios=[1 / 2.,],  # [0.62,], #[1 / 2.,],
             #aspect_ratios=[1.,],
             #scale_ratios=[1., pow(2, 1 / 3.), pow(2, 2 / 3.)]
             iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
@@ -73,7 +75,7 @@ params = AttrDict(
             class_loss_scale = 100,
         ),
     ),
-    load_model_from = 'NN_results/retina_chars_d58e5f/models/clr.001.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
+    load_model_from = 'NN_results/retina_chars3_0.5_100_5_090399/models/clr.009.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
     optim = 'torch.optim.SGD',
     optim_params = AttrDict(
         lr=0.0001,
@@ -96,7 +98,7 @@ params = AttrDict(
     clr=AttrDict(
         warmup_epochs=10,
         min_lr=1e-4,
-        max_lr=0.09,
+        max_lr=0.03,
         period_epochs=500,
         scale_max_lr=0.95,
         scale_min_lr=0.95,

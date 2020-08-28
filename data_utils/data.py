@@ -158,7 +158,12 @@ class BrailleDataset:
 
         self.image_files = []
         self.label_files = []
+        self.sample_weights = []
         for list_file_name in list_file_names:
+            if isinstance(list_file_name, (tuple, list)):
+                list_file_name, sample_weight = list_file_name
+            else:
+                sample_weight = 1.
             list_file = os.path.join(local_config.data_path, list_file_name)
             data_dir = os.path.dirname(list_file)
             with open(list_file, 'r') as f:
@@ -171,6 +176,9 @@ class BrailleDataset:
                 if image_fn:
                     self.image_files.append(image_fn)
                     self.label_files.append(labels_fn)
+                    self.sample_weights.append(sample_weight)
+                else:
+                    print('WARNINGL: can't load file:', data_dir, fn)
 
         assert len(self.image_files) > 0, list_file
 
@@ -199,6 +207,8 @@ class BrailleDataset:
         if rects is None:
             lbl_fn = self.label_files[item]
             rects = self.read_annotation(lbl_fn, width, height)
+            rects = [ (min(r[0], r[2]), min(r[1], r[3]), max(r[0], r[2]), max(r[1], r[3])) + r[4:] for r in rects]
+            rects = [ r for r in rects if r[0] < r[2] and r[1] < r[3]]
             self.rects[item] = rects
 
         if (self.aug_images[item] is not None) and (random.random() < self.REPEAT_PROBABILITY):
