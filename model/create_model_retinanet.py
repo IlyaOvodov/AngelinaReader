@@ -35,7 +35,7 @@ def create_model_retinanet(params, device):
         # if len(t):
         #     pass
 
-        device = torch.device('cuda')
+        #device = torch.device('cpu')  # commented to use settings.device
 
         boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32, device=device)
                  *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32, device=device) for b in batch]
