@@ -154,14 +154,17 @@ class BrailleDataset(torch.utils.data.ConcatDataset):
         sub_datasets = []
         for list_file_name in list_file_names:
             if isinstance(list_file_name, (tuple, list)):
-                list_file_name, sample_weight = list_file_name
+                list_params = list_file_name[2] if len(list_file_name) >=3 else {}
+                assert isinstance(list_params, dict)
+                list_file_name, sample_weight = list_file_name[:2]
             else:
                 sample_weight = 1
+                list_params = {}
             while sample_weight >= 1:
-                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, 1))
+                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, 1, list_params))
                 sample_weight -= 1
             if sample_weight > 1e-10:
-                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, sample_weight))
+                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, sample_weight, list_params))
 
         super(BrailleDataset, self).__init__(sub_datasets)
 
@@ -170,13 +173,17 @@ class BrailleSubDataset:
     Provides subset of data for BrailleSubDataset defined by one list file
     '''
 
-    def __init__(self, params, list_file_name, mode, verbose, sample_weight):
+    def __init__(self, params, list_file_name, mode, verbose, sample_weight, list_params):
         '''
         :param params:  params dict
         :param list_file_names: list of files with image files list (relative to local_config.data_path)
             each file should contain list of image file paths relative to that list file location
         :param mode: augmentation and output mode ('train', 'debug', 'inference')
         :param verbose: if != 0 enables debug print
+        :param sample_weight: при значениях больше двух - датасет повторяется. При дробных значениях - уменьшается
+         видимы размер датасета за счето того, что при запросе одного индекса выдатся последовательно разные элементы.
+         дробная часть долна быть кратна 1/n
+        :param list_params: опиональный параметр - dict, 3-й при в списке в m param. Выдается в батч ввместе с данными об item.
         '''
         assert mode in {'train', 'debug', 'inference'}
         self.params = params
@@ -210,9 +217,11 @@ class BrailleSubDataset:
         self.REPEAT_PROBABILITY = 0.6
         self.verbose = verbose
         assert sample_weight <= 1
-        if self.sample_weight < 1:
-            self.denominator = int(1/sample_weight)
-            self.call_count = 0
+        if sample_weight < 1:
+            assert mode == 'train'
+        self.denominator = int(1/sample_weight)
+        self.call_count = 0
+        self.list_params = list_params
 
     def __len__(self):
         return len(self.image_files) // self.denominator
@@ -251,9 +260,9 @@ class BrailleSubDataset:
             print('BrailleDataset: preparing file '+ self.image_files[item] + '. Total rects: ' + str(len(aug_bboxes)))
 
         if self.mode == 'train':
-            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5)
+            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), self.list_params
         else:
-            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), aug_img
+            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), self.list_params, aug_img
 
     def filenames_of_item(self, data_dir, fn):
         '''

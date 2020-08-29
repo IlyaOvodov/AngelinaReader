@@ -1,2 +1,2 @@
-data_path = r'D:\Programming.Data\Braille'
-global_3rd_party = r'D:\Programming\3rd_party\pytorch_addons'
+data_path = r'/home/orwell/Data/Braille/'
+global_3rd_party = r'/home/orwell/Programming/3rd_party/'

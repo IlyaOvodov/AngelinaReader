@@ -26,7 +26,7 @@ def create_model_retinanet(params, device):
 
     def detection_collate(batch):
         '''
-        :param batch: list of (tb image(CHW float), [(left, top, right, bottom, class),...]) сcoords in [0,1]
+        :param batch: list of (tb image(CHW float), [(left, top, right, bottom, class),...]) сcoords in [0,1], extra_params
         :return: batch: ( images (BCNHW), ( encoded_rects, encoded_labels ) )
         copied from RetinaNet, but a) accepts rects as input, b) returns (x,y) where y = (encoded_rects, encoded_labels)
         '''
@@ -47,9 +47,12 @@ def create_model_retinanet(params, device):
             labels = [torch.tensor([[int(ch)-1 for ch in label_tools.int_to_label010(int_lbl.item())] for int_lbl in lb],
                                    dtype=torch.long, device=device) for lb in labels]
 
-        original_images = [b[2] for b in batch if len(b)>2] # batch contains augmented image if not in train mode
+        original_images = [b[3] for b in batch if len(b)>3] # batch contains augmented image if not in train mode
 
         imgs = [x[0] for x in batch]
+        calc_cls_mask = torch.tensor([b[2].get('calc_cls', True) for b in batch],
+                                dtype=torch.bool,
+                                device=device)
 
         h, w = tuple(params.data.net_hw)
         num_imgs = len(batch)
@@ -66,9 +69,9 @@ def create_model_retinanet(params, device):
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
         if original_images: # inference mode
-            return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets) ), original_images
+            return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets), calc_cls_mask), original_images
         else:
-            return inputs, (torch.stack(loc_targets), torch.stack(cls_targets))
+            return inputs, (torch.stack(loc_targets), torch.stack(cls_targets), calc_cls_mask)
 
     class Loss:
         def __init__(self):
@@ -76,8 +79,10 @@ def create_model_retinanet(params, device):
             pass
         def __call__(self, pred, targets):
             loc_preds, cls_preds = pred
-            loc_targets, cls_targets = targets
-            loss = retina_loss(loc_preds, loc_targets, cls_preds, cls_targets)
+            loc_targets, cls_targets, calc_cls_mask = targets
+            if calc_cls_mask.min():  # Ничего не пропускаем
+                calc_cls_mask = None
+            loss = retina_loss(loc_preds, loc_targets, cls_preds, cls_targets, cls_calc_mask=calc_cls_mask)
             return loss
         def get_dict(self, *kargs, **kwargs):
             return retina_loss.loss_dict

@@ -4,14 +4,14 @@ from ovotools import AttrDict
 settings = AttrDict(
     max_epochs=100000,
     tensorboard_port=6006,
-    device='cuda:0',
+    device='cuda:1',
     findLR=False,
     can_overwrite=False,
 )
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/all_data_{model_params.encoder_params.aspect_ratios[0]}_{model_params.loss_params.class_loss_scale}_{augmentation.rotate_limit}',
+    model_name = 'NN_results/all_data_{model_params.encoder_params.aspect_ratios[0]}_{model_params.loss_params.class_loss_scale}_{augmentation.rotate_limit}_nocls',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
@@ -20,18 +20,15 @@ params = AttrDict(
         rect_margin = 0.3, #  every of 4 margions to char width
         max_std = 0.1,
         train_list_file_names = [
-            r'DSBI/data/my_train.txt', #0.5),
+            r'DSBI/data/my_train.txt',
             r'My/labeled/labeled2/train_books.txt',
             r'My/labeled/labeled2/train_withtext.txt',
-            r'My/labeled/labeled2/train_pupils.txt',
-            r'My/labeled/labeled2/train_pupils.txt',
+            (r'My/labeled/labeled2/train_pupils.txt', 2),
             r'My/labeled/not_braille/_not_braille.txt',
             r'My/labeled/ASI/student_book_p1.txt',
-            r'My/labeled/ASI/turlom_c2.txt', #3),
-            r'My/labeled/ASI/turlom_c2.txt',
-            r'My/labeled/ASI/turlom_c2.txt',
-            r'web_uploaded/re-processed200823.txt',
-            r'ASI_results/braile_photos_and_scans.txt',
+            (r'My/labeled/ASI/turlom_c2.txt', 3),
+            (r'web_uploaded/re-processed200823.txt', 0.125, {'calc_cls':False}),
+            (r'ASI_results/braile_photos_and_scans.txt', 1, {'calc_cls':False})
         ],
         val_list_file_names = {
             # 'val_dsbi' :  [
