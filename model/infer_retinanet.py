@@ -223,12 +223,13 @@ class BrailleInference:
             assert find_orientation == False, "gt_rects можно передавать только если ориентация задана"
         t = time.clock()
         if not isinstance(img, PIL.Image.Image):
-            if Path(img).suffix=='.pdf':
-                img = self.load_pdf(img)
-            else:
-                img = PIL.Image.open(img)
-        if img is None:
-            return None
+            try:
+                if Path(img).suffix=='.pdf':
+                    img = self.load_pdf(img)
+                else:
+                    img = PIL.Image.open(img)
+            except Exception as e:
+                return None
         if self.verbose >= 2:
             print("run.reading image", time.clock() - t)
             img.save(Path(results_dir) / 'original.jpg')
@@ -436,9 +437,9 @@ class BrailleInference:
                }
         return res
 
-    def save_results(self, result_dict, reverse_page, results_dir, filename_stem):
+    def save_results(self, result_dict, reverse_page, results_dir, filename_stem, save_development_info):
         suff = '.rev' if reverse_page else ''
-        if not reverse_page:
+        if save_development_info and not reverse_page:
             labeled_image_filename = filename_stem + '.labeled' + suff + '.jpg'
             result_dict['image' + suff].save(Path(results_dir) / labeled_image_filename)
             json_path = Path(results_dir) / (filename_stem + '.labeled' + suff + '.json')
@@ -456,7 +457,8 @@ class BrailleInference:
 
 
     def run_and_save(self, img, results_dir, target_stem, lang, extra_info, draw_refined,
-                     remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned):
+                     remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned,
+                     save_development_info=True):
         """
         :param img: can be 1) PIL.Image 2) filename to image (.jpg etc.) or .pdf file
         :param target_stem: starting part of result files names (i.e. <target_stem>.protocol.txt etc.) Is used when
@@ -478,25 +480,26 @@ class BrailleInference:
             target_stem = Path(img).stem
         if remove_labeled_from_filename and target_stem.endswith('.labeled'):
             target_stem = target_stem[: -len('.labeled')]
-        while (Path(results_dir) / (target_stem + '.protocol' + '.txt')).exists():
+        while (Path(results_dir) / (target_stem + '.marked.jpg')).exists():
             target_stem += "(dup)"
 
-        protocol_text_path = Path(results_dir) / (target_stem + '.protocol' + '.txt')
-        with open(protocol_text_path, 'w') as f:
-            info = OrderedDict(
-                ver = '20200816',
-                best_idx = result_dict['best_idx'],
-                err_scores = result_dict['err_scores'],
-                homography = result_dict['homography'],
-                model_weights = self.impl.model_weights_fn,
-            )
-            if extra_info:
-                info.update(extra_info)
-            json.dump(info, f, sort_keys=False, indent=4)
+        if save_development_info:
+            protocol_text_path = Path(results_dir) / (target_stem + '.protocol' + '.txt')
+            with open(protocol_text_path, 'w') as f:
+                info = OrderedDict(
+                    ver = '20200816',
+                    best_idx = result_dict['best_idx'],
+                    err_scores = result_dict['err_scores'],
+                    homography = result_dict['homography'],
+                    model_weights = self.impl.model_weights_fn,
+                )
+                if extra_info:
+                    info.update(extra_info)
+                json.dump(info, f, sort_keys=False, indent=4)
 
-        results = [self.save_results(result_dict, False, results_dir, target_stem)]
+        results = [self.save_results(result_dict, False, results_dir, target_stem, save_development_info)]
         if process_2_sides:
-            results += [self.save_results(result_dict, True, results_dir, target_stem)]
+            results += [self.save_results(result_dict, True, results_dir, target_stem, save_development_info)]
 
         if self.verbose >= 2:
             print("run_and_save.save results", time.clock() - t)
@@ -504,7 +507,7 @@ class BrailleInference:
 
     def process_dir_and_save(self, img_filename_mask, results_dir, lang, extra_info, draw_refined,
                              remove_labeled_from_filename, find_orientation, process_2_sides, align_results,
-                             repeat_on_aligned):
+                             repeat_on_aligned, save_development_info=True):
         if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
             list_file = os.path.join(local_config.data_path, img_filename_mask)
             data_dir = os.path.dirname(list_file)
@@ -531,7 +534,8 @@ class BrailleInference:
                 find_orientation=find_orientation,
                 process_2_sides=process_2_sides,
                 align_results=align_results,
-                repeat_on_aligned=repeat_on_aligned)
+                repeat_on_aligned=repeat_on_aligned,
+                save_development_info=save_development_info)
             if ith_result is None:
                 print('Error processing file: '+ str(img_file))
                 continue
@@ -539,7 +543,8 @@ class BrailleInference:
         return result_list
 
     def process_archive_and_save(self, arch_path, results_dir, lang, extra_info, draw_refined,
-                    remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned):
+                    remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned,
+                    save_development_info=True):
         arch_name = Path(arch_path).name
         result_list = list()
         with zipfile.ZipFile(arch_path, 'r') as archive:
@@ -558,7 +563,8 @@ class BrailleInference:
                         find_orientation=find_orientation,
                         process_2_sides=process_2_sides,
                         align_results=align_results,
-                        repeat_on_aligned=repeat_on_aligned)
+                        repeat_on_aligned=repeat_on_aligned,
+                        save_development_info=save_development_info)
                     if ith_result is None:
                         print('Error processing file: ' + str(img_file))
                         continue
