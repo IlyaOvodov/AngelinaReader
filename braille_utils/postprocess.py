@@ -670,7 +670,7 @@ def transform_rects(rects, hom):
             pts_transform = cv2.perspectiveTransform
         else:
             pts_transform = cv2.transform
-        old_centers = np.array([[((r[2]-r[0])/2, (r[3]-r[1])/2) for r in rects]])
+        old_centers = np.array([[((r[2]+r[0])/2, (r[3]+r[1])/2) for r in rects]])
         new_centers = pts_transform(old_centers, hom)
         shifts = (new_centers - old_centers)[0].tolist()
         rects = [
