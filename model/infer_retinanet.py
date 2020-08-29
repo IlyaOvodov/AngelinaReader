@@ -19,6 +19,7 @@ from pathlib import Path
 import PIL.ImageDraw
 import PIL.ImageFont
 from pathlib import Path
+import zipfile
 import data_utils.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
@@ -37,7 +38,8 @@ device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
 nms_thresh = 0.02
-
+REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
+                        # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
 
 class OrientationAttempts(enum.IntEnum):
     NONE = 0
@@ -213,14 +215,18 @@ class BrailleInference:
             return None
 
 
-    def run(self, img_fn, lang, draw_refined, find_orientation, process_2_sides, align_results, repeat_on_aligned=True, gt_rects=[]):
+    def run(self, img, lang, draw_refined, find_orientation, process_2_sides, align_results, repeat_on_aligned=True, gt_rects=[]):
+        """
+        :param img: can be 1) PIL.Image 2) filename to image (.jpg etc.) or .pdf file
+        """
         if gt_rects:
             assert find_orientation == False, "gt_rects можно передавать только если ориентация задана"
         t = time.clock()
-        if Path(img_fn).suffix=='.pdf':
-            img = self.load_pdf(img_fn)
-        else:
-            img = PIL.Image.open(img_fn)
+        if not isinstance(img, PIL.Image.Image):
+            if Path(img).suffix=='.pdf':
+                img = self.load_pdf(img)
+            else:
+                img = PIL.Image.open(img)
         if img is None:
             return None
         if self.verbose >= 2:
@@ -252,16 +258,16 @@ class BrailleInference:
         return results_dict
 
 
-    def refine_boxes(self, boxes):
-        """
-        GVNC. Эмпирическая коррекция получившихся размеров чтобы исправить неточность результатов для последующей разметки
-        :param boxes:
-        :return:
-        """
-        h = boxes[:, 3:4] - boxes[:, 1:2]
-        coefs = torch.tensor([[0.083, 0.092, -0.083, -0.013]])
-        deltas = h * coefs
-        return boxes + deltas
+    # def refine_boxes(self, boxes):
+    #     """
+    #     GVNC. Эмпирическая коррекция получившихся размеров чтобы исправить неточность результатов для последующей разметки
+    #     :param boxes:
+    #     :return:
+    #     """
+    #     h = boxes[:, 3:4] - boxes[:, 1:2]
+    #     coefs = torch.tensor([REFINE_COEFFS])
+    #     deltas = h * coefs
+    #     return boxes + deltas
 		
     def refine_lines(self, lines):
         """
@@ -272,7 +278,7 @@ class BrailleInference:
         for ln in lines:
             for ch in ln.chars:
                 h = ch.refined_box[3] - ch.refined_box[1]
-                coefs = np.array([0.083, 0.092, -0.083, -0.013])
+                coefs = np.array(REFINE_COEFFS)
                 deltas = h * coefs
                 ch.refined_box = (np.array(ch.refined_box) + deltas).tolist()
 
@@ -449,10 +455,15 @@ class BrailleInference:
         return str(marked_image_path), str(recognized_text_path), result_dict['text' + suff]
 
 
-    def run_and_save(self, img_path, results_dir, lang, extra_info, draw_refined,
+    def run_and_save(self, img, results_dir, target_stem, lang, extra_info, draw_refined,
                      remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned):
+        """
+        :param img: can be 1) PIL.Image 2) filename to image (.jpg etc.) or .pdf file
+        :param target_stem: starting part of result files names (i.e. <target_stem>.protocol.txt etc.) Is used when
+            img is image, not filename. When target_stem is None, it is taken from img stem.
+        """
         t = time.clock()
-        result_dict = self.run(img_path, lang=lang, draw_refined=draw_refined,
+        result_dict = self.run(img, lang=lang, draw_refined=draw_refined,
                                find_orientation=find_orientation,
                                process_2_sides=process_2_sides, align_results=align_results, repeat_on_aligned=repeat_on_aligned)
         if result_dict is None:
@@ -462,11 +473,15 @@ class BrailleInference:
             t = time.clock()
 
         os.makedirs(results_dir, exist_ok=True)
-        filename_stem = os.path.splitext(os.path.basename(img_path))[0]
-        if remove_labeled_from_filename and filename_stem.endswith('.labeled'):
-            filename_stem = filename_stem[: -len('.labeled')]
+        if target_stem is None:
+            assert isinstance(img, (str, Path))
+            target_stem = Path(img).stem
+        if remove_labeled_from_filename and target_stem.endswith('.labeled'):
+            target_stem = target_stem[: -len('.labeled')]
+        while (Path(results_dir) / (target_stem + '.protocol' + '.txt')).exists():
+            target_stem += "(dup)"
 
-        protocol_text_path = Path(results_dir) / (filename_stem + '.protocol' + '.txt')
+        protocol_text_path = Path(results_dir) / (target_stem + '.protocol' + '.txt')
         with open(protocol_text_path, 'w') as f:
             info = OrderedDict(
                 ver = '20200816',
@@ -479,9 +494,9 @@ class BrailleInference:
                 info.update(extra_info)
             json.dump(info, f, sort_keys=False, indent=4)
 
-        results = [self.save_results(result_dict, False, results_dir, filename_stem)]
+        results = [self.save_results(result_dict, False, results_dir, target_stem)]
         if process_2_sides:
-            results += [self.save_results(result_dict, True, results_dir, filename_stem)]
+            results += [self.save_results(result_dict, True, results_dir, target_stem)]
 
         if self.verbose >= 2:
             print("run_and_save.save results", time.clock() - t)
@@ -509,7 +524,8 @@ class BrailleInference:
         for img_file, img_folder in zip(img_files, img_folders):
             print('processing '+str(img_file))
             ith_result = self.run_and_save(
-                img_file, os.path.join(results_dir, img_folder), lang=lang, extra_info=extra_info,
+                img_file, os.path.join(results_dir, img_folder), target_stem=None,
+                lang=lang, extra_info=extra_info,
                 draw_refined=draw_refined,
 			    remove_labeled_from_filename=remove_labeled_from_filename,
                 find_orientation=find_orientation,
@@ -522,27 +538,32 @@ class BrailleInference:
             result_list += ith_result
         return result_list
 
-    def run_and_save_archive(self, arch_path, results_dir, lang, extra_info, draw_refined,
-                    remove_labeled_from_filename, find_orientation, process_2_sides, align_results, repeat_on_aligned):
-        if os.path.isfile(img_filename_mask) and os.path.splitext(img_filename_mask)[1] == '.txt':
-            list_file = os.path.join(local_config.data_path, img_filename_mask)
-            data_dir = os.path.dirname(list_file)
-            with open(list_file, 'r') as f:
-                files = f.readlines()
-            img_files = [os.path.join(data_dir, fn[:-1] if fn[-1] == '\n' else fn) for fn in files]
-            img_folders = [os.path.split(fn)[0] for fn in files]
-        else:
-            root_dir, mask = img_filename_mask.split('*', 1)
-            mask = '*' + mask
-            img_files = list(Path(root_dir).glob(mask))
-            img_folders = [os.path.split(fn)[0].replace(str(Path(root_dir)), '')[1:] for fn in img_files]
-        return self.process_dir_and_save(self, img_filename_mask, results_dir, lang, extra_info=extra_info,
-                                    draw_refined=draw_refined,
-                                    remove_labeled_from_filename=remove_labeled_from_filename,
-                                    find_orientation=find_orientation,
-                                    process_2_sides=process_2_sides,
-                                    align_results=align_results,
-                                    repeat_on_aligned=repeat_on_aligned)
+    def process_archive_and_save(self, arch_path, results_dir, lang, extra_info, draw_refined,
+                    remove_labeled_from_filename, find_orientation, align_results, process_2_sides, repeat_on_aligned):
+        arch_name = Path(arch_path).name
+        result_list = list()
+        with zipfile.ZipFile(arch_path, 'r') as archive:
+            for entry in archive.infolist():
+                with archive.open(entry) as file:
+                    try:
+                        img = PIL.Image.open(file)
+                    except:
+                        print('Error processing file: ' + str(entry.filename) + ' in ' + arch_path)
+                        continue
+                    ith_result = self.run_and_save(
+                        img, results_dir, target_stem=arch_name + '.'+ Path(entry.filename).stem,
+                        lang=lang, extra_info=extra_info,
+                        draw_refined=draw_refined,
+                        remove_labeled_from_filename=remove_labeled_from_filename,
+                        find_orientation=find_orientation,
+                        process_2_sides=process_2_sides,
+                        align_results=align_results,
+                        repeat_on_aligned=repeat_on_aligned)
+                    if ith_result is None:
+                        print('Error processing file: ' + str(img_file))
+                        continue
+                    result_list += ith_result
+        return result_list
 
 
 if __name__ == '__main__':

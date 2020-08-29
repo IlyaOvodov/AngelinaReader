@@ -51,9 +51,12 @@ function set_onchange() {
             {{ flashed_messages() }}
             <div class="button_wrapper">
                 <input type="button" id="form_file_click" value="Загрузить файл" onclick="set_onchange(); form.file.click();"/>
+                <div align="center">
+                    (изображение, pdf, zip)
+                </div>
             </div>
-            {{ form.camera_file(accept="image/*", capture="camera", style="display:none;") }}
-            {{ form.file(accept="image/*", style="display:none;") }}
+            {{ form.camera_file(accept="image/*,application/pdf,application/zip", capture="camera", style="display:none;") }}
+            {{ form.file(accept="image/*,application/pdf,application/zip", style="display:none;") }}
         </div>
         <div id="wait_mode" style="text-align: center; display:none">
             <div>минуточку...</div>

@@ -47,7 +47,7 @@ IMG_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'raw'
 RESULTS_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'results'
 os.makedirs(Path(app.root_path) / app.config['DATA_ROOT'], exist_ok=True)
 
-photos = UploadSet('photos', extensions=IMAGES + ('pdf',) + ARCHIVES)
+photos = UploadSet('photos', extensions=IMAGES + ('pdf','zip'))
 
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
@@ -93,12 +93,12 @@ def index(template, is_mobile=False):
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
         lang = SelectField("Язык текста", choices=[('RU', 'RU'), ('EN', 'EN')])
-        find_orientation = BooleanField("Авто ориентация")
+        find_orientation = BooleanField("Авто-ориентация")
         process_2_sides = BooleanField("Обе стороны")
     form = MainForm(agree=request.values.get('has_public_confirm', '') == 'True',
                     disgree=request.values.get('has_public_confirm', '') == 'False',
                     lang=request.values.get('lang', 'RU'),
-                    find_orientation=request.values.get('find_orientation', 'False') == 'True',
+                    find_orientation=request.values.get('find_orientation', 'True') == 'True',
                     process_2_sides=request.values.get('process_2_sides', 'False') == 'True',
                     )
     if form.validate_on_submit():
@@ -172,20 +172,23 @@ def results(template):
                   'lang': request.values['lang']}
     ext = Path(request.values['img_path']).suffix[1:]  # exclude leading dot
     if ext in IMAGES or ext == 'pdf':
-        results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT,
+        results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT, target_stem=None,
                                                lang=request.values['lang'], extra_info=extra_info,
                                                draw_refined=recognizer.DRAW_NONE,
                                                remove_labeled_from_filename=False,
                                                find_orientation=request.values['find_orientation']=='True',
-                                               process_2_sides=request.values['process_2_sides']=='True',
                                                align_results=True,
+                                               process_2_sides=request.values['process_2_sides']=='True',
                                                repeat_on_aligned=False)
-    # elif ext in ARCHIVES:  TODO
-    #     results_list = recognizer.run_and_save_archive(request.values['img_path'], RESULTS_ROOT,
-    #                                                           lang=request.values['lang'], extra_info=extra_info,
-    #                                                           draw_refined=recognizer.DRAW_NONE,
-    #                                                           find_orientation=request.values['find_orientation']=='True',
-    #                                          process_2_sides=request.values['process_2_sides']=='True')
+    elif ext == 'zip':
+        results_list = recognizer.process_archive_and_save(request.values['img_path'], RESULTS_ROOT,
+                                               lang=request.values['lang'], extra_info=extra_info,
+                                               draw_refined=recognizer.DRAW_NONE,
+                                               remove_labeled_from_filename=False,
+                                               find_orientation=request.values['find_orientation']=='True',
+                                               align_results=True,
+                                               process_2_sides=request.values['process_2_sides']=='True',
+                                               repeat_on_aligned=False)
     else:
         assert False, "incorrect file type: " + str(request.values['img_path'])
     if results_list is None:

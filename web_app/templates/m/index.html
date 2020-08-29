@@ -40,9 +40,13 @@ function set_onchange() {
             <div class="button_wrapper">
                 <input type="button" id="form_camera_file_click" value="Сделать фото" onclick="set_onchange(); form.camera_file.click();"/>
                 <input type="button" id="form_file_click" value="Загрузить файл" onclick="set_onchange(); form.file.click();"/>
+                <table class="centered" width="100%"><tr>
+                    <td width="40%"></td>
+                    <td width="60%" align="center">(изображение, pdf, zip)</td>
+                </tr></table>
             </div>
-            {{ form.camera_file(accept="image/*", capture="camera", style="display:none;") }}
-            {{ form.file(accept="image/*", style="display:none;") }}
+            {{ form.camera_file(accept="image/*,application/pdf,application/zip", capture="camera", style="display:none;") }}
+            {{ form.file(accept="image/*,application/pdf,application/zip", style="display:none;") }}
         </div>
         <div id="wait_mode" style="text-align: center; display:none">
             <div>минуточку...</div>
