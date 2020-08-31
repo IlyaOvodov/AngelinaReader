@@ -1,6 +1,8 @@
-pillow
-torch==1.4.0
-torchvision==0.5.0
+--find-links https://download.pytorch.org/whl/torch_stable.html
+numpy>=1.15.1
+pillow>=6.2.0
+torch==1.6.0
+torchvision==0.7.0
 werkzeug==0.14.1
 flask==0.12
 flask_login==0.4.1
@@ -8,6 +10,7 @@ flask_wtf==0.14.2
 flask_uploads==0.2.1
 flask_mobility==0.1.1
 wtforms==2.2.1
+scikit-build
 albumentations==0.4.5
 PyMuPDF==1.17.5
 -e git+https://github.com/IlyaOvodov/OvoTools.git@asi#egg=OvoTools

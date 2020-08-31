@@ -10,8 +10,7 @@ from pathlib import Path
 import local_config
 import model.infer_retinanet as infer_retinanet
 
-model_root = 'weights/retina_chars_eced60'
-model_weights = '.clr.008'
+model_weights = 'model.t7'
 
 parser = argparse.ArgumentParser(description='Angelina Braille Reader: optical Braille text recognizer .')
 
@@ -28,8 +27,8 @@ if not Path(args.input).exists():
     exit()
 
 recognizer = infer_retinanet.BrailleInference(
-    params_fn=os.path.join(local_config.data_path, model_root + '.param.txt'),
-    model_weights_fn=os.path.join(local_config.data_path, model_root + model_weights),
+    params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
+    model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
     create_script=None)
 
 if Path(args.input).is_dir():

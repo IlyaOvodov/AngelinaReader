@@ -29,11 +29,9 @@ import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
 inference_width = 1024
-model_root = 'weights/retina_chars_eced60'
-model_weights = '.clr.008'
-model_fn = join(local_config.data_path, model_root)
-params_fn = model_fn + '.param.txt'
-model_weights_fn = model_fn + model_weights
+model_weights = 'model.t7'
+params_fn = join(local_config.data_path, 'weights', 'param.txt')
+model_weights_fn = join(local_config.data_path, 'weights', model_weights)
 device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
@@ -335,7 +333,7 @@ class BrailleInference:
             t = time.clock()
 
         if align and not process_2_sides:
-            hom = postprocess.find_transformation(lines)
+            hom = postprocess.find_transformation(lines, (aug_img.width, aug_img.height))
             if hom is not None:
                 aug_img = postprocess.transform_image(aug_img, hom)
                 boxes = postprocess.transform_rects(boxes, hom)
@@ -577,10 +575,10 @@ if __name__ == '__main__':
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
-    img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\**\*.*'
+    img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\**\*.*'
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    results_dir =       r'D:\Programming.Data\Braille\ASI_results\Student_Book'
+    results_dir =       r'D:\Programming.Data\Braille\ASI_results_NEW_EN\Braile Photos and Scans'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
     remove_labeled_from_filename = False

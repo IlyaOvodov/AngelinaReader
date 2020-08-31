@@ -181,24 +181,36 @@ def interpret_line_RU(line, lang, mode = None):
                     ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['NUM_DENOMINATOR'])
                     if ch.char is not None:
                         ch.char = ch.char[1:]
-            if math_mode and ch.char is None:
-                frac_mode = False
+            if ch.char is None:
+                if ch.spaces_before:
+                    math_lang = ''
                 if math_lang:
                     ch.labeling_char = ch.char = lt.int_to_letter(ch.label, [math_lang.upper()])
                     if ch.char is not None:
                         if math_lang.isupper():
                             ch.char = ch.char.upper()
+                        digit_mode = False
+                        if not ch.char.isalpha():
+                            math_lang = ''
                     else:
                         math_lang = ''
+            if ch.char is None:
+                if (ch.spaces_before
+                    or not prev_ch
+                    or prev_ch and not prev_ch.char.isalpha()
+                    or math_mode and not math_lang and lt.int_to_letter(ch.label, ['MATH_RU']) == '..'
+                ):
+                    if lt.int_to_letter(ch.label, ['MATH_RU']) in {'en', 'EN'}:
+                        math_lang = lt.int_to_letter(ch.label, ['MATH_RU'])
+                        ch.char = ''
+            if math_mode and ch.char is None:
+                frac_mode = False
                 if not math_lang and (ch.spaces_before or lt.int_to_letter(ch.label, ['MATH_RU']) == '..'):
                     # без spaces_before точка и запятая после числа интерпретируется как математический знак :
                     # перед умножением точкой (..) пробел не ставится
                     ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['MATH_RU'])
                     if ch.char is not None:
-                        if ch.char in {'en','EN'}:
-                            math_lang = ch.char
-                            ch.char = ''
-                        elif ch.char == '..':
+                        if ch.char == '..':
                             if i < len(line.chars)-1 and line.chars[i+1].spaces_before == 0 and lt.int_to_letter(line.chars[i+1].label, ['NUM']) is not None:
                                 ch.char = '.'
                             else:
@@ -214,8 +226,8 @@ def interpret_line_RU(line, lang, mode = None):
                     digit_mode = False
                     frac_mode = False
             if not math_mode:
-                if prev_ch and prev_ch.char == ",":
-                    prev_ch.char = ", "
+                if prev_ch and prev_ch.char in {",", ";"}:
+                    prev_ch.char += " "
             if ch.char == '()':
                 if brackets_on['(('] == 0:
                     ch.char = '('
@@ -260,7 +272,22 @@ interpret_line_funcs = {
 }
 
 
-def boxes_to_lines(boxes, labels, lang):
+def filter_lonely_rects_for_lines(lines):
+    allowed_lonely = {} # lt.label010_to_int('111000'), lt.label010_to_int('000111'), lt.label010_to_int('111111')
+    filtered_chars = []
+    for ln in lines:
+        while len(ln.chars) and (ln.chars[0].label not in allowed_lonely and len(ln.chars)>1 and ln.chars[1].spaces_before > 1 or len(ln.chars) == 1):
+            filtered_chars.append(ln.chars[0])
+            ln.chars = ln.chars[1:]
+            if len(ln.chars):
+                ln.chars[0].spaces_before = 0
+        while len(ln.chars) and (ln.chars[-1].label not in allowed_lonely and len(ln.chars)>1 and ln.chars[-1].spaces_before > 1 or len(ln.chars) == 1):
+            filtered_chars.append(ln.chars[-1])
+            ln.chars = ln.chars[:-1]
+    return [ln for ln in lines if len(ln.chars)], filtered_chars
+
+
+def boxes_to_lines(boxes, labels, lang, filter_lonely = True):
     '''
     :param boxes: list of (left, tor, right, bottom)
     :return: text: list of strings
@@ -298,6 +325,8 @@ def boxes_to_lines(boxes, labels, lang):
         prev_line = ln
 
         interpret_line_mode = interpret_line_f(ln, lang, mode = interpret_line_mode)
+    if filter_lonely:
+        lines, _ = filter_lonely_rects_for_lines(lines)
     return lines
 
 
@@ -594,7 +623,7 @@ def find_transformation_full(lines):
     return hom
 
 
-def find_transformation(lines):
+def find_transformation(lines, img_size_wh):
     """
     Finds alignment transform
     :param lines:
@@ -620,8 +649,19 @@ def find_transformation(lines):
         if sum_weights > 0:
             angle = sum_slip / sum_weights  # rad -> grad
             if abs(angle) < MAX_ROTATION and abs(angle) > MIN_ROTATION:
-                scale = 1 - angle*0.5  # 0.5 is empiric
-                hom = cv2.getRotationMatrix2D(((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2), angle * 59, scale)
+                scale = 1.
+                center = ((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2)
+                hom = cv2.getRotationMatrix2D(center, angle * 59, scale)
+                old_points = np.array([[(bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[0], bounds[3]), (bounds[2], bounds[3])]])
+                new_points = cv2.transform(old_points, hom)
+                scale = min(
+                    center[0]/(center[0]-new_points[0][0][0]), center[1]/(center[1]-new_points[0][0][1]),
+                    (img_size_wh[0]-center[0]) / (new_points[0][1][0] - center[0]), center[1]/(center[1]-new_points[0][1][1]),
+                    center[0] / (center[0] - new_points[0][2][0]), (img_size_wh[1]-center[1]) / (new_points[0][2][1] - center[1]),
+                    (img_size_wh[0]-center[0]) / (new_points[0][3][0] - center[0]), (img_size_wh[1]-center[1]) / (new_points[0][3][1] - center[1])
+                )
+                if scale < 1:
+                    hom = cv2.getRotationMatrix2D(center, angle * 59, scale)
     return hom
 
 
@@ -682,6 +722,10 @@ def transform_rects(rects, hom):
 
 if __name__ == '__main__':
     #OK
+    validate_postprocess('''аб«~6~и»вг''', '''аб«i»вг''')
+    validate_postprocess('''~46~и вг''', '''I вг''')
+    validate_postprocess('''~##~2))~6~r9n7o''', '''2))ringo''')
+
     validate_postprocess('''(~##~1) =~##~1''', '''(1)=1''')
     validate_postprocess('''а ~((~б~))~,''', '''а (б),''')
     validate_postprocess('''~((~в~))~,''', '''(в),''')

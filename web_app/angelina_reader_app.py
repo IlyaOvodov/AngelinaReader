@@ -27,14 +27,13 @@ import local_config
 import model.infer_retinanet as infer_retinanet
 from .config import Config
 
-model_root = 'weights/retina_chars_eced60'
-model_weights = '.clr.008'
+model_weights = 'model.t7'
 
 print("infer_retinanet.BrailleInference()")
 t = time.clock()
 recognizer = infer_retinanet.BrailleInference(
-    params_fn=os.path.join(local_config.data_path, model_root + '.param.txt'),
-    model_weights_fn=os.path.join(local_config.data_path, model_root + model_weights),
+    params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
+    model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
     create_script=None)
 print(time.clock()-t)
 

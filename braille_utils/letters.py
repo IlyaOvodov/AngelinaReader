@@ -24,7 +24,8 @@ sym_map = {
     '34' : '/',
     '3456': num_sign,
     '123456': markout_sign,
-    '46': "EN",  # TODO only for Russian ?
+    # '6': "en",
+    # '46': "EN",  # TODO only for Russian ?
 }
 
 # RU symbols
@@ -101,9 +102,11 @@ alpha_map_EN = {
     '1356': 'z',
 
     #'6': caps_sign, # TODO duplicate оа RU caps_sign
-    #'3': "'",
-    '236': '"',  # mark as <<
-    '356': '"',  # mark as >>
+    '3': "'",
+    '236': '«',  # <<
+    '356': '»',  # >>
+    # '236': '"',  # mark as <<
+    # '356': '"',  # mark as >>
 }
 
 # Digit symbols (after num_sign)

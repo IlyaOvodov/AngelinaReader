@@ -1,2 +1,2 @@
-cd %~dp0
-c:/miniconda3/python run_local.py %*
+python %~dp0/run_local.py %*
+pause
