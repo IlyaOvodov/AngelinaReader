@@ -7,6 +7,10 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 # Для отладки
 models = [
     # ('NN_saved/retina_chars_eced60', 'models/clr.008'),
+    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.003.t7'),
+    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.004.t7'),
+    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.005.t7'),
+    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.006.t7'),
 ]
 
 model_dirs = [
@@ -15,16 +19,21 @@ model_dirs = [
     # 'NN_results/retina_chars3_0.5_100_5_090399',
     # 'NN_results/retina_chars3_0.5_100_5_1c2265',
     # 'NN_results/retina_chars3_0.5_100_5_25be8f', ###
+    ('NN_results/all_data_0.5_100_5_nocls_769014', 'models/clr.*.t7'),
+    ('NN_results/retina_chars3_0.5_100_5_c3222a', 'models/clr.*.t7'),
+    ('NN_results/retina_chars3_0.5_100_5_dirty_186ce5', 'models/clr.*.t7'),
 
-    'NN_results/all_data_0.5_100_5_895449',  ###
+    # ('NN_results/all_data_0.5_100_5_895449', 'models/clr.*.t7'),  ###
+    # ('NN_results/all_data_0.5_100_5_7570a5', 'models/clr.*.t7'),  ###
+    # ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.*.t7'),  ###
 
     # 'NN_results/retina_chars_d58e5f',
-    'NN_results/retina_chars_ff4ef7',
-    'NN_results/retina_chars3_0.62_100_5_0473d8',
-    'NN_results/retina_chars3_0.62_100_5_75df7f', ###--
-    'NN_results/retina_chars3_0.62_100_5_fdb66e', ###
-
-    'NN_results/all_data_0.62_100_5_19c267',  ###
+    # 'NN_results/retina_chars_ff4ef7',
+    # 'NN_results/retina_chars3_0.62_100_5_0473d8',
+    # 'NN_results/retina_chars3_0.62_100_5_75df7f', ###--
+    # 'NN_results/retina_chars3_0.62_100_5_fdb66e', ###
+    #
+    # 'NN_results/all_data_0.62_100_5_19c267',  ###
 ]
 
 datasets = {
@@ -68,8 +77,8 @@ rect_margin=0.3
 
 for md in model_dirs:
     models += [
-        (str(md), str(Path('models')/m.name))
-        for m in (Path(local_config.data_path)/md/'models').glob('*.t7')
+        (str(md[0]), str(Path('models')/m.name))
+        for m in (Path(local_config.data_path)/md[0]).glob(md[1])
     ]
 for m in models:
     print(m)
@@ -403,7 +412,7 @@ def main(table_like_format):
         params_fn = Path(local_config.data_path) / model_root / 'param.txt'
         if not params_fn.is_file():
             params_fn = Path(local_config.data_path) / (model_root + '.param.txt')  # старый вариант
-            assert params_fn.is_file()
+            assert params_fn.is_file(), str(params_fn)
         recognizer = infer_retinanet.BrailleInference(
             params_fn=params_fn,
             model_weights_fn=os.path.join(local_config.data_path, model_root, model_weights),
