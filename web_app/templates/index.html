@@ -55,7 +55,7 @@ function set_onchange() {
                     (изображение, pdf, zip)
                 </div>
             </div>
-            {{ form.camera_file(accept="image/*,application/pdf,application/zip", capture="camera", style="display:none;") }}
+            {{ form.camera_file(accept="image/*", capture="camera", style="display:none;") }}
             {{ form.file(accept="image/*,application/pdf,application/zip", style="display:none;") }}
         </div>
         <div id="wait_mode" style="text-align: center; display:none">
