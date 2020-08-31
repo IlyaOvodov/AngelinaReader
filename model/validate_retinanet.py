@@ -6,11 +6,15 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 
 # Для отладки
 models = [
-    # ('NN_saved/retina_chars_eced60', 'models/clr.008'),
-    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.003.t7'),
-    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.004.t7'),
-    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.005.t7'),
+    ('NN_saved/retina_chars_eced60', 'models/clr.008'),
+
     ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.006.t7'),
+
+    # ('NN_results/all_data_0.5_100_5_nocls_dirty_820535', 'models/clr.003.t7'),
+    #
+    # ('NN_results/retina_chars3_0.5_100_5_c3222a', 'models/clr.014.t7'),
+    #
+    # ('NN_results/retina_chars3_0.5_100_5_dirty_186ce5', 'models/clr.012.t7'),
 ]
 
 model_dirs = [
@@ -19,9 +23,9 @@ model_dirs = [
     # 'NN_results/retina_chars3_0.5_100_5_090399',
     # 'NN_results/retina_chars3_0.5_100_5_1c2265',
     # 'NN_results/retina_chars3_0.5_100_5_25be8f', ###
-    ('NN_results/all_data_0.5_100_5_nocls_769014', 'models/clr.*.t7'),
-    ('NN_results/retina_chars3_0.5_100_5_c3222a', 'models/clr.*.t7'),
-    ('NN_results/retina_chars3_0.5_100_5_dirty_186ce5', 'models/clr.*.t7'),
+    # ('NN_results/all_data_0.5_100_5_nocls_769014', 'models/clr.*.t7'),
+    # ('NN_results/retina_chars3_0.5_100_5_c3222a', 'models/clr.*.t7'),
+    # ('NN_results/retina_chars3_0.5_100_5_dirty_186ce5', 'models/clr.*.t7'),
 
     # ('NN_results/all_data_0.5_100_5_895449', 'models/clr.*.t7'),  ###
     # ('NN_results/all_data_0.5_100_5_7570a5', 'models/clr.*.t7'),  ###
@@ -54,6 +58,10 @@ datasets = {
     'val_3_asi_scan': [
         r'My/labeled/ASI/turlom_c15_scan_1p.txt',
     ],
+    'val_3_asi_train': [
+        'My/labeled/ASI/student_book_p1.txt',
+        r'My/labeled/ASI/turlom_c2.txt'
+    ]
 }
 
 lang = 'RU'
@@ -246,11 +254,11 @@ def filter_lonely_rects(boxes, labels, img):
                 break
         else:
             filtered.append(box)
-    if filtered:
-        draw = PIL.ImageDraw.Draw(img)
-        for b in filtered:
-            draw.rectangle(b, fill="red")
-        img.show()
+    # if filtered:
+    #     draw = PIL.ImageDraw.Draw(img)
+    #     for b in filtered:
+    #         draw.rectangle(b, fill="red")
+    #     img.show()
 
     return res_boxes, res_labels
 
@@ -325,7 +333,7 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_r
 
 
 
-def validate_model(recognizer, data_list, do_filter_lonely_rects):
+def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_lines = False):
     """
     :param recognizer: infer_retinanet.BrailleInference instance
     :param data_list:  list of (image filename, groundtruth pseudotext)
@@ -354,14 +362,34 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects):
                                   repeat_on_aligned=False,
                                   gt_rects=gt_rects)
 
-        tpi, fpi, fni = dot_metrics_rects(boxes = res_dict['boxes'], labels = res_dict['labels'],
+        lines = res_dict['lines']
+        if do_filter_lonely_rects:
+            lines, filtered_chars = postprocess.filter_lonely_rects_for_lines(lines)
+            if filtered_chars and show_filtered:
+                img = res_dict['labeled_image']
+                draw = PIL.ImageDraw.Draw(img)
+                for b in filtered_chars:
+                    draw.rectangle(b.refined_box, fill="red")
+                img.show()
+
+        if metrics_for_lines:
+            boxes = []
+            labels = []
+            for ln in lines:
+                boxes += [ch.refined_box for ch in ln.chars]
+                labels += [ch.label for ch in ln.chars]
+        else:
+            boxes = res_dict['boxes']
+            labels = res_dict['labels']
+
+        tpi, fpi, fni = dot_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
                                           img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects)
         tp_r += tpi
         fp_r += fpi
         fn_r += fni
 
-        res_text = lines_to_pseudotext(res_dict['lines'])
+        res_text = lines_to_pseudotext(lines)
         d = Levenshtein.distance(res_text, gt_text)
         sum_d += d
         if len(gt_text):
@@ -394,7 +422,6 @@ def main(table_like_format):
     # make data list
     data_set = prepare_data()
     prev_model_root = None
-    do_filter_lonely_rects = False
 
     if table_like_format:
         print('model\tweights\tkey\t'
@@ -419,7 +446,7 @@ def main(table_like_format):
             create_script=None,
             verbose=verbose)
         for key, data_list in data_set.items():
-            res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects)
+            res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines = metrics_for_lines)
             # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
             #       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
             #       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
@@ -439,6 +466,9 @@ if __name__ == '__main__':
     import time
     infer_retinanet.nms_thresh = 0.02
     postprocess.Line.LINE_THR = 0.6
+    do_filter_lonely_rects = True
+    metrics_for_lines = True  # was False
+    show_filtered = False
     t0 = time.clock()
     # for thr in (0.5, 0.6, 0.7, 0.8):
     #     postprocess.Line.LINE_THR = thr
