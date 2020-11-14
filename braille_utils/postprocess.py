@@ -66,6 +66,8 @@ class Line:
         best_pair = [1e99, None, None, None, None, ] # err,i,j,k,a,b
         for i in range(len(calc_chars)-self.AVG_APPROX_DIST):
             for j in range(i+self.AVG_APPROX_DIST, len(calc_chars)):
+                if calc_chars[j].x == calc_chars[i].x:
+                    continue
                 a = (calc_chars[j].y - calc_chars[i].y) / (calc_chars[j].x - calc_chars[i].x)
                 b = (calc_chars[j].x * calc_chars[i].y - calc_chars[i].x * calc_chars[j].y) / (calc_chars[j].x - calc_chars[i].x)
                 ks = [k for k in range(len(calc_chars)) if k!=i and k!= j]

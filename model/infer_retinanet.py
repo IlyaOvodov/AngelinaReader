@@ -24,8 +24,7 @@ import data_utils.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
 from model import create_model_retinanet
-import pytorch_retinanet
-import pytorch_retinanet.encoder
+import model.decoder
 import braille_utils.postprocess as postprocess
 
 inference_width = 1024
@@ -63,8 +62,7 @@ class BraileInferenceImpl(torch.nn.Module):
         self.model.eval()
         #self.model = torch.jit.script(self.model)
 
-        self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
-        #self.encoder = encoder
+        self.encoder = model.decoder.PixelDataEncoder(**params.model_params.encoder_params)
         self.valid_mask = torch.tensor(label_is_valid).long()
         self.cls_thresh = cls_thresh
         self.nms_thresh = nms_thresh
@@ -575,17 +573,17 @@ if __name__ == '__main__':
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
-    img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\**\*.*'
+    img_filename_mask = r'D:\Programming.Data\Braille\Книги Анжелы\raw\3 класс\Чтение 63-100\*.*'
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    results_dir =       r'D:\Programming.Data\Braille\ASI_results_NEW_EN\Braile Photos and Scans'
+    results_dir =       r'D:\Programming.Data\Braille\Книги Анжелы\raw\3 класс\Чтение 63-100-res'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
     remove_labeled_from_filename = False
     find_orientation = True
     process_2_sides = False
     repeat_on_aligned = False
-    verbose = 0
+    verbose = 2
     draw_redined = BrailleInference.DRAW_REFINED
 
     recognizer = BrailleInference(verbose=verbose)
