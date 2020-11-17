@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 import enum
-import fitz
+try:
+    import fitz
+except:
+    pass
 import os
 import json
 import glob
@@ -163,7 +166,7 @@ class BrailleInference:
     DRAW_BOTH = DRAW_ORIGINAL | DRAW_REFINED  # 3
     DRAW_FULL_CHARS = 4
 
-    def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None, verbose=1):
+    def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None, verbose=1, inference_width=inference_width):
         self.verbose = verbose
         params = AttrDict.load(params_fn, verbose=verbose)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
@@ -177,7 +180,7 @@ class BrailleInference:
         model_script_fn = model_weights_fn + '.pth'
 
         if create_script != False:
-            self.impl = BraileInferenceImpl(params, model_weights_fn, lt.label_is_valid, verbose=verbose).cuda()
+            self.impl = BraileInferenceImpl(params, model_weights_fn, lt.label_is_valid, verbose=verbose).to(device)
             if create_script is not None:
                 self.impl = torch.jit.script(self.impl)
             if isinstance(self.impl, torch.jit.ScriptModule):

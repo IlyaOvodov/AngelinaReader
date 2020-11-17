@@ -5,39 +5,18 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
+inference_width = 850
+
 models = [
-    ('NN_saved/retina_chars_eced60', 'models/clr.008'),
-
-    ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.006.t7'),
-
-    # ('NN_results/all_data_0.5_100_5_nocls_dirty_820535', 'models/clr.003.t7'),
+    #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
     #
-    # ('NN_results/retina_chars3_0.5_100_5_c3222a', 'models/clr.014.t7'),
-    #
-    # ('NN_results/retina_chars3_0.5_100_5_dirty_186ce5', 'models/clr.012.t7'),
+    #('NN_results/dsbi_lay0_526290', 'models/clr.004.t7'),
+    ('NN_results/dsbi_lay1_047eca', 'models/clr.006.t7'),
+    ('NN_results/dsbi_lay3_c4ca62', 'models/clr.006.t7'),
+    ('NN_results/dsbi_lay5_0d8197', 'models/clr.006.t7'),
 ]
 
 model_dirs = [
-    # 'NN_results/retina_chars_7e1d4e',
-    # 'NN_results/retina_chars_785e35',
-    # 'NN_results/retina_chars3_0.5_100_5_090399',
-    # 'NN_results/retina_chars3_0.5_100_5_1c2265',
-    # 'NN_results/retina_chars3_0.5_100_5_25be8f', ###
-    # ('NN_results/all_data_0.5_100_5_nocls_769014', 'models/clr.*.t7'),
-    # ('NN_results/retina_chars3_0.5_100_5_c3222a', 'models/clr.*.t7'),
-    # ('NN_results/retina_chars3_0.5_100_5_dirty_186ce5', 'models/clr.*.t7'),
-
-    # ('NN_results/all_data_0.5_100_5_895449', 'models/clr.*.t7'),  ###
-    # ('NN_results/all_data_0.5_100_5_7570a5', 'models/clr.*.t7'),  ###
-    # ('NN_results/all_data_0.5_100_5_nocls_91b802', 'models/clr.*.t7'),  ###
-
-    # 'NN_results/retina_chars_d58e5f',
-    # 'NN_results/retina_chars_ff4ef7',
-    # 'NN_results/retina_chars3_0.62_100_5_0473d8',
-    # 'NN_results/retina_chars3_0.62_100_5_75df7f', ###--
-    # 'NN_results/retina_chars3_0.62_100_5_fdb66e', ###
-    #
-    # 'NN_results/all_data_0.62_100_5_19c267',  ###
 ]
 
 datasets = {
@@ -47,21 +26,8 @@ datasets = {
     # 'DSBI_test': [
     #                 r'DSBI\data\test.txt',
     #               ],
-    'val_2': [
-        r'My/labeled/labeled2/val_books.txt',
-        r'My/labeled/labeled2/val_withtext.txt',
-        r'My/labeled/labeled2/val_pupils.txt',
-    ],
-    'val_3_asi': [
-        r'My/labeled/ASI/turlom_c15_photo_1p.txt',
-    ],
-    'val_3_asi_scan': [
-        r'My/labeled/ASI/turlom_c15_scan_1p.txt',
-    ],
-    'val_3_asi_train': [
-        'My/labeled/ASI/student_book_p1.txt',
-        r'My/labeled/ASI/turlom_c2.txt'
-    ]
+    'val': [r'DSBI/data/val_li2.txt', ],
+    # 'test': [r'DSBI/data/test_li2.txt', ]
 }
 
 lang = 'RU'
@@ -108,6 +74,7 @@ def prepare_data():
             for fn in files:
                 if fn[-1] == '\n':
                     fn = fn[:-1]
+                fn = fn.replace('\\', '/')
                 full_fn = os.path.join(data_dir, fn)
                 if os.path.isfile(full_fn):
                     rects = None
@@ -332,6 +299,79 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_r
     return tp, fp, fn
 
 
+def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_rects):
+    if do_filter_lonely_rects:
+        boxes, labels = filter_lonely_rects(boxes, labels, img)
+    gt_labels = [r[4] for r in gt_rects]
+    gt_is_correct = [0] * len(gt_rects)  # recognized label for gt, -1 - missed
+    rec_is_false = [1] * len(labels)  # recognized is false
+
+    tp = 0
+    fp = 0
+    fn = 0
+    if len(gt_rects) and len(labels):
+        boxes = torch.tensor(boxes)
+        gt_boxes = torch.tensor([r[:4] for r in gt_rects], dtype=torch.float32) * torch.tensor([image_wh[0], image_wh[1], image_wh[0], image_wh[1]])
+
+        # Для отладки
+        # labels = torch.tensor(labels)
+        # gt_labels = torch.tensor(gt_labels)
+        #
+        # _, rec_order = torch.sort(boxes[:, 1], dim=0)
+        # boxes = boxes[rec_order][:15]
+        # labels = labels[rec_order][:15]
+        # _, gt_order = torch.sort(gt_boxes[:, 1], dim=0)
+        # gt_boxes = gt_boxes[gt_order][:15]
+        # gt_labels = gt_labels[gt_order][:15]
+        #
+        # _, rec_order = torch.sort(labels, dim=0)
+        # boxes = boxes[rec_order]
+        # labels = labels[rec_order]
+        # _, gt_order = torch.sort(-gt_labels, dim=0)
+        # gt_boxes = gt_boxes[gt_order]
+        # gt_labels = gt_labels[gt_order]
+        #
+        # labels = torch.tensor(labels)
+        # gt_labels = torch.tensor(gt_labels)
+
+        areas = (boxes[:, 2] - boxes[:, 0])*(boxes[:, 3] - boxes[:, 1])
+        gt_areas = (gt_boxes[:, 2] - gt_boxes[:, 0])*(gt_boxes[:, 3] - gt_boxes[:, 1])
+        x1 = torch.max(gt_boxes[:, 0].unsqueeze(1), boxes[:, 0].unsqueeze(0))
+        y1 = torch.max(gt_boxes[:, 1].unsqueeze(1), boxes[:, 1].unsqueeze(0))
+        x2 = torch.min(gt_boxes[:, 2].unsqueeze(1), boxes[:, 2].unsqueeze(0))
+        y2 = torch.min(gt_boxes[:, 3].unsqueeze(1), boxes[:, 3].unsqueeze(0))
+        intersect_area = (x2-x1).clamp(min=0)*(y2-y1).clamp(min=0)
+        iou = intersect_area / (gt_areas.unsqueeze(1) + areas.unsqueeze(0) - intersect_area)
+        for gt_i in range(len(gt_labels)):
+            rec_i = iou[gt_i, :].argmax()
+            if iou[gt_i, rec_i] > 0.5:
+                if labels[rec_i] == gt_labels[gt_i]:
+                    gt_is_correct[gt_i] = 1
+        for rec_i in range(len(labels)):
+            gt_i = iou[:, rec_i].argmax()
+            if iou[gt_i, rec_i] > 0.5:
+                if labels[rec_i] == gt_labels[gt_i]:
+                    rec_is_false[rec_i] = 0
+        tp = sum(gt_is_correct)
+        fp = sum(rec_is_false)
+        fn = len(gt_is_correct) - tp
+
+        # if fp or fn:
+        #     draw = PIL.ImageDraw.Draw(img)
+        #     for i, is_correct in enumerate(gt_is_correct):
+        #         if not is_correct:
+        #             draw.rectangle(gt_boxes[i].tolist(), outline="red")
+        #             draw.text((gt_boxes[i][0]-20, gt_boxes[i][3]), label_tools.int_to_label123(gt_labels[i]), fill="red")
+        #         else:
+        #             draw.rectangle(gt_boxes[i].tolist(), outline="green")
+        #     for i, is_false in enumerate(rec_is_false):
+        #         if is_false:
+        #             draw.rectangle(boxes[i].tolist(), outline="blue")
+        #             draw.text((boxes[i][0]+20, boxes[i][3]), label_tools.int_to_label123(labels[i]), fill="blue")
+        #     img.show()
+
+    return tp, fp, fn
+
 
 def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_lines = False):
     """
@@ -350,6 +390,11 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
     tp_r = 0
     fp_r = 0
     fn_r = 0
+
+    # по символам
+    tp_c = 0
+    fp_c = 0
+    fn_c = 0
 
     for gt_dict in data_list:
         img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
@@ -400,10 +445,20 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         fp += fpi
         fn += fni
 
+        tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
+                                          gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
+                                          img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects)
+        tp_c += tpi
+        fp_c += fpi
+        fn_c += fni
+
+
     # precision = tp/(tp+fp)
     # recall = tp/(tp+fn)
     precision_r = tp_r/(tp_r+fp_r) if tp_r+fp_r != 0 else 0.
     recall_r = tp_r/(tp_r+fn_r) if tp_r+fn_r != 0 else 0.
+    precision_c = tp_c/(tp_c+fp_c) if tp_c+fp_c != 0 else 0.
+    recall_c = tp_c/(tp_c+fn_c) if tp_c+fn_c != 0 else 0.
     return {
         # 'precision': precision,
         # 'recall': recall,
@@ -411,6 +466,9 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         'precision_r': precision_r,
         'recall_r': recall_r,
         'f1_r': 2*precision_r*recall_r/(precision_r+recall_r) if precision_r+recall_r != 0 else 0.,
+        'precision_c': precision_c,
+        'recall_c': recall_c,
+        'f1_c': 2*precision_c*recall_c/(precision_c+recall_c) if precision_c+recall_c != 0 else 0.,
         'd_by_doc': sum_d/len(data_list),
         'd_by_char': sum_d/sum_len,
         'd_by_char_avg': sum_d1/len(data_list)
@@ -426,6 +484,7 @@ def main(table_like_format):
     if table_like_format:
         print('model\tweights\tkey\t'
               'precision\trecall\tf1\t'
+              'precision_c\trecall_C\tf1_c\t'
               'd_by_doc\td_by_char\td_by_char_avg')
     for model_root, model_weights in models:
         if model_root != prev_model_root:
@@ -444,6 +503,7 @@ def main(table_like_format):
             params_fn=params_fn,
             model_weights_fn=os.path.join(local_config.data_path, model_root, model_weights),
             create_script=None,
+            inference_width=inference_width,
             verbose=verbose)
         for key, data_list in data_set.items():
             res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines = metrics_for_lines)
@@ -454,6 +514,7 @@ def main(table_like_format):
             if table_like_format:
                 print('{model}\t{weights}\t{key}\t'
                       '{res[precision_r]:.4}\t{res[recall_r]:.4}\t{res[f1_r]:.4}\t'
+                      '{res[precision_c]:.4}\t{res[recall_c]:.4}\t{res[f1_c]:.4}\t'
                       '{res[d_by_doc]:.4}\t{res[d_by_char]:.4}\t'
                       '{res[d_by_char_avg]:.4}'.format(model=model_root, weights=model_weights, key=key, res=res))
             else:
@@ -466,7 +527,7 @@ if __name__ == '__main__':
     import time
     infer_retinanet.nms_thresh = 0.02
     postprocess.Line.LINE_THR = 0.6
-    do_filter_lonely_rects = True
+    do_filter_lonely_rects = False
     metrics_for_lines = True  # was False
     show_filtered = False
     t0 = time.clock()

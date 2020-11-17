@@ -20,7 +20,8 @@ def create_model_retinanet(params, device):
     num_classes = 1 if params.data.get_points else ([1]*6 if use_multiple_class_groups else 64)
     encoder = DataEncoder(**params.model_params.encoder_params)
     model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
-                      num_classes=num_classes).to(device)
+                      num_classes=num_classes,
+                      num_fpn_layers=params.model_params.get('num_fpn_layers', 0)).to(device)
     retina_loss = FocalLoss(num_classes=num_classes, **params.model_params.get('loss_params', dict()))
 
 

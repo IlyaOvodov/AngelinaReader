@@ -75,7 +75,7 @@ evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metric
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val_2:loss', minimize=True, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val:loss', minimize=True, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,
