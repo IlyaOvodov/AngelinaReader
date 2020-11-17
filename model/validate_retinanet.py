@@ -6,12 +6,13 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 
 # Для отладки
 inference_width = 850
+verbose = 2
 
 models = [
     #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
     #
-    #('NN_results/dsbi_lay0_526290', 'models/clr.004.t7'),
-    ('NN_results/dsbi_lay1_047eca', 'models/clr.006.t7'),
+    ('NN_results/dsbi_lay0_526290', 'models/clr.006.t7'),
+    ('NN_results/dsbi_lay1_047eca', 'models/clr.007.t7'),
     ('NN_results/dsbi_lay3_c4ca62', 'models/clr.006.t7'),
     ('NN_results/dsbi_lay5_0d8197', 'models/clr.006.t7'),
 ]
@@ -27,7 +28,6 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     'val': [r'DSBI/data/val_li2.txt', ],
-    # 'test': [r'DSBI/data/test_li2.txt', ]
 }
 
 lang = 'RU'
@@ -476,7 +476,6 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
 
 
 def main(table_like_format):
-    verbose = 0
     # make data list
     data_set = prepare_data()
     prev_model_root = None

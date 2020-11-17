@@ -7,8 +7,9 @@ import json
 import numpy as np
 from pathlib import Path
 
+import dsbi
+
 H_RANGE = (0, 100)
-W2H_RANGE = (0, 2, 0.01)
 
 class Hist:
     def __init__(self, x1, x2, step = 1):
@@ -67,104 +68,50 @@ class Hist:
         return res
 
 
-def init_hist():
-    return Hist(*H_RANGE, 1), Hist(*W2H_RANGE)
+def process_list(xs, fn):
+    hh = Hist(*H_RANGE, 1)
+    n = len(xs) - 1
+    if n>0:
+        for i, xi in enumerate(xs[:-1]) :
+            w = xs[i+1] - xi
+            if w > 0:
+                hh.add(w)
+            else:
+                print(xi, xs[i+1], w, fn)
+    return hh
+
 
 def process_file(file_path):
-    hh, w2hh = init_hist()
-    with open(file_path) as f:
-        data = json.loads(f.read())
-    rects = [s["points"] for s in data["shapes"]]
-    n = 0
-    for r in rects:
-        assert len(r) == 2
-        for pt in r:
-            assert len(pt) == 2
-        w = r[1][0] - r[0][0]
-        h = r[1][1] - r[0][1]
-        assert w > 0 and h > 0
-        hh.add(h)
-        w2hh.add(w/h)
-        n += 1
-    if n > 0:
-        hh.scale(1/n)
-        w2hh.scale(1/n)
-        assert hh.hist.sum() > 0.95 and hh.hist.sum() < 1.05
-        assert w2hh.hist.sum() > 0.95 and w2hh.hist.sum() < 1.05
-        return hh, w2hh
+    angle, h_lines, v_lines, cells = dsbi.read_txt(file_path)
+    if h_lines is not None:
+        ww = process_list(v_lines, file_path)
+        hh = process_list(h_lines, file_path)
+        return hh, ww
     else:
         return None, None
 
 
 def process_dir_recursive(dir, mask=""):
-    hh, w2hh = init_hist()
+    hh, ww = Hist(*H_RANGE, 1), Hist(*H_RANGE, 1)
     if mask == "":
         mask = "**/"
-    img_files = list(Path(dir).glob(mask+"*.json"))
+    img_files = list(Path(dir).glob(mask+"*recto.txt"))
     for i, file_path in enumerate(img_files):
-        if i % 100 == 99:
+        if i % 10 == 99:
             print(i, "/", len(img_files))
-        hhi, w2hhi = process_file(file_path)
+        hhi, wwi = process_file(file_path)
         if hhi is not None:
             hh.add_hist(hhi)
-            w2hh.add_hist(w2hhi)
-    return hh, w2hh
+            ww.add_hist(wwi)
+    return hh, ww
 
 
 def dir_statistics(data_dir, mask):
-    hh, w2hh = process_dir_recursive(data_dir, mask)
-    print(data_dir+mask, "S:", int(hh.total_sum()), "H: ", hh.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)), "W2H:", w2hh.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)))
-    #
-    # print()
-    # print(hh.print_hist())
-    # print()
-    # print(w2hh.print_hist())
-
-def check_file(file_path, what, min_v, max_v):
-    hhi, w2hhi = process_file(file_path)
-    if what == "h":
-        h = hhi
-    elif what == "w2h":
-        h = w2hhi
-    else:
-        assert False, what
-    if h is None:
-        return None
-    q = h.quantiles([0.25, 0.75])
-    if q[0] < min_v:
-        return q[0]
-    elif q[1] > max_v:
-        return q[1]
-    else:
-        return None
-
-def select_outliers(dir, mask, what, min_v, max_v):
-    if mask == "":
-        mask = "**/"
-    img_files = list(Path(dir).glob(mask+"*.json"))
-    for i, file_path in enumerate(img_files):
-        # if i % 100 == 99:
-        #     print(i, "/", len(img_files))
-        v = check_file(file_path, what, min_v, max_v)
-        if v is not None:
-            print(v, file_path)
-
-
+    hh, ww = process_dir_recursive(data_dir, mask)
+    print(hh.print_hist())
+    print(ww.print_hist())
 
 if __name__=="__main__":
-    data_dir = r"D:\Programming.Data\Braille\web_uploaded\re-processed200823"
+    data_dir = r"D:\Programming.Data\Braille\DSBI\data"
     mask = ""
     dir_statistics(data_dir, mask)
-
-    what = "h"
-    min_v = 20 #25
-    max_v = 7000 #50
-
-    # what = "w2h"
-    # min_v = 0.57
-    # max_v = 0.76 #50
-
-    select_outliers(data_dir, mask, what, min_v, max_v)
-
-
-
