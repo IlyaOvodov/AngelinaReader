@@ -126,7 +126,13 @@ class BraileInferenceImpl(torch.nn.Module):
             t = time.clock()
         for i, input_data_i in enumerate(input_data):
             if i in orientation_attempts:
-                loc_pred, cls_pred = self.model(input_data_i)
+                pred = self.model(input_data_i)
+                if isinstance(pred[0], torch.Tensor):  # num_heads==1
+                    loc_pred, cls_pred = pred
+                else:
+                    assert len(pred) == 2
+                    loc_pred, cls_pred = pred[0]  # TODO reverse side
+
                 loc_preds[i] = loc_pred
                 cls_preds[i] = cls_pred
         if self.verbose >= 2:

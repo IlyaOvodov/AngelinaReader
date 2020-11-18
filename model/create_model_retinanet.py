@@ -19,9 +19,12 @@ def create_model_retinanet(params, device):
     use_multiple_class_groups = params.data.get('class_as_6pt', False)
     num_classes = 1 if params.data.get_points else ([1]*6 if use_multiple_class_groups else 64)
     encoder = DataEncoder(**params.model_params.encoder_params)
+    two_heads = params.data.get('load_front_side', False) and params.data.get('load_front_side', False)
     model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
                       num_classes=num_classes,
-                      num_fpn_layers=params.model_params.get('num_fpn_layers', 0)).to(device)
+                      num_fpn_layers=params.model_params.get('num_fpn_layers', 0),
+                      num_heads=2 if two_heads else 1
+                      ).to(device)
     retina_loss = FocalLoss(num_classes=num_classes, **params.model_params.get('loss_params', dict()))
 
 
@@ -54,6 +57,9 @@ def create_model_retinanet(params, device):
         calc_cls_mask = torch.tensor([b[2].get('calc_cls', True) for b in batch],
                                 dtype=torch.bool,
                                 device=device)
+        is_front_side_mask = torch.tensor([b[2]['is_front_side'] for b in batch],
+                                dtype=torch.bool,
+                                device=device)
 
         h, w = tuple(params.data.net_hw)
         num_imgs = len(batch)
@@ -70,21 +76,38 @@ def create_model_retinanet(params, device):
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
         if original_images: # inference mode
-            return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets), calc_cls_mask), original_images
+            return inputs, ( torch.stack(loc_targets), torch.stack(cls_targets), calc_cls_mask, is_front_side_mask), original_images
         else:
-            return inputs, (torch.stack(loc_targets), torch.stack(cls_targets), calc_cls_mask)
+            return inputs, (torch.stack(loc_targets), torch.stack(cls_targets), calc_cls_mask, is_front_side_mask)
 
     class Loss:
         def __init__(self):
             self.encoder = encoder
             pass
         def __call__(self, pred, targets):
-            loc_preds, cls_preds = pred
-            loc_targets, cls_targets, calc_cls_mask = targets
-            if calc_cls_mask.min():  # Ничего не пропускаем
-                calc_cls_mask = None
-            loss = retina_loss(loc_preds, loc_targets, cls_preds, cls_targets, cls_calc_mask=calc_cls_mask)
+            if isinstance(pred[0], torch.Tensor):  # num_heads==1
+                loc_preds, cls_preds = pred
+                loc_targets, cls_targets, calc_cls_mask, is_front_side_mask = targets
+                if calc_cls_mask.min():  # Ничего не пропускаем
+                    calc_cls_mask = None
+                loss = retina_loss(loc_preds, loc_targets, cls_preds, cls_targets, cls_calc_mask=calc_cls_mask)
+            else:
+                loss = 0
+                assert len(pred) == 2
+                for pred_i, handle_front_side in zip(pred, (True, False)):
+                    loc_preds, cls_preds = pred_i
+                    loc_targets, cls_targets, calc_cls_mask, is_front_side_mask = targets
+                    this_side_mask = is_front_side_mask == handle_front_side
+                    calc_cls_mask_i = calc_cls_mask & this_side_mask
+                    if this_side_mask.max() or calc_cls_mask_i.max():
+                        if calc_cls_mask_i.min():  # Ничего не пропускаем
+                            calc_cls_mask_i = None
+                        if this_side_mask.min():
+                            this_side_mask = None
+                        loss += retina_loss(loc_preds, loc_targets, cls_preds, cls_targets,
+                                        loc_calc_mask=this_side_mask, cls_calc_mask=calc_cls_mask_i)
             return loss
+
         def get_dict(self, *kargs, **kwargs):
             return retina_loss.loss_dict
         def metric(self, key):

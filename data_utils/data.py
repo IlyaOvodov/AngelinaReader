@@ -186,12 +186,14 @@ class BrailleSubDataset:
         :param list_params: опиональный параметр - dict, 3-й при в списке в m param. Выдается в батч ввместе с данными об item.
         '''
         assert mode in {'train', 'debug', 'inference'}
+        assert isinstance(list_params, dict)
         self.params = params
         self.mode = mode
         self.image_preprocessor = ImagePreprocessor(params, mode)
 
         self.image_files = []
         self.label_files = []
+        self.is_front_side = []
 
         list_file = os.path.join(local_config.data_path, list_file_name)
         data_dir = os.path.dirname(list_file)
@@ -201,12 +203,20 @@ class BrailleSubDataset:
             if fn[-1] == '\n':
                 fn = fn[:-1]
             fn = fn.replace('\\', '/')
-            image_fn, labels_fn = self.filenames_of_item(data_dir, fn)
-            if image_fn:
-                self.image_files.append(image_fn)
-                self.label_files.append(labels_fn)
-            else:
-                print("WARNING: can't load file:", data_dir, fn)
+            if params.data.get('load_front_side', True):
+                image_fn, labels_fn = self.filenames_of_item(data_dir, fn, front_side=True)
+                if image_fn:
+                    self.image_files.append(image_fn)
+                    self.label_files.append(labels_fn)
+                    self.is_front_side.append(True)
+                else:
+                    print("WARNING: can't load file:", data_dir, fn)
+            if params.data.get('load_reverse_side', False):
+                image_fn, labels_fn = self.filenames_of_item(data_dir, fn, front_side=False)
+                if image_fn:
+                    self.image_files.append(image_fn)
+                    self.label_files.append(labels_fn)
+                    self.is_front_side.append(False)
 
         assert len(self.image_files) > 0, list_file
 
@@ -259,12 +269,14 @@ class BrailleSubDataset:
         if self.verbose >= 2:
             print('BrailleDataset: preparing file '+ self.image_files[item] + '. Total rects: ' + str(len(aug_bboxes)))
 
+        sample_params = self.list_params.copy()
+        sample_params['is_front_side'] = self.is_front_side[item]
         if self.mode == 'train':
-            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), self.list_params
+            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), sample_params
         else:
-            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), self.list_params, aug_img
+            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), sample_params, aug_img
 
-    def filenames_of_item(self, data_dir, fn):
+    def filenames_of_item(self, data_dir, fn, front_side):
         '''
         Finds appropriate image and label full filenames for list item and validates these files exists
         :param data_dir: dir base for filename from list
@@ -280,16 +292,22 @@ class BrailleSubDataset:
             return None
 
         full_fn = os.path.join(data_dir, fn)
-        lbl_fn = check_label_ext(full_fn, '.json')
-        if lbl_fn:
-            return full_fn, lbl_fn
-        lbl_fn = check_label_ext(full_fn, '.txt')
-        if lbl_fn:
-            return full_fn, lbl_fn
-        full_fn = full_fn.rsplit('.', 1)[0] + '+recto.jpg'
-        lbl_fn = check_label_ext(full_fn, '.txt')
-        if lbl_fn:
-            return full_fn, lbl_fn
+        if front_side:
+            lbl_fn = check_label_ext(full_fn, '.json')
+            if lbl_fn:
+                return full_fn, lbl_fn
+            lbl_fn = check_label_ext(full_fn, '.txt')
+            if lbl_fn:
+                return full_fn, lbl_fn
+            full_fn = full_fn.rsplit('.', 1)[0] + '+recto.jpg'
+            lbl_fn = check_label_ext(full_fn, '.txt')
+            if lbl_fn:
+                return full_fn, lbl_fn
+        else:
+            full_fn = full_fn.rsplit('.', 1)[0] + '+verso.jpg'
+            lbl_fn = check_label_ext(full_fn, '.txt')
+            if lbl_fn:
+                return full_fn, lbl_fn
         return None, None
 
     def read_annotation(self, label_filename, width, height):

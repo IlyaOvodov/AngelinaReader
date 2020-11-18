@@ -296,7 +296,7 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_r
     return tp, fp, fn
 
 
-def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_rects):
+def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_rects, img_fn):
     if do_filter_lonely_rects:
         boxes, labels = filter_lonely_rects(boxes, labels, img)
     gt_labels = [r[4] for r in gt_rects]
@@ -309,27 +309,6 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
     if len(gt_rects) and len(labels):
         boxes = torch.tensor(boxes)
         gt_boxes = torch.tensor([r[:4] for r in gt_rects], dtype=torch.float32) * torch.tensor([image_wh[0], image_wh[1], image_wh[0], image_wh[1]])
-
-        # Для отладки
-        # labels = torch.tensor(labels)
-        # gt_labels = torch.tensor(gt_labels)
-        #
-        # _, rec_order = torch.sort(boxes[:, 1], dim=0)
-        # boxes = boxes[rec_order][:15]
-        # labels = labels[rec_order][:15]
-        # _, gt_order = torch.sort(gt_boxes[:, 1], dim=0)
-        # gt_boxes = gt_boxes[gt_order][:15]
-        # gt_labels = gt_labels[gt_order][:15]
-        #
-        # _, rec_order = torch.sort(labels, dim=0)
-        # boxes = boxes[rec_order]
-        # labels = labels[rec_order]
-        # _, gt_order = torch.sort(-gt_labels, dim=0)
-        # gt_boxes = gt_boxes[gt_order]
-        # gt_labels = gt_labels[gt_order]
-        #
-        # labels = torch.tensor(labels)
-        # gt_labels = torch.tensor(gt_labels)
 
         areas = (boxes[:, 2] - boxes[:, 0])*(boxes[:, 3] - boxes[:, 1])
         gt_areas = (gt_boxes[:, 2] - gt_boxes[:, 0])*(gt_boxes[:, 3] - gt_boxes[:, 1])
@@ -353,19 +332,20 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
         fp = sum(rec_is_false)
         fn = len(gt_is_correct) - tp
 
-        # if fp or fn:
-        #     draw = PIL.ImageDraw.Draw(img)
-        #     for i, is_correct in enumerate(gt_is_correct):
-        #         if not is_correct:
-        #             draw.rectangle(gt_boxes[i].tolist(), outline="red")
-        #             draw.text((gt_boxes[i][0]-20, gt_boxes[i][3]), label_tools.int_to_label123(gt_labels[i]), fill="red")
-        #         else:
-        #             draw.rectangle(gt_boxes[i].tolist(), outline="green")
-        #     for i, is_false in enumerate(rec_is_false):
-        #         if is_false:
-        #             draw.rectangle(boxes[i].tolist(), outline="blue")
-        #             draw.text((boxes[i][0]+20, boxes[i][3]), label_tools.int_to_label123(labels[i]), fill="blue")
-        #     img.show()
+        if verbose==2 and (fp or fn):
+             draw = PIL.ImageDraw.Draw(img)
+             for i, is_correct in enumerate(gt_is_correct):
+                 if not is_correct:
+                     # draw.rectangle(gt_boxes[i].tolist(), outline="red")
+                     draw.text((gt_boxes[i][0], gt_boxes[i][3]), label_tools.int_to_label123(gt_labels[i]), fill="red")
+                 # else:
+                 #     draw.rectangle(gt_boxes[i].tolist(), outline="green")
+             for i, is_false in enumerate(rec_is_false):
+                 if is_false:
+                     # draw.rectangle(boxes[i].tolist(), outline="blue")
+                     draw.text((boxes[i][0], boxes[i][3]+5), label_tools.int_to_label123(labels[i]), fill="blue")
+             draw.text((10, 10), img_fn, fill="black")
+             img.show(title=img_fn)
 
     return tp, fp, fn
 
@@ -444,7 +424,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
 
         tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
-                                          img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects)
+                                          img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
         tp_c += tpi
         fp_c += fpi
         fn_c += fni
@@ -513,7 +493,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
             labels = res_dict['labels']
         tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
-                                          img=None, do_filter_lonely_rects=do_filter_lonely_rects)
+                                          img=None, do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
         tp_c += tpi
         fp_c += fpi
         fn_c += fni
