@@ -54,15 +54,18 @@ class OrientationAttempts(enum.IntEnum):
 
 
 class BraileInferenceImpl(torch.nn.Module):
-    def __init__(self, params, model_weights_fn, label_is_valid, verbose=1):
+    def __init__(self, params, model, device, label_is_valid, verbose=1):
         super(BraileInferenceImpl, self).__init__()
         self.verbose = verbose
-        self.model_weights_fn = model_weights_fn
-
-        #self.model = model
-        self.model, _, _ = create_model_retinanet.create_model_retinanet(params, device=device)
-        self.model = self.model.to(device)
-        self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
+        self.device = device
+        if isinstance(model, torch.nn.Module):
+            self.model_weights_fn = ""
+            self.model = model
+        else:
+            self.model_weights_fn = model
+            self.model, _, _ = create_model_retinanet.create_model_retinanet(params, device=device)
+            self.model = self.model.to(device)
+            self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
         self.model.eval()
         #self.model = torch.jit.script(self.model)
 
@@ -134,7 +137,7 @@ class BraileInferenceImpl(torch.nn.Module):
         else:
             best_idx, err_score = OrientationAttempts.NONE, (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
         if self.verbose >= 2:
-            torch.cuda.synchronize(device)
+            torch.cuda.synchronize(self.device)
 
         if best_idx in [OrientationAttempts.INV, OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]:
             best_idx -= 2
@@ -169,7 +172,8 @@ class BrailleInference:
     DRAW_BOTH = DRAW_ORIGINAL | DRAW_REFINED  # 3
     DRAW_FULL_CHARS = 4
 
-    def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None, verbose=1, inference_width=inference_width):
+    def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None,
+                 verbose=1, inference_width=inference_width, device=device):
         self.verbose = verbose
         params = AttrDict.load(params_fn, verbose=verbose)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
@@ -180,23 +184,26 @@ class BrailleInference:
             rotate_limit=0,
         )
         self.preprocessor = data.ImagePreprocessor(params, mode = 'inference')
-        model_script_fn = model_weights_fn + '.pth'
 
-        if create_script != False:
-            self.impl = BraileInferenceImpl(params, model_weights_fn, lt.label_is_valid, verbose=verbose).to(device)
-            if create_script is not None:
-                self.impl = torch.jit.script(self.impl)
-            if isinstance(self.impl, torch.jit.ScriptModule):
-                torch.jit.save(self.impl, model_script_fn)
-                if verbose >= 1:
-                    print("Model loaded and saved to " + model_script_fn)
-            else:
-                if verbose >= 1:
-                    print("Model loaded")
+        if isinstance(model_weights_fn, torch.nn.Module):
+            self.impl = BraileInferenceImpl(params, model_weights_fn, device, lt.label_is_valid, verbose=verbose)
         else:
-            self.impl = torch.jit.load(model_script_fn)
-            if verbose >= 1:
-                print("Model pth loaded")
+            model_script_fn = model_weights_fn + '.pth'
+            if create_script != False:
+                self.impl = BraileInferenceImpl(params, model_weights_fn, device, lt.label_is_valid, verbose=verbose)
+                if create_script is not None:
+                    self.impl = torch.jit.script(self.impl)
+                if isinstance(self.impl, torch.jit.ScriptModule):
+                    torch.jit.save(self.impl, model_script_fn)
+                    if verbose >= 1:
+                        print("Model loaded and saved to " + model_script_fn)
+                else:
+                    if verbose >= 1:
+                        print("Model loaded")
+            else:
+                self.impl = torch.jit.load(model_script_fn)
+                if verbose >= 1:
+                    print("Model pth loaded")
         self.impl.to(device)
 
     def load_pdf(self, img_fn):
@@ -292,15 +299,15 @@ class BrailleInference:
         np_img = np.asarray(img)
         aug_img, aug_gt_rects = self.preprocessor.preprocess_and_augment(np_img, gt_rects)
         aug_img = data.unify_shape(aug_img)
-        input_tensor = self.preprocessor.to_normalized_tensor(aug_img).to(device)
-        input_tensor_rotated = torch.tensor(0).to(device)
+        input_tensor = self.preprocessor.to_normalized_tensor(aug_img).to(self.impl.device)
+        input_tensor_rotated = torch.tensor(0).to(self.impl.device)
 
         aug_img_rot = None
         if find_orientation:
             np_img_rot = np.rot90(np_img, 1, (0,1))
             aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0]
             aug_img_rot = data.unify_shape(aug_img_rot)
-            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot).to(device)
+            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot).to(self.impl.device)
 
         if self.verbose >= 2:
             print("    run_impl.make_batch", time.clock() - t)

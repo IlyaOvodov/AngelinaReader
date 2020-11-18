@@ -8,6 +8,7 @@ import local_config
 import sys
 sys.path.append(local_config.global_3rd_party)
 from collections import OrderedDict
+import os
 import torch
 import ignite
 from ignite.engine import Events
@@ -20,6 +21,7 @@ import ovotools.pytorch
 from data_utils import data
 from model import create_model_retinanet
 from model.params import params, settings
+import model.validate_retinanet as validate_retinanet
 
 if settings.findLR:
     params.model_name += '_findLR'
@@ -108,6 +110,16 @@ else:
                 call_params['metrics'] = engine.state.metrics['val_dsbi:loss']
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
             ctx.lr_scheduler.step(**call_params)
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def eval_accuracy(engine):
+        if engine.state.epoch % 100 == 1:
+            data_set = validate_retinanet.prepare_data(ctx.params.data.val_list_file_names)
+            for key, data_list in data_set.items():
+                acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
+                                                               model, settings.device, data_list)
+                for rk, rv in acc_res.items():
+                    engine.state.metrics[key+ ':' + rk] = rv
 
 #@trainer.on(Events.EPOCH_COMPLETED)
 #def save_model(engine):

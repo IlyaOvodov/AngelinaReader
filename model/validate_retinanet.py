@@ -6,15 +6,13 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 
 # Для отладки
 inference_width = 850
-verbose = 2
+verbose = 0
 
 models = [
     #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
     #
-    ('NN_results/dsbi_lay0_526290', 'models/clr.006.t7'),
-    ('NN_results/dsbi_lay1_047eca', 'models/clr.007.t7'),
+    ('NN_results/dsbi_lay3_c4ca62', 'models/clr.005.t7'),
     ('NN_results/dsbi_lay3_c4ca62', 'models/clr.006.t7'),
-    ('NN_results/dsbi_lay5_0d8197', 'models/clr.006.t7'),
 ]
 
 model_dirs = [
@@ -28,6 +26,7 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     'val': [r'DSBI/data/val_li2.txt', ],
+    'test': [r'DSBI/data/test_li2.txt', ],
 }
 
 lang = 'RU'
@@ -54,10 +53,8 @@ for md in model_dirs:
         (str(md[0]), str(Path('models')/m.name))
         for m in (Path(local_config.data_path)/md[0]).glob(md[1])
     ]
-for m in models:
-    print(m)
 
-def prepare_data():
+def prepare_data(datasets=datasets):
     """
     data (datasets defined above as global) -> dict: key - list of dict (image_fn":full image filename, "gt_text": groundtruth pseudotext, "gt_rects": groundtruth rects + label 0..64)
     :return:
@@ -474,9 +471,64 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         'd_by_char_avg': sum_d1/len(data_list)
     }
 
+def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rects = False, metrics_for_lines = True):
+    """
+    :param recognizer: infer_retinanet.BrailleInference instance
+    :param data_list:  list of (image filename, groundtruth pseudotext)
+    :return: (<distance> avg. by documents, <distance> avg. by char, <<distance> avg. by char> avg. by documents>)
+    """
+    # по символам
+    recognizer = infer_retinanet.BrailleInference(
+        params_fn=params_fn,
+        model_weights_fn=model,
+        create_script=None,
+        inference_width=inference_width,
+        device=device,
+        verbose=verbose)
+
+    tp_c = 0
+    fp_c = 0
+    fn_c = 0
+    for gt_dict in data_list:
+        img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
+        res_dict = recognizer.run(img_fn,
+                                  lang=lang,
+                                  draw_refined=infer_retinanet.BrailleInference.DRAW_NONE,
+                                  find_orientation=False,
+                                  process_2_sides=False,
+                                  align_results=False,
+                                  repeat_on_aligned=False,
+                                  gt_rects=gt_rects)
+        lines = res_dict['lines']
+        if do_filter_lonely_rects:
+            lines, filtered_chars = postprocess.filter_lonely_rects_for_lines(lines)
+        if metrics_for_lines:
+            boxes = []
+            labels = []
+            for ln in lines:
+                boxes += [ch.refined_box for ch in ln.chars]
+                labels += [ch.label for ch in ln.chars]
+        else:
+            boxes = res_dict['boxes']
+            labels = res_dict['labels']
+        tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
+                                          gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
+                                          img=None, do_filter_lonely_rects=do_filter_lonely_rects)
+        tp_c += tpi
+        fp_c += fpi
+        fn_c += fni
+    precision_c = tp_c/(tp_c+fp_c) if tp_c+fp_c != 0 else 0.
+    recall_c = tp_c/(tp_c+fn_c) if tp_c+fn_c != 0 else 0.
+    return {
+        'precision': precision_c,
+        'recall': recall_c,
+        'f1': 2*precision_c*recall_c/(precision_c+recall_c) if precision_c+recall_c != 0 else 0.,
+    }
 
 def main(table_like_format):
     # make data list
+    for m in models:
+        print(m)
     data_set = prepare_data()
     prev_model_root = None
 
