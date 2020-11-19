@@ -462,7 +462,7 @@ class BrailleInference:
             json_path = Path(results_dir) / (filename_stem + '.labeled' + suff + '.json')
             result_dict['dict']['imagePath'] = labeled_image_filename
             with open(json_path, 'w') as opened_json:
-                json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=4)
+                json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=2)
         marked_image_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.jpg')
         recognized_text_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.txt')
         result_dict['labeled_image' + suff].save(marked_image_path)

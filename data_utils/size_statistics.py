@@ -7,6 +7,7 @@ import json
 import numpy as np
 from pathlib import Path
 
+TARGET_WIDTH = 850
 H_RANGE = (0, 100)
 W2H_RANGE = (0, 2, 0.01)
 
@@ -68,52 +69,60 @@ class Hist:
 
 
 def init_hist():
-    return Hist(*H_RANGE, 1), Hist(*W2H_RANGE)
+    return Hist(*H_RANGE, 1), Hist(*H_RANGE, 1), Hist(*W2H_RANGE)
 
 def process_file(file_path):
-    hh, w2hh = init_hist()
+    ww, hh, w2hh = init_hist()
     with open(file_path) as f:
         data = json.loads(f.read())
+    source_width = int(data["imageWidth"])
     rects = [s["points"] for s in data["shapes"]]
     n = 0
     for r in rects:
         assert len(r) == 2
         for pt in r:
             assert len(pt) == 2
-        w = r[1][0] - r[0][0]
-        h = r[1][1] - r[0][1]
+        w = (r[1][0] - r[0][0])*TARGET_WIDTH/source_width
+        h = (r[1][1] - r[0][1])*TARGET_WIDTH/source_width
         assert w > 0 and h > 0
+        ww.add(w)
         hh.add(h)
         w2hh.add(w/h)
         n += 1
     if n > 0:
+        ww.scale(1/n)
         hh.scale(1/n)
         w2hh.scale(1/n)
         assert hh.hist.sum() > 0.95 and hh.hist.sum() < 1.05
         assert w2hh.hist.sum() > 0.95 and w2hh.hist.sum() < 1.05
-        return hh, w2hh
+        return ww, hh, w2hh
     else:
-        return None, None
+        return None, None, None
 
 
 def process_dir_recursive(dir, mask=""):
-    hh, w2hh = init_hist()
+    ww, hh, w2hh = init_hist()
     if mask == "":
         mask = "**/"
     img_files = list(Path(dir).glob(mask+"*.json"))
     for i, file_path in enumerate(img_files):
         if i % 100 == 99:
             print(i, "/", len(img_files))
-        hhi, w2hhi = process_file(file_path)
+        wwi, hhi, w2hhi = process_file(file_path)
         if hhi is not None:
+            ww.add_hist(wwi)
             hh.add_hist(hhi)
             w2hh.add_hist(w2hhi)
-    return hh, w2hh
+    return ww, hh, w2hh
 
 
 def dir_statistics(data_dir, mask):
-    hh, w2hh = process_dir_recursive(data_dir, mask)
-    print(data_dir+mask, "S:", int(hh.total_sum()), "H: ", hh.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)), "W2H:", w2hh.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)))
+    ww, hh, w2hh = process_dir_recursive(data_dir, mask)
+    print(data_dir+mask,
+          #"S:", int(ww.total_sum()), int(hh.total_sum()),
+          "W: ", ww.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)),
+          "H: ", hh.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)),
+          "W2H:", w2hh.quantiles((0, 0.05, 0.25, 0.5, 0.75, 0.95, 1)))
     #
     # print()
     # print(hh.print_hist())
