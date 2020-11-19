@@ -75,17 +75,6 @@ trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, 
 evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metrics, device=settings.device)
 
 if settings.findLR:
-    best_model_buffer = None
-else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'val:loss', minimize=True, params=ctx.params)
-log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
-                                                                loaders_dict = eval_loaders,
-                                                                best_model_buffer=best_model_buffer,
-                                                                params = params,
-                                                                duty_cycles = eval_duty_cycle)
-trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
-
-if settings.findLR:
     import math
     @trainer.on(Events.ITERATION_STARTED)
     def upd_lr(engine):
@@ -120,6 +109,17 @@ else:
                                                                model, settings.device, data_list)
                 for rk, rv in acc_res.items():
                     engine.state.metrics[key+ ':' + rk] = rv
+
+if settings.findLR:
+    best_model_buffer = None
+else:
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'Angelina:f1', minimize=False, params=ctx.params)
+log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
+                                                                loaders_dict = eval_loaders,
+                                                                best_model_buffer=best_model_buffer,
+                                                                params = params,
+                                                                duty_cycles = eval_duty_cycle)
+trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
 
 #@trainer.on(Events.EPOCH_COMPLETED)
 #def save_model(engine):
