@@ -23,6 +23,7 @@ def create_model_retinanet(params, device):
     model = RetinaNet(num_layers=encoder.num_layers(), num_anchors=encoder.num_anchors(),
                       num_classes=num_classes,
                       num_fpn_layers=params.model_params.get('num_fpn_layers', 0),
+                      fpn_skip_layers=params.model_params.encoder_params.get('fpn_skip_layers', 0),
                       num_heads=2 if two_heads else 1
                       ).to(device)
     retina_loss = FocalLoss(num_classes=num_classes, **params.model_params.get('loss_params', dict()))

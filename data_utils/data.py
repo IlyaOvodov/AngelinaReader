@@ -113,12 +113,12 @@ class ImagePreprocessor:
         new_height = ((new_height+31)//32)*32
         return albu_f.resize(img, height=new_height, width=new_width, interpolation=cv2.INTER_LINEAR)
 
-    def to_normalized_tensor(self, img):
+    def to_normalized_tensor(self, img, device):
         '''
         returns image converted to FloatTensor and normalized
         '''
         assert img.ndim == 3
-        ten_img = torch.from_numpy(img.transpose((2, 0, 1))).cuda().float()
+        ten_img = torch.from_numpy(img.transpose((2, 0, 1))).to(device=device).float()
         means = ten_img.view(3, -1).mean(dim=1)
         std = torch.max(ten_img.view(3, -1).std(dim=1), torch.tensor(self.params.data.get('max_std',0)*255).to(ten_img))
                         #(ten_img.view(3, -1).max(dim=1)[0] - ten_img.view(3, -1).min(dim=1)[0])/6)
@@ -143,7 +143,7 @@ class BrailleDataset(torch.utils.data.ConcatDataset):
         symbols: np.array(Nx5 i.e. Nx(left, top, right, bottom [0..1), class [1..63]))
         If get_points mode is on, class is always 0
     '''
-    def __init__(self, params, list_file_names, mode, verbose):
+    def __init__(self, params, device, list_file_names, mode, verbose):
         '''
         :param params:  params dict
         :param list_file_names: list of files with image files list (relative to local_config.data_path)
@@ -161,10 +161,10 @@ class BrailleDataset(torch.utils.data.ConcatDataset):
                 sample_weight = 1
                 list_params = {}
             while sample_weight >= 1:
-                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, 1, list_params))
+                sub_datasets.append(BrailleSubDataset(params, device, list_file_name, mode, verbose, 1, list_params))
                 sample_weight -= 1
             if sample_weight > 1e-10:
-                sub_datasets.append(BrailleSubDataset(params, list_file_name, mode, verbose, sample_weight, list_params))
+                sub_datasets.append(BrailleSubDataset(params, device, list_file_name, mode, verbose, sample_weight, list_params))
 
         super(BrailleDataset, self).__init__(sub_datasets)
 
@@ -173,7 +173,7 @@ class BrailleSubDataset:
     Provides subset of data for BrailleSubDataset defined by one list file
     '''
 
-    def __init__(self, params, list_file_name, mode, verbose, sample_weight, list_params):
+    def __init__(self, params, device, list_file_name, mode, verbose, sample_weight, list_params):
         '''
         :param params:  params dict
         :param list_file_names: list of files with image files list (relative to local_config.data_path)
@@ -194,6 +194,7 @@ class BrailleSubDataset:
         self.image_files = []
         self.label_files = []
         self.is_front_side = []
+        self.device = device
 
         list_file = os.path.join(local_config.data_path, list_file_name)
         data_dir = os.path.dirname(list_file)
@@ -272,9 +273,9 @@ class BrailleSubDataset:
         sample_params = self.list_params.copy()
         sample_params['is_front_side'] = self.is_front_side[item]
         if self.mode == 'train':
-            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), sample_params
+            return self.image_preprocessor.to_normalized_tensor(aug_img, device=self.device), np.asarray(aug_bboxes).reshape(-1, 5), sample_params
         else:
-            return self.image_preprocessor.to_normalized_tensor(aug_img), np.asarray(aug_bboxes).reshape(-1, 5), sample_params, aug_img
+            return self.image_preprocessor.to_normalized_tensor(aug_img, device=self.device), np.asarray(aug_bboxes).reshape(-1, 5), sample_params, aug_img
 
     def filenames_of_item(self, data_dir, fn, front_side):
         '''
@@ -368,13 +369,13 @@ def read_LabelMe_annotation(label_filename, get_points):
     return rects
 
 
-def create_dataloader(params, collate_fn, list_file_names, shuffle, mode = 'train', verbose = 0):
+def create_dataloader(params, device, collate_fn, list_file_names, shuffle, mode = 'train', verbose = 0):
     '''
     :param params: params AttrDict
     :param collate_fn: converts batch from BrailleDataset output to format required by model
     :return: pytorch DataLoader
     '''
-    dataset = BrailleDataset(params, list_file_names=list_file_names, mode=mode, verbose=verbose)
+    dataset = BrailleDataset(params, device=device, list_file_names=list_file_names, mode=mode, verbose=verbose)
     loader = torch.utils.data.DataLoader(dataset, params.data.batch_size, shuffle=shuffle, num_workers=0, collate_fn=collate_fn)
     return loader
 

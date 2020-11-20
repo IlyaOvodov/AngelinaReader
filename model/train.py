@@ -13,6 +13,7 @@ import torch
 import ignite
 from ignite.engine import Events
 from pathlib import Path
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 import ovotools.ignite_tools
 import ovotools.pytorch_tools
@@ -28,7 +29,7 @@ if settings.findLR:
 params.save(can_overwrite=settings.can_overwrite)
 
 
-ctx = ovotools.pytorch.Context(settings=None, params=params)
+ctx = ovotools.pytorch.Context(settings=None, params=params, eval_func=lambda x: eval(x))
 
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
 if 'load_model_from' in params.keys():
@@ -38,9 +39,9 @@ if 'load_model_from' in params.keys():
 ctx.net  = model
 ctx.loss = loss
 
-train_loader = data.create_dataloader(params, collate_fn,
+train_loader = data.create_dataloader(params, device=settings.device, collate_fn=collate_fn,
                                             list_file_names=params.data.train_list_file_names, shuffle=True)
-val_loaders = { k: data.create_dataloader(params, collate_fn, list_file_names=v, shuffle=False)
+val_loaders = { k: data.create_dataloader(params, device=settings.device, collate_fn=collate_fn, list_file_names=v, shuffle=False)
                 for k,v in params.data.val_list_file_names.items() }
 print('data loaded. train:{} batches'.format(len(train_loader)))
 for k,v in val_loaders.items():
@@ -86,6 +87,16 @@ if settings.findLR:
             print('done')
             engine.terminate()
 else:
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def eval_accuracy(engine):
+        if engine.state.epoch % 100 == 1:
+            data_set = validate_retinanet.prepare_data(ctx.params.data.val_list_file_names)
+            for key, data_list in data_set.items():
+                acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
+                                                               model, settings.device, data_list)
+                for rk, rv in acc_res.items():
+                    engine.state.metrics[key+ ':' + rk] = rv
+
     if params.lr_scheduler.type == 'clr':
         clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, ctx.optimizer, target_metric, params,
                                                        engine=trainer)
@@ -96,19 +107,9 @@ else:
         def lr_scheduler_step(engine):
             call_params = {'epoch': engine.state.epoch}
             if ctx.params.lr_scheduler.type.split('.')[-1] == 'ReduceLROnPlateau':
-                call_params['metrics'] = engine.state.metrics['val_dsbi:loss']
+                call_params['metrics'] = engine.state.metrics['Angelina:f1']
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
             ctx.lr_scheduler.step(**call_params)
-
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def eval_accuracy(engine):
-        if engine.state.epoch % 100 == 1:
-            data_set = validate_retinanet.prepare_data(ctx.params.data.val_list_file_names)
-            for key, data_list in data_set.items():
-                acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
-                                                               model, settings.device, data_list)
-                for rk, rv in acc_res.items():
-                    engine.state.metrics[key+ ':' + rk] = rv
 
 if settings.findLR:
     best_model_buffer = None

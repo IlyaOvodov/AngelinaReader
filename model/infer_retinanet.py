@@ -305,7 +305,7 @@ class BrailleInference:
         np_img = np.asarray(img)
         aug_img, aug_gt_rects = self.preprocessor.preprocess_and_augment(np_img, gt_rects)
         aug_img = data.unify_shape(aug_img)
-        input_tensor = self.preprocessor.to_normalized_tensor(aug_img).to(self.impl.device)
+        input_tensor = self.preprocessor.to_normalized_tensor(aug_img, device=self.impl.device)
         input_tensor_rotated = torch.tensor(0).to(self.impl.device)
 
         aug_img_rot = None
@@ -313,7 +313,7 @@ class BrailleInference:
             np_img_rot = np.rot90(np_img, 1, (0,1))
             aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0]
             aug_img_rot = data.unify_shape(aug_img_rot)
-            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot).to(self.impl.device)
+            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot, device=self.impl.device)
 
         if self.verbose >= 2:
             print("    run_impl.make_batch", time.clock() - t)
