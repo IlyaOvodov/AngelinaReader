@@ -5,14 +5,19 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
-inference_width = 850
 verbose = 0
+inference_width = 850
+cls_thresh = 0.3
+nms_thresh = 0.02
+LINE_THR = 0.6
+do_filter_lonely_rects = False
+metrics_for_lines = True  # was False
+show_filtered = False
 
 models = [
     #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
     #
-    ('NN_results/dsbi_lay3_c4ca62', 'models/clr.005.t7'),
-    ('NN_results/dsbi_lay3_c4ca62', 'models/clr.006.t7'),
+    ('NN_results/angelina_fpn1_lay3_100_factor.5_4b0827', 'models/best.t7'),
 ]
 
 model_dirs = [
@@ -25,8 +30,9 @@ datasets = {
     # 'DSBI_test': [
     #                 r'DSBI\data\test.txt',
     #               ],
-    'val': [r'DSBI/data/val_li2.txt', ],
-    'test': [r'DSBI/data/test_li2.txt', ],
+    #'val': [r'DSBI/data/val_li2.txt', ],
+    #'test': [r'DSBI/data/test_li2.txt', ],
+    'test':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
 }
 
 lang = 'RU'
@@ -332,7 +338,7 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
         fp = sum(rec_is_false)
         fn = len(gt_is_correct) - tp
 
-        if verbose==2 and (fp or fn):
+        if verbose==3 and (fp or fn):
              draw = PIL.ImageDraw.Draw(img)
              for i, is_correct in enumerate(gt_is_correct):
                  if not is_correct:
@@ -350,7 +356,7 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
     return tp, fp, fn
 
 
-def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_lines = False):
+def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_lines):
     """
     :param recognizer: infer_retinanet.BrailleInference instance
     :param data_list:  list of (image filename, groundtruth pseudotext)
@@ -451,7 +457,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         'd_by_char_avg': sum_d1/len(data_list)
     }
 
-def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rects = False, metrics_for_lines = True):
+def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rects = False, metrics_for_lines=metrics_for_lines):
     """
     :param recognizer: infer_retinanet.BrailleInference instance
     :param data_list:  list of (image filename, groundtruth pseudotext)
@@ -537,7 +543,7 @@ def main(table_like_format):
             inference_width=inference_width,
             verbose=verbose)
         for key, data_list in data_set.items():
-            res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines = metrics_for_lines)
+            res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines=metrics_for_lines)
             # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
             #       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
             #       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
@@ -556,11 +562,9 @@ def main(table_like_format):
 
 if __name__ == '__main__':
     import time
-    infer_retinanet.nms_thresh = 0.02
-    postprocess.Line.LINE_THR = 0.6
-    do_filter_lonely_rects = False
-    metrics_for_lines = True  # was False
-    show_filtered = False
+    infer_retinanet.cls_thresh = cls_thresh
+    infer_retinanet.nms_thresh = nms_thresh
+    postprocess.Line.LINE_THR = LINE_THR
     t0 = time.clock()
     # for thr in (0.5, 0.6, 0.7, 0.8):
     #     postprocess.Line.LINE_THR = thr
