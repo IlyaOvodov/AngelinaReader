@@ -7,20 +7,25 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 # Для отладки
 verbose = 0
 inference_width = 850
-cls_thresh = 0.3
+cls_thresh = 0.5
 nms_thresh = 0.02
 LINE_THR = 0.6
+iou_thr = 0.5
 do_filter_lonely_rects = False
-metrics_for_lines = True  # was False
+metrics_for_lines = False
 show_filtered = False
 
 models = [
-    #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
-    #
-    ('NN_results/angelina_fpn1_lay3_100_factor.5_4b0827', 'models/best.t7'),
+    ('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
+    #('NN_results/angelina_fpn1_lay3_100_factor.5_4b0827', 'models/best.t7'),
+    #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
+    #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
+    #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
 ]
 
 model_dirs = [
+    # ('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/*.t7'),
+    # ('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/*.t7'),
 ]
 
 datasets = {
@@ -31,7 +36,7 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
-    #'test': [r'DSBI/data/test_li2.txt', ],
+    'dsbi': [r'DSBI/data/test_li2.txt', ],
     'test':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
 }
 
@@ -57,7 +62,7 @@ rect_margin=0.3
 for md in model_dirs:
     models += [
         (str(md[0]), str(Path('models')/m.name))
-        for m in (Path(local_config.data_path)/md[0]).glob(md[1])
+        for m in sorted((Path(local_config.data_path)/md[0]).glob(md[1]))
     ]
 
 def prepare_data(datasets=datasets):
@@ -274,7 +279,7 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_r
         iou = intersect_area / (gt_areas.unsqueeze(1) + areas.unsqueeze(0) - intersect_area)
         for gt_i in range(len(gt_labels)):
             rec_i = iou[gt_i, :].argmax()
-            if iou[gt_i, rec_i] > 0:
+            if iou[gt_i, rec_i] > iou_thr:
                 gt_i2 = iou[:, rec_i].argmax()
                 if gt_i2 == gt_i:
                     gt_rec_labels[gt_i] = labels[rec_i]
@@ -326,7 +331,7 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
         iou = intersect_area / (gt_areas.unsqueeze(1) + areas.unsqueeze(0) - intersect_area)
         for gt_i in range(len(gt_labels)):
             rec_i = iou[gt_i, :].argmax()
-            if iou[gt_i, rec_i] > 0.5:
+            if iou[gt_i, rec_i] > iou_thr:
                 if labels[rec_i] == gt_labels[gt_i]:
                     gt_is_correct[gt_i] = 1
         for rec_i in range(len(labels)):
@@ -552,8 +557,9 @@ def main(table_like_format):
                 print('{model}\t{weights}\t{key}\t'
                       '{res[precision_r]:.4}\t{res[recall_r]:.4}\t{res[f1_r]:.4}\t'
                       '{res[precision_c]:.4}\t{res[recall_c]:.4}\t{res[f1_c]:.4}\t'
-                      '{res[d_by_doc]:.4}\t{res[d_by_char]:.4}\t'
-                      '{res[d_by_char_avg]:.4}'.format(model=model_root, weights=model_weights, key=key, res=res))
+                      # '{res[d_by_doc]:.4}\t{res[d_by_char]:.4}\t'
+                      # '{res[d_by_char_avg]:.4}'
+                      .format(model=model_root, weights=model_weights, key=key, res=res))
             else:
                 print('{model_weights} {key} '
                       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '

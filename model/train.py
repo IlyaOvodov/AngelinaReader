@@ -34,6 +34,17 @@ ctx = ovotools.pytorch.Context(settings=None, params=params, eval_func=lambda x:
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
 if 'load_model_from' in params.keys():
     preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from, map_location='cpu')
+
+    keys_to_replace = []
+    for k in preloaded_weights.keys():
+        if k[:8] in ('loc_head', 'cls_head'):
+            keys_to_replace.append(k)
+    for k in keys_to_replace:
+        k2 = k.split('.')
+        if len(k2) == 4:
+            k2 = k2[0] + '.' + k2[2] + '.' + k2[3]
+            preloaded_weights[k2] = preloaded_weights.pop(k)
+
     model.load_state_dict(preloaded_weights)
 
 ctx.net  = model
@@ -107,14 +118,14 @@ else:
         def lr_scheduler_step(engine):
             call_params = {'epoch': engine.state.epoch}
             if ctx.params.lr_scheduler.type.split('.')[-1] == 'ReduceLROnPlateau':
-                call_params['metrics'] = engine.state.metrics['Angelina:f1']
+                call_params['metrics'] = engine.state.metrics['test:f1']
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
             ctx.lr_scheduler.step(**call_params)
 
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'Angelina:f1', minimize=False, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'test:f1', minimize=False, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,

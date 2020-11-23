@@ -65,7 +65,19 @@ class BraileInferenceImpl(torch.nn.Module):
             self.model_weights_fn = model
             self.model, _, _ = create_model_retinanet.create_model_retinanet(params, device=device)
             self.model = self.model.to(device)
-            self.model.load_state_dict(torch.load(self.model_weights_fn, map_location = 'cpu'))
+
+            preloaded_weights = torch.load(self.model_weights_fn, map_location='cpu')
+            keys_to_replace = []
+            for k in preloaded_weights.keys():
+                if k[:8] in ('loc_head', 'cls_head'):
+                    keys_to_replace.append(k)
+            for k in keys_to_replace:
+                k2 = k.split('.')
+                if len(k2) == 4:
+                    k2 = k2[0] + '.' + k2[2] + '.' + k2[3]
+                    preloaded_weights[k2] = preloaded_weights.pop(k)
+
+            self.model.load_state_dict(preloaded_weights)
         self.model.eval()
         #self.model = torch.jit.script(self.model)
 
