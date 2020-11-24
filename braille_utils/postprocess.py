@@ -9,7 +9,7 @@ from braille_utils import label_tools as lt
 
 
 class LineChar:
-    def __init__(self, box, label):
+    def __init__(self, box, label, score):
         self.original_box = box # box found by NN
         self.x = (box[0] + box[2])/2 # original x of last char
         self.y = (box[1] + box[3])/2 # original y of last char
@@ -21,6 +21,7 @@ class LineChar:
         self.spaces_before = 0
         self.char = '' # char to display in printed text
         self.labeling_char = '' # char to display in rects labeling
+        self.score = score
 
 
 class Line:
@@ -29,9 +30,9 @@ class Line:
     AVG_PERIOD = 5 # для аппроксимации при коррекции
     AVG_APPROX_DIST = 3 # берутся точки с интервалос не менее 2, т.е. 0я и 3я или 1я и 4я
 
-    def __init__(self, box, label):
+    def __init__(self, box, label, score):
         self.chars = []
-        new_char = LineChar(box, label)
+        new_char = LineChar(box, label, score)
         self.chars.append(new_char)
         self.x = new_char.x
         self.y = new_char.y
@@ -39,11 +40,11 @@ class Line:
         self.slip = 0
         self.has_space_before = False
 
-    def check_and_append(self, box, label):
+    def check_and_append(self, box, label, score):
         x = (box[0] + box[2])/2
         y = (box[1] + box[3])/2
         if abs(self.y + self.slip * (x-self.x) -y) < self.h*self.LINE_THR:
-            new_char = LineChar(box, label)
+            new_char = LineChar(box, label, score)
             self.chars.append(new_char)
             calc_chars = self.chars[-self.AVG_PERIOD:]
             new_char.approximation = self._calc_approximation(calc_chars)
@@ -287,20 +288,20 @@ def filter_lonely_rects_for_lines(lines):
     return [ln for ln in lines if len(ln.chars)], filtered_chars
 
 
-def boxes_to_lines(boxes, labels, lang, filter_lonely = True):
+def boxes_to_lines(boxes, labels, scores, lang, filter_lonely = True):
     '''
     :param boxes: list of (left, tor, right, bottom)
     :return: text: list of strings
     '''
     VERTICAL_SPACING_THR = 2.3
 
-    boxes = list(zip(boxes, labels))
+    boxes = list(zip(boxes, labels, scores))
     lines = []
     boxes = sorted(boxes, key=lambda b: b[0][0])
     for b in boxes:
         found_line = None
         for ln in lines:
-            if ln.check_and_append(box=b[0], label=b[1]):
+            if ln.check_and_append(box=b[0], label=b[1], score=b[2]):
                 # to handle seldom cases when one char can be related to several lines mostly because of errorneous outlined symbols
                 if (found_line and (found_line.chars[-1].x - found_line.chars[-2].x) < (ln.chars[-1].x - ln.chars[-2].x)):
                     ln.chars.pop()
@@ -309,7 +310,7 @@ def boxes_to_lines(boxes, labels, lang, filter_lonely = True):
                         found_line.chars.pop()
                     found_line = ln
         if found_line is None:
-            lines.append(Line(box=b[0], label=b[1]))
+            lines.append(Line(box=b[0], label=b[1], score=b[2]))
 
     lines = _sort_lines(lines)
     interpret_line_f = interpret_line_funcs[lang]
@@ -358,9 +359,9 @@ def string_to_line(text_line):
                 else:
                     label = lt.human_label_to_int(ch)
                     if line is None:
-                        line = Line(box=[0,0,0,0], label=label)
+                        line = Line(box=[0,0,0,0], label=label, score=1.0)
                     else:
-                        line.chars.append(LineChar(box=[0,0,0,0], label=label))
+                        line.chars.append(LineChar(box=[0,0,0,0], label=label, score=1.0))
                     line.chars[-1].spaces_before = spaces_before
                     spaces_before = 0
     assert not ext_mode, text_line

@@ -11,7 +11,8 @@ def annonation_to_text(json_filename, lang):
     rects = data.read_LabelMe_annotation(label_filename = json_filename, get_points = False)
     boxes = [r[:4] for r in rects]
     labels = [r[4] for r in rects]
-    lines = postprocess.boxes_to_lines(boxes, labels, lang=lang)
+    scores = [1. for r in rects]
+    lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
     return postprocess.lines_to_text(lines)
 
 

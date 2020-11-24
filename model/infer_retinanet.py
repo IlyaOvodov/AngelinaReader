@@ -41,6 +41,7 @@ cls_thresh = 0.3
 nms_thresh = 0.02
 REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
                         # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
+#REFINE_COEFFS = [0.0]*4
 
 class OrientationAttempts(enum.IntEnum):
     NONE = 0
@@ -342,7 +343,7 @@ class BrailleInference:
         boxes = boxes.tolist()
         labels = labels.tolist()
         scores = scores.tolist()
-        lines = postprocess.boxes_to_lines(boxes, labels, lang = lang)
+        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
         self.refine_lines(lines)
 
         if process_2_sides:
@@ -350,7 +351,7 @@ class BrailleInference:
             boxes2 = boxes2.tolist()
             labels2 = labels2.tolist()
             scores2 = scores2.tolist()
-            lines2 = postprocess.boxes_to_lines(boxes2, labels2, lang=lang)
+            lines2 = postprocess.boxes_to_lines(boxes2, labels2, scores=scores2, lang=lang)
             self.refine_lines(lines2)
 
         aug_img = PIL.Image.fromarray(aug_img if best_idx < OrientationAttempts.ROT90 else aug_img_rot)
@@ -368,7 +369,7 @@ class BrailleInference:
             if hom is not None:
                 aug_img = postprocess.transform_image(aug_img, hom)
                 boxes = postprocess.transform_rects(boxes, hom)
-                lines = postprocess.boxes_to_lines(boxes, labels, lang=lang)
+                lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
                 self.refine_lines(lines)
                 aug_gt_rects = postprocess.transform_rects(aug_gt_rects, hom)
             if self.verbose >= 2:

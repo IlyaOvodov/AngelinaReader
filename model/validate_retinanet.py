@@ -16,7 +16,7 @@ metrics_for_lines = False
 show_filtered = False
 
 models = [
-    ('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
+    #('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_factor.5_4b0827', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
@@ -24,7 +24,7 @@ models = [
 ]
 
 model_dirs = [
-    # ('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/*.t7'),
+    ('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/*.t7'),
     # ('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/*.t7'),
 ]
 
@@ -37,7 +37,7 @@ datasets = {
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
     'dsbi': [r'DSBI/data/test_li2.txt', ],
-    'test':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
+    #'test':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
 }
 
 lang = 'RU'
@@ -112,7 +112,8 @@ def prepare_data(datasets=datasets):
                     if rects is not None:
                         boxes = [r[:4] for r in rects]
                         labels = [r[4] for r in rects]
-                        lines = postprocess.boxes_to_lines(boxes, labels, lang=lang)
+                        scores = [1. for r in rects]
+                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
                         gt_text = lines_to_pseudotext(lines)
                         data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})
     return res_dict
@@ -496,12 +497,15 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
         if metrics_for_lines:
             boxes = []
             labels = []
+            #scores = []
             for ln in lines:
                 boxes += [ch.refined_box for ch in ln.chars]
                 labels += [ch.label for ch in ln.chars]
+                #scores += [ch.score for ch in ln.chars]
         else:
             boxes = res_dict['boxes']
             labels = res_dict['labels']
+            #scores = res_dict['scores']
         tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
                                           img=None, do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
