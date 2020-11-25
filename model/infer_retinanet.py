@@ -42,8 +42,8 @@ model_weights = 'model.t7'
 params_fn = join(local_config.data_path, 'weights', 'param.txt')
 model_weights_fn = join(local_config.data_path, 'weights', model_weights)
 
-#params_fn = join(local_config.data_path, 'NN_results\dsbi_lay3_100_225fc0\param.txt')
-#model_weights_fn = join(local_config.data_path, 'NN_results\dsbi_lay3_100_225fc0\models\clr.032.t7')
+#params_fn = join(local_config.data_path, r'NN_results\dsbi_fpn1_lay4_1000_b67b68\param.txt')
+#model_weights_fn = join(local_config.data_path, r'NN_results\dsbi_fpn1_lay4_1000_b67b68\models\best.t7')
 
 device = 'cuda:0'
 #device = 'cpu'
@@ -51,7 +51,9 @@ cls_thresh = 0.3
 nms_thresh = 0.02
 REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
                         # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
-#REFINE_COEFFS = [0.0]*4
+
+SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - usual, 2 - refined
+
 
 class OrientationAttempts(enum.IntEnum):
     NONE = 0
@@ -258,7 +260,7 @@ class BrailleInference:
             return None
 
 
-    def run(self, img, lang, draw_refined, find_orientation, process_2_sides, align_results, repeat_on_aligned=True, gt_rects=[]):
+    def run(self, img, lang, draw_refined, find_orientation, process_2_sides, align_results, repeat_on_aligned, gt_rects=[]):
         """
         :param img: can be 1) PIL.Image 2) filename to image (.jpg etc.) or .pdf file
         """
@@ -361,7 +363,7 @@ class BrailleInference:
         boxes = boxes.tolist()
         labels = labels.tolist()
         scores = scores.tolist()
-        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
+        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1)
         self.refine_lines(lines)
 
         if process_2_sides:
@@ -369,7 +371,7 @@ class BrailleInference:
             boxes2 = boxes2.tolist()
             labels2 = labels2.tolist()
             scores2 = scores2.tolist()
-            lines2 = postprocess.boxes_to_lines(boxes2, labels2, scores=scores2, lang=lang)
+            lines2 = postprocess.boxes_to_lines(boxes2, labels2, scores=scores2, lang=lang, filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1)
             self.refine_lines(lines2)
 
         aug_img = PIL.Image.fromarray(aug_img if best_idx < OrientationAttempts.ROT90 else aug_img_rot)
@@ -387,7 +389,7 @@ class BrailleInference:
             if hom is not None:
                 aug_img = postprocess.transform_image(aug_img, hom)
                 boxes = postprocess.transform_rects(boxes, hom)
-                lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
+                lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1)
                 self.refine_lines(lines)
                 aug_gt_rects = postprocess.transform_rects(aug_gt_rects, hom)
             if self.verbose >= 2:
@@ -413,6 +415,26 @@ class BrailleInference:
                 results_dict.update(self.draw_results(aug_img, boxes2, lines2, labels2, scores2, True, draw_refined))
             if self.verbose >= 2:
                 print("    run_impl.draw", time.clock() - t)
+
+        if SAVE_FOR_PSEUDOLABELS_MODE == 1:
+            # check
+            shapes = results_dict['dict']['shapes']
+            saved_boxes = [
+                sh['points']
+                for sh in shapes
+            ]
+            saved_labels = [
+                lt.human_label_to_int(sh['label'])
+                for sh in shapes
+            ]
+            arr = sorted(zip(saved_boxes, saved_labels), key=lambda x: tuple(x[0]))
+            saved_boxes, saved_labels = zip(*arr)
+            assert len(saved_boxes) == len(boxes)
+            arr = sorted(zip(boxes, labels), key=lambda x: tuple(x[0]))
+            sorted_boxes, sorted_labels = zip(*arr)
+            for b,sb,l,sl  in zip(sorted_boxes, saved_boxes, sorted_labels, saved_labels):
+                assert b == sb[0]+sb[1]
+                assert l == sl
 
         return results_dict
 
@@ -443,9 +465,9 @@ class BrailleInference:
                     draw.text((ch_box[0], ch_box[3]), ch.char, font=fntErr, fill="black")
                 else:
                     draw.text((ch_box[0]+5,ch_box[3]-7), ch.char, font=fntA, fill="black")
-                #score = scores[i].item()
-                #score = '{:.1f}'.format(score*10)
-                #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
+                if SAVE_FOR_PSEUDOLABELS_MODE:
+                    score = str(int(ch.score*100))
+                    draw.text((ch_box[0],ch_box[3]+12), score, font=fntErr, fill='green')
             out_text.append(s)
         return {
             'labeled_image' + suff: aug_img,
@@ -471,13 +493,15 @@ class BrailleInference:
             for ch in ln.chars:
                 ch_box = ch.refined_box if (draw_refined & self.DRAW_BOTH) != self.DRAW_ORIGINAL else ch.original_box
                 shape = {
-                    "label": ch.labeling_char,
+                    "label": ch.labeling_char if ch.labeling_char else '~'+lt.int_to_label123(ch.label),
                     "points": [[ch_box[0], ch_box[1]],
                                [ch_box[2], ch_box[3]]],
                     "shape_type": "rectangle",
                     "line_color": None,
                     "fill_color": None,
                 }
+                if SAVE_FOR_PSEUDOLABELS_MODE:
+                    shape['score'] = ch.score
                 shapes.append(shape)
         res = {"shapes": shapes,
                "imageHeight": img.height, "imageWidth": img.width, "imagePath": None, "imageData": None,
@@ -625,26 +649,37 @@ if __name__ == '__main__':
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
-    img_filename_mask = r'D:\Programming.Data\Braille\DSBI\data\test_li2.txt'
+    img_filename_mask = r'D:\Programming.Data\Braille\AngelinaDataset\books\train_books.txt'
 
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    results_dir =       r'D:\Programming.Data\Braille\DSBI\tmp_new'
+    results_dir =       r'D:\Programming.Data\Braille\AngelinaDataset\pseudo1\books'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
-    remove_labeled_from_filename = False
+    remove_labeled_from_filename = True
     find_orientation = False
     process_2_sides = False
+    align_results = True
     repeat_on_aligned = False
     verbose = 0
     draw_redined = BrailleInference.DRAW_REFINED
+
+    if SAVE_FOR_PSEUDOLABELS_MODE:
+        find_orientation = False
+        process_2_sides = False
+        align_results = False
+        repeat_on_aligned = False
+        if SAVE_FOR_PSEUDOLABELS_MODE == 1:
+            draw_redined = BrailleInference.DRAW_ORIGINAL
+        else:  # 2
+            draw_redined = BrailleInference.DRAW_REFINED
 
     recognizer = BrailleInference(verbose=verbose)
     recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined=draw_redined,
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,
                                     process_2_sides=process_2_sides,
-                                    align_results=True,
+                                    align_results=align_results,
                                     repeat_on_aligned=repeat_on_aligned)
 
     #recognizer.process_dir_and_save(r'D:\Programming.Data\Braille\My\raw\ang_redmi\*.jpg', r'D:\Programming.Data\Braille\tmp\flip_inv\ang_redmi', lang = 'RU')

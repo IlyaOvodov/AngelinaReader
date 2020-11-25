@@ -112,7 +112,7 @@ def prepare_data(datasets=datasets):
                     if rects is not None:
                         boxes = [r[:4] for r in rects]
                         labels = [r[4] for r in rects]
-                        scores = [1. for r in rects]
+                        scores = [r[5] for r in rects]
                         lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely = False)
                         gt_text = lines_to_pseudotext(lines)
                         data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})

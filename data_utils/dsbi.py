@@ -68,9 +68,10 @@ def read_DSBI_annotation(label_filename, width, height, rect_margin, get_points)
     :param rect_margin:
     :param get_points: Points or Symbols mode
     :return:
-        List of symbol rects if get_points==False. Each rect is a tuple (left, top, right, bottom, label) where
+        List of symbol rects if get_points==False. Each rect is a tuple (left, top, right, bottom, label, score) where
         left..bottom are in [0,1], label is int in [1..63]. Symbol size is extended to rect_margin*width of symbol
         in every side.
+        score is always 1.0 as it is !=1 only for auto-generated annotation
         List of points rects if get_points==True. Each point is a tuple (left, top, right, bottom, label) where
         left..bottom are in [0,1], label is 0. Width and height of point is 2*rect_margin*width of symbol
     """
@@ -105,6 +106,7 @@ def read_DSBI_annotation(label_filename, width, height, rect_margin, get_points)
                 (c.right + rect_margin * (c.right - c.left)) / width,
                 (c.bottom + rect_margin * (c.right - c.left)) / height,
                 lt.label010_to_int(c.label),
+                1.0  # score, DSBI can not be auto-generated
                 ) for c in cells if c.label != '000000']
     else:
         rects = []
