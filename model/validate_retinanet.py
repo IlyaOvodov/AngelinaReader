@@ -521,7 +521,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
             boxes = res_dict['boxes']
             labels = res_dict['labels']
             #scores = res_dict['scores']
-        tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
+        tpi, fpi, fni, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
                                           img=None, do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
         tp_c += tpi

@@ -27,7 +27,7 @@ def rect_vflip(b):
     :param b: tuple (left, top, right, bottom, label)
     :return: converted tuple (left, top, right, bottom, label)
     '''
-    return b[:4] + (lt.label_vflip(b[4]),)
+    return b[:4] + (lt.label_vflip(b[4]),) + b[5:]
 
 def rect_hflip(b):
     '''
@@ -35,7 +35,7 @@ def rect_hflip(b):
     :param b: tuple (left, top, right, bottom, label)
     :return: converted tuple (left, top, right, bottom, label)
     '''
-    return b[:4] + (lt.label_hflip(b[4]),)
+    return b[:4] + (lt.label_hflip(b[4]),) + b[5:]
 
 
 def common_aug(mode, params):
