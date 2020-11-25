@@ -27,9 +27,8 @@ import data_utils.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
 from model import create_model_retinanet
-import pytorch_retinanet
-import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
+from model.my_decoder import CreateDataEncoder
 
 inference_width = 1024
 model_weights = 'model.t7'
@@ -82,8 +81,7 @@ class BraileInferenceImpl(torch.nn.Module):
         self.model.eval()
         #self.model = torch.jit.script(self.model)
 
-        self.encoder = pytorch_retinanet.encoder.DataEncoder(**params.model_params.encoder_params)
-        #self.encoder = encoder
+        self.encoder = CreateDataEncoder(**params.model_params.encoder_params)
         self.valid_mask = torch.tensor(label_is_valid).long()
         self.cls_thresh = cls_thresh
         self.nms_thresh = nms_thresh
@@ -149,20 +147,19 @@ class BraileInferenceImpl(torch.nn.Module):
                 loc_preds[i] = loc_pred
                 cls_preds[i] = cls_pred
         if self.verbose >= 2:
+            torch.cuda.synchronize(self.device)
             print("        forward.model", time.clock() - t)
             t = time.clock()
         if find_orientation:
             best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh, orientation_attempts)
+            if self.verbose >= 2:
+                print("        forward.calc_letter_statistics", time.clock() - t)
+                t = time.clock()
         else:
             best_idx, err_score = OrientationAttempts.NONE, (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
-        if self.verbose >= 2:
-            torch.cuda.synchronize(self.device)
-
         if best_idx in [OrientationAttempts.INV, OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]:
             best_idx -= 2
-        if self.verbose >= 2:
-            print("        forward.calc_letter_statistics", time.clock() - t)
-            t = time.clock()
+
         h,w = input_data[best_idx].shape[2:]
         boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data,
                                                     cls_preds[best_idx][0].cpu().data, (w,h),
