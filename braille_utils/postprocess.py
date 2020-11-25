@@ -274,21 +274,25 @@ interpret_line_funcs = {
 
 
 def filter_lonely_rects_for_lines(lines):
+    """
+    Отрезает одинокие символы с левого и правого края строки
+    :return: lines: List[Line], filtered_chars: List[Char]
+    """
     allowed_lonely = {} # lt.label010_to_int('111000'), lt.label010_to_int('000111'), lt.label010_to_int('111111')
     filtered_chars = []
     for ln in lines:
-        while len(ln.chars) and (ln.chars[0].label not in allowed_lonely and len(ln.chars)>1 and ln.chars[1].spaces_before > 1 or len(ln.chars) == 1):
+        while len(ln.chars) and (ln.chars[0].label not in allowed_lonely and (len(ln.chars)>1 and ln.chars[1].spaces_before > 1 or len(ln.chars) == 1)):
             filtered_chars.append(ln.chars[0])
             ln.chars = ln.chars[1:]
             if len(ln.chars):
                 ln.chars[0].spaces_before = 0
-        while len(ln.chars) and (ln.chars[-1].label not in allowed_lonely and len(ln.chars)>1 and ln.chars[-1].spaces_before > 1 or len(ln.chars) == 1):
+        while len(ln.chars) and (ln.chars[-1].label not in allowed_lonely and (len(ln.chars)>1 and ln.chars[-1].spaces_before > 1 or len(ln.chars) == 1)):
             filtered_chars.append(ln.chars[-1])
             ln.chars = ln.chars[:-1]
     return [ln for ln in lines if len(ln.chars)], filtered_chars
 
 
-def boxes_to_lines(boxes, labels, scores, lang, filter_lonely = True):
+def boxes_to_lines(boxes, labels, scores, lang, filter_lonely):
     '''
     :param boxes: list of (left, tor, right, bottom)
     :return: text: list of strings
@@ -317,7 +321,7 @@ def boxes_to_lines(boxes, labels, scores, lang, filter_lonely = True):
     interpret_line_mode = None
     prev_line = None
     for ln in lines:
-        ln.refine()
+        ln.refine()  # -> ch.refined_box, ch.spaces_before
 
         if prev_line is not None:
             prev_y, y = get_compareble_y(prev_line, ln)

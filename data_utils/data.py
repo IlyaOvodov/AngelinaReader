@@ -273,9 +273,9 @@ class BrailleSubDataset:
         sample_params = self.list_params.copy()
         sample_params['is_front_side'] = self.is_front_side[item]
         if self.mode == 'train':
-            return self.image_preprocessor.to_normalized_tensor(aug_img, device=self.device), np.asarray(aug_bboxes).reshape(-1, 5), sample_params
+            return self.image_preprocessor.to_normalized_tensor(aug_img, device=self.device), np.asarray(aug_bboxes).reshape(-1, 6), sample_params
         else:
-            return self.image_preprocessor.to_normalized_tensor(aug_img, device=self.device), np.asarray(aug_bboxes).reshape(-1, 5), sample_params, aug_img
+            return self.image_preprocessor.to_normalized_tensor(aug_img, device=self.device), np.asarray(aug_bboxes).reshape(-1, 6), sample_params, aug_img
 
     def filenames_of_item(self, data_dir, fn, front_side):
         '''
@@ -345,8 +345,9 @@ def read_LabelMe_annotation(label_filename, get_points):
     '''
     Reads LabelMe (see https://github.com/IlyaOvodov/labelme labelling tool) annotation JSON file.
     :param label_filename: path to LabelMe annotation JSON file
-    :return: list of rect objects. Each rect object is a tuple (left, top, right, bottom, label) where
+    :return: list of rect objects. Each rect object is a tuple (left, top, right, bottom, label, score) where
         left..bottom are in [0,1), label is int in [1..63]
+        score is 1.0 if no 'score' key for the item. Score is set in auto-generated annotation
     '''
     if get_points:
         raise NotImplementedError("read_annotation get_point mode not implemented for LabelMe annotation")
@@ -359,10 +360,12 @@ def read_LabelMe_annotation(label_filename, get_points):
               convert_x(max(xvals)),
               convert_y(max(yvals)),
               lt.human_label_to_int(label),
-              ) for label, xvals, yvals in
+              score
+              ) for label, xvals, yvals, score in
                     ((shape["label"],
                       [coords[0] for coords in shape["points"]],
-                      [coords[1] for coords in shape["points"]]
+                      [coords[1] for coords in shape["points"]],
+                      shape.get("score", 1.0)
                      ) for shape in loaded["shapes"]
                     )
             ]

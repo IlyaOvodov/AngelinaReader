@@ -16,15 +16,15 @@ metrics_for_lines = False
 show_filtered = False
 
 models = [
-    #('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/best.t7'),
-    #('NN_results/angelina_fpn1_lay3_100_factor.5_4b0827', 'models/best.t7'),
+    #('NN_results/dsbi_lay3_100_225fc0', 'models/clr.032.t7'),
+    ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
     #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
 ]
 
 model_dirs = [
-    ('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/*.t7'),
+    #('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/*.t7'),
     # ('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/*.t7'),
 ]
 
@@ -36,8 +36,8 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
-    'dsbi': [r'DSBI/data/test_li2.txt', ],
-    #'test':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
+    #'dsbi': [r'DSBI/data/test_li2.txt', ],
+    'Angelina':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
 }
 
 lang = 'RU'
@@ -112,8 +112,8 @@ def prepare_data(datasets=datasets):
                     if rects is not None:
                         boxes = [r[:4] for r in rects]
                         labels = [r[4] for r in rects]
-                        scores = [1. for r in rects]
-                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
+                        scores = [r[5] for r in rects]
+                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely = False)
                         gt_text = lines_to_pseudotext(lines)
                         data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})
     return res_dict
@@ -359,7 +359,7 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
              draw.text((10, 10), img_fn, fill="black")
              img.show(title=img_fn)
 
-    return tp, fp, fn
+    return tp, fp, fn, rec_is_false
 
 
 def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_lines):
@@ -385,6 +385,9 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
     fp_c = 0
     fn_c = 0
 
+    score_hist_true = [0 for i in range(101)]
+    score_hist_false = [0 for i in range(101)]
+
     for gt_dict in data_list:
         img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
         res_dict = recognizer.run(img_fn,
@@ -409,12 +412,15 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         if metrics_for_lines:
             boxes = []
             labels = []
+            scores = []
             for ln in lines:
                 boxes += [ch.refined_box for ch in ln.chars]
                 labels += [ch.label for ch in ln.chars]
+                scores += [ch.score for ch in ln.chars]
         else:
             boxes = res_dict['boxes']
             labels = res_dict['labels']
+            scores = res_dict['scores']
 
         tpi, fpi, fni = dot_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
@@ -434,13 +440,22 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         fp += fpi
         fn += fni
 
-        tpi, fpi, fni = char_metrics_rects(boxes = boxes, labels = labels,
+        tpi, fpi, fni, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
                                           img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
         tp_c += tpi
         fp_c += fpi
         fn_c += fni
 
+        for s, is_false in zip(scores, rec_is_false):
+            (score_hist_true, score_hist_false)[is_false][int(s*100)] += 1
+
+    if verbose == 2:
+        print('scores: ')
+        s_true, s_false = sum(score_hist_true), sum(score_hist_false)
+        for i, (v_true, v_false) in enumerate(zip(score_hist_true, score_hist_false)):
+            print(i/100, 1000*(v_true+v_false)//(s_true+s_false), 1000*v_true//s_true, 1000*v_false//s_false)
+        print('scores: ')
 
     # precision = tp/(tp+fp)
     # recall = tp/(tp+fn)
@@ -580,4 +595,6 @@ if __name__ == '__main__':
     #     postprocess.Line.LINE_THR = thr
     #     print(thr)
     main(table_like_format=True)
-    print(time.clock() - t0)
+    if verbose>=2:
+        print("decode: ", infer_retinanet.decode_t/infer_retinanet.decode_calls, "impl: ", infer_retinanet.impl_t/infer_retinanet.impl_calls)
+        print(time.clock() - t0)

@@ -44,6 +44,7 @@ def create_model_retinanet(params, device):
         boxes = [torch.tensor(b[1][:, :4], dtype = torch.float32, device=device)
                  *torch.tensor(params.data.net_hw[::-1]*2, dtype = torch.float32, device=device) for b in batch]
         labels = [torch.tensor(b[1][:, 4], dtype = torch.long, device=device) for b in batch]
+        scores = [torch.tensor(b[1][:, 5], dtype = torch.float32, device=device) for b in batch]
         if params.data.get_points:
             labels = [torch.tensor([0]*len(lb), dtype = torch.long, device=device) for lb in labels]
         elif use_multiple_class_groups:
