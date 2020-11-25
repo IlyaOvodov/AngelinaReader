@@ -73,7 +73,7 @@ def create_model_retinanet(params, device):
             labels_i = labels[i]
             if use_multiple_class_groups and len(labels_i.shape) != 2:  # it can happen if no labels are on image
                 labels_i = labels_i.reshape((0, len(num_classes)))
-            loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels_i, input_size=(w,h))
+            loc_target, cls_target, max_ious = encoder.encode(boxes[i], labels_i, input_size=(w,h), scores=scores[i])
             loc_targets.append(loc_target)
             cls_targets.append(cls_target)
         if original_images: # inference mode
