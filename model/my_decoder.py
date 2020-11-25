@@ -5,9 +5,9 @@ from torch import Tensor
 import torch
 import pytorch_retinanet.encoder
 
-from model.utils import meshgrid, box_nms
+from model.utils import meshgrid, box_nms_fast, box_nms
 
-USE_FAST_DECODER = True
+USE_FAST_DECODER = False
 
 class DataEncoder(torch.nn.Module):
     def __init__(self,
@@ -110,6 +110,7 @@ class DataEncoder(torch.nn.Module):
           boxes: (tensor) decode box locations, sized [#obj,4].
           labels: (tensor) class labels for each box, sized [#obj,].
         '''
+
         assert loc_preds.device == cls_preds.device
         assert not isinstance(input_size, int)
         input_size = torch.tensor(input_size)
@@ -138,14 +139,22 @@ class DataEncoder(torch.nn.Module):
             #     pos += n
 
         #ids = score > cls_thresh
-        keep = box_nms(anchor_boxes, boxes, score, cls_thresh=cls_thresh, nms_thresh=nms_thresh)
-        return boxes[keep].view(-1, 4), labels[keep].view(-1), score[keep].view(-1)
+        keep = box_nms_fast(anchor_boxes, boxes, score, cls_thresh=cls_thresh, nms_thresh=nms_thresh)
+        boxes, labels, score = boxes[keep].view(-1, 4), labels[keep].view(-1), score[keep].view(-1)
+
+        keep = box_nms(boxes, score, threshold=nms_thresh)
+        boxes, labels, score = boxes[keep], labels[keep], score[keep]
+
+        return boxes, labels, score
 
 def DataEncoderScripted():
     return torch.jit.script(DataEncoder)
 
-def CreateDataEncoder(anchor_areas, aspect_ratios, scale_ratios, **kwargs):
-    if USE_FAST_DECODER and len(anchor_areas)==1 and len(aspect_ratios)==1 and len(scale_ratios)==1:
-        return DataEncoder(anchor_areas=anchor_areas, aspect_ratios=aspect_ratios, scale_ratios=scale_ratios, **kwargs)
+def CreateDataEncoder(**kwargs):
+    if (USE_FAST_DECODER and
+            len(kwargs.get('anchor_areas', []))==1 and
+            len(kwargs.get('aspect_ratios', []))==1 and
+            len(kwargs.get('scale_ratios', []))==1):
+        return DataEncoder(**kwargs)
     else:
-        return pytorch_retinanet.encoder.DataEncoder(anchor_areas=anchor_areas, aspect_ratios=aspect_ratios, scale_ratios=scale_ratios, **kwargs)
+        return pytorch_retinanet.encoder.DataEncoder(**kwargs)

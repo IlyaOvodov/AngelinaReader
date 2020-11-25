@@ -30,10 +30,21 @@ from model import create_model_retinanet
 import braille_utils.postprocess as postprocess
 from model.my_decoder import CreateDataEncoder
 
+import time
+decode_calls=0
+decode_t=0
+impl_calls=0
+impl_t=0
+
+
 inference_width = 1024
 model_weights = 'model.t7'
 params_fn = join(local_config.data_path, 'weights', 'param.txt')
 model_weights_fn = join(local_config.data_path, 'weights', model_weights)
+
+#params_fn = join(local_config.data_path, 'NN_results\dsbi_lay3_100_225fc0\param.txt')
+#model_weights_fn = join(local_config.data_path, 'NN_results\dsbi_lay3_100_225fc0\models\clr.032.t7')
+
 device = 'cuda:0'
 #device = 'cpu'
 cls_thresh = 0.3
@@ -175,6 +186,11 @@ class BraileInferenceImpl(torch.nn.Module):
         else:
             boxes2, labels2, scores2 = None, None, None
         if self.verbose >= 2:
+
+            global decode_calls, decode_t
+            decode_calls += 1
+            decode_t += time.clock() - t
+
             print("        forward.decode", time.clock() - t)
             t = time.clock()
         return boxes, labels, scores, best_idx, err_score, boxes2, labels2, scores2
@@ -333,6 +349,11 @@ class BrailleInference:
             boxes, labels, scores, best_idx, err_score, boxes2, labels2, scores2 = self.impl(
                 input_tensor, input_tensor_rotated, find_orientation=find_orientation, process_2_sides=process_2_sides)
         if self.verbose >= 2:
+
+            global impl_calls, impl_t
+            impl_calls += 1
+            impl_t += time.clock() - t
+
             print("    run_impl.impl", time.clock() - t)
             t = time.clock()
 
@@ -604,14 +625,15 @@ if __name__ == '__main__':
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
-    img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\**\*.*'
+    img_filename_mask = r'D:\Programming.Data\Braille\DSBI\data\test_li2.txt'
+
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    results_dir =       r'D:\Programming.Data\Braille\ASI_results_NEW_EN\Braile Photos and Scans'
+    results_dir =       r'D:\Programming.Data\Braille\DSBI\tmp_new'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
     remove_labeled_from_filename = False
-    find_orientation = True
+    find_orientation = False
     process_2_sides = False
     repeat_on_aligned = False
     verbose = 0

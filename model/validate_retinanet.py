@@ -16,15 +16,15 @@ metrics_for_lines = False
 show_filtered = False
 
 models = [
-    #('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/best.t7'),
-    #('NN_results/angelina_fpn1_lay3_100_factor.5_4b0827', 'models/best.t7'),
+    #('NN_results/dsbi_lay3_100_225fc0', 'models/clr.032.t7'),
+    ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
     #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
 ]
 
 model_dirs = [
-    ('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/*.t7'),
+    #('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/*.t7'),
     # ('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/*.t7'),
 ]
 
@@ -580,4 +580,6 @@ if __name__ == '__main__':
     #     postprocess.Line.LINE_THR = thr
     #     print(thr)
     main(table_like_format=True)
-    print(time.clock() - t0)
+    if verbose>=2:
+        print("decode: ", infer_retinanet.decode_t/infer_retinanet.decode_calls, "impl: ", infer_retinanet.impl_t/infer_retinanet.impl_calls)
+        print(time.clock() - t0)
