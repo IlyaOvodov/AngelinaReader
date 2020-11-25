@@ -12,7 +12,7 @@ def annonation_to_text(json_filename, lang):
     boxes = [r[:4] for r in rects]
     labels = [r[4] for r in rects]
     scores = [1. for r in rects]
-    lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
+    lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely=False)
     return postprocess.lines_to_text(lines)
 
 

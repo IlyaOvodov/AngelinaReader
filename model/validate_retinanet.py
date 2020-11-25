@@ -5,9 +5,9 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
-verbose = 2
+verbose = 0
 inference_width = 850
-cls_thresh = 0.1
+cls_thresh = 0.5
 nms_thresh = 0.02
 LINE_THR = 0.6
 iou_thr = 0.5
@@ -113,7 +113,7 @@ def prepare_data(datasets=datasets):
                         boxes = [r[:4] for r in rects]
                         labels = [r[4] for r in rects]
                         scores = [1. for r in rects]
-                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang)
+                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely = False)
                         gt_text = lines_to_pseudotext(lines)
                         data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})
     return res_dict
