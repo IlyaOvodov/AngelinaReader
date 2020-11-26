@@ -40,14 +40,14 @@ class Line:
         self.slip = 0
         self.has_space_before = False
 
-    def check_and_append(self, box, label, score):
+    def check_and_append(self, box, label, score, min_align_score):
         x = (box[0] + box[2])/2
         y = (box[1] + box[3])/2
         if abs(self.y + self.slip * (x-self.x) -y) < self.h*self.LINE_THR:
             new_char = LineChar(box, label, score)
             self.chars.append(new_char)
             calc_chars = self.chars[-self.AVG_PERIOD:]
-            new_char.approximation = self._calc_approximation(calc_chars)
+            new_char.approximation = self._calc_approximation(calc_chars, min_align_score=min_align_score)
             if new_char.approximation is None:
                 self.x = new_char.x
                 self.y = new_char.y
@@ -61,20 +61,26 @@ class Line:
             return True
         return False
 
-    def _calc_approximation(self, calc_chars):
+    def _calc_approximation(self, calc_chars, min_align_score):
         if len(calc_chars) <= self.AVG_APPROX_DIST:
             return None
-        best_pair = [1e99, None, None, None, None, ] # err,i,j,k,a,b
+        best_pair = None  # -> [err,i,j,k,a,b]
         for i in range(len(calc_chars)-self.AVG_APPROX_DIST):
+            if calc_chars[i].score < min_align_score:
+                continue
             for j in range(i+self.AVG_APPROX_DIST, len(calc_chars)):
+                if calc_chars[j].score < min_align_score:
+                    continue
                 a = (calc_chars[j].y - calc_chars[i].y) / (calc_chars[j].x - calc_chars[i].x)
                 b = (calc_chars[j].x * calc_chars[i].y - calc_chars[i].x * calc_chars[j].y) / (calc_chars[j].x - calc_chars[i].x)
                 ks = [k for k in range(len(calc_chars)) if k!=i and k!= j]
                 errors = [abs(calc_chars[k].x * a + b - calc_chars[k].y) for k in ks]
                 min_err = min(errors)
-                if min_err < best_pair[0]:
+                if best_pair is None or min_err < best_pair[0]:
                     idx_if_min = min(range(len(errors)), key=errors.__getitem__)
                     best_pair = min_err, i, j, ks[idx_if_min], a, b
+        if best_pair is None:
+            return None
         err, i, j, k, a, b = best_pair
         w = (calc_chars[i].w + calc_chars[j].w + calc_chars[k].w) / 3
         h = (calc_chars[i].h + calc_chars[j].h + calc_chars[k].h) / 3
@@ -292,9 +298,10 @@ def filter_lonely_rects_for_lines(lines):
     return [ln for ln in lines if len(ln.chars)], filtered_chars
 
 
-def boxes_to_lines(boxes, labels, scores, lang, filter_lonely):
+def boxes_to_lines(boxes, labels, scores, lang, filter_lonely, min_align_score):
     '''
     :param boxes: list of (left, tor, right, bottom)
+    :param min_align_score: chars with score < min_align_score are not used for interpolation and line alignment
     :return: text: list of strings
     '''
     VERTICAL_SPACING_THR = 2.3
@@ -305,7 +312,7 @@ def boxes_to_lines(boxes, labels, scores, lang, filter_lonely):
     for b in boxes:
         found_line = None
         for ln in lines:
-            if ln.check_and_append(box=b[0], label=b[1], score=b[2]):
+            if ln.check_and_append(box=b[0], label=b[1], score=b[2], min_align_score=min_align_score):
                 # to handle seldom cases when one char can be related to several lines mostly because of errorneous outlined symbols
                 if (found_line and (found_line.chars[-1].x - found_line.chars[-2].x) < (ln.chars[-1].x - ln.chars[-2].x)):
                     ln.chars.pop()
@@ -418,6 +425,33 @@ def validate_postprocess(in_text, out_text):
     '''
     res_text = lines_to_text(text_to_lines(in_text))
     assert res_text == out_text, (in_text, res_text, out_text)
+
+
+def pseudolabeling_spellchecker(lines, to_score):
+    """
+    checks lines by spellchecker and sets chars' score in incorrect words to to_score
+    """
+    def check_word(hobj, chars):
+        word = ''.join([c.char for c in chars])
+        if not hobj.spell(word):
+            for c in chars:
+                if c.score > to_score:
+                    c.score = to_score
+
+    import hunspell  # sudo apt-get install libhunspell-dev; sudo pip install hunspell
+    dict_path = '/home/orwell/Data/Braille/'
+
+    hobj = hunspell.HunSpell(dict_path+'ru_RU.dic', dict_path+'ru_RU.aff')
+    for ln in lines:
+        start_i = None
+        for i, ch in enumerate(ln.chars):
+            if start_i is not None and (ch.spaces_before or not ch.char.isalpha()):
+                check_word(hobj, ln.chars[start_i:i])
+                start_i = None
+            if start_i is None and ch.char.isalpha():
+                start_i = i
+        if start_i is not None:
+            check_word(hobj, ln.chars[start_i:])
 
 
 #####################################

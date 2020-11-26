@@ -113,7 +113,7 @@ def prepare_data(datasets=datasets):
                         boxes = [r[:4] for r in rects]
                         labels = [r[4] for r in rects]
                         scores = [r[5] for r in rects]
-                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely = False)
+                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely = False, min_align_score=0)
                         gt_text = lines_to_pseudotext(lines)
                         data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})
     return res_dict

@@ -42,8 +42,8 @@ model_weights = 'model.t7'
 params_fn = join(local_config.data_path, 'weights', 'param.txt')
 model_weights_fn = join(local_config.data_path, 'weights', model_weights)
 
-#params_fn = join(local_config.data_path, r'NN_results\dsbi_fpn1_lay4_1000_b67b68\param.txt')
-#model_weights_fn = join(local_config.data_path, r'NN_results\dsbi_fpn1_lay4_1000_b67b68\models\best.t7')
+params_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/param.txt')
+model_weights_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7')
 
 device = 'cuda:0'
 #device = 'cpu'
@@ -52,7 +52,8 @@ nms_thresh = 0.02
 REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
                         # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
 
-SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - usual, 2 - refined
+SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - usual, 2 - refined, 3 - refined with score, 4 - spell check
+pseudolabel_scores = (0.6, 0.8)
 
 
 class OrientationAttempts(enum.IntEnum):
@@ -363,7 +364,11 @@ class BrailleInference:
         boxes = boxes.tolist()
         labels = labels.tolist()
         scores = scores.tolist()
-        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1)
+        min_align_score = 0
+        if SAVE_FOR_PSEUDOLABELS_MODE >= 3:
+            min_align_score = pseudolabel_scores[1]
+        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang,
+                                           filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1, min_align_score=min_align_score)
         self.refine_lines(lines)
 
         if process_2_sides:
@@ -371,7 +376,8 @@ class BrailleInference:
             boxes2 = boxes2.tolist()
             labels2 = labels2.tolist()
             scores2 = scores2.tolist()
-            lines2 = postprocess.boxes_to_lines(boxes2, labels2, scores=scores2, lang=lang, filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1)
+            lines2 = postprocess.boxes_to_lines(boxes2, labels2, scores=scores2, lang=lang,
+                                                filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1, min_align_score=min_align_score)
             self.refine_lines(lines2)
 
         aug_img = PIL.Image.fromarray(aug_img if best_idx < OrientationAttempts.ROT90 else aug_img_rot)
@@ -389,7 +395,8 @@ class BrailleInference:
             if hom is not None:
                 aug_img = postprocess.transform_image(aug_img, hom)
                 boxes = postprocess.transform_rects(boxes, hom)
-                lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1)
+                lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang,
+                                                   filter_lonely=SAVE_FOR_PSEUDOLABELS_MODE != 1, min_align_score=min_align_score)
                 self.refine_lines(lines)
                 aug_gt_rects = postprocess.transform_rects(aug_gt_rects, hom)
             if self.verbose >= 2:
@@ -407,6 +414,9 @@ class BrailleInference:
             'gt_rects': aug_gt_rects,
             'homography': hom.tolist() if hom is not None else hom,
         }
+
+        if SAVE_FOR_PSEUDOLABELS_MODE >= 4:
+            postprocess.pseudolabeling_spellchecker(lines, to_score = pseudolabel_scores[0])
 
         if draw:
             results_dict.update(self.draw_results(aug_img, boxes, lines, labels, scores, False, draw_refined))
@@ -585,8 +595,8 @@ class BrailleInference:
             data_dir = os.path.dirname(list_file)
             with open(list_file, 'r') as f:
                 files = f.readlines()
-            img_files = [os.path.join(data_dir, fn[:-1] if fn[-1] == '\n' else fn) for fn in files]
-            img_folders = [os.path.split(fn)[0] for fn in files]
+            img_files = [os.path.join(data_dir, (fn[:-1] if fn[-1] == '\n' else fn).replace('\\','/')) for fn in files]
+            img_folders = [os.path.split(fn.replace('\\','/'))[0] for fn in files]
         elif os.path.isfile(img_filename_mask):
             img_files = [img_filename_mask]
             img_folders = [""]
@@ -649,11 +659,11 @@ if __name__ == '__main__':
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
-    img_filename_mask = r'D:\Programming.Data\Braille\AngelinaDataset\books\train_books.txt'
+    img_filename_mask = r'/home/orwell/Data/Braille/AngelinaDataset/books/train.txt'
 
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    results_dir =       r'D:\Programming.Data\Braille\AngelinaDataset\pseudo1\books'
+    results_dir =       r'/home/orwell/Data/Braille/AngelinaDataset/pseudo3/books'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
     remove_labeled_from_filename = True
