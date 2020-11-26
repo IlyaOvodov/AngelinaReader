@@ -13,7 +13,7 @@ import torch
 import ignite
 from ignite.engine import Events
 from pathlib import Path
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, MultiStepLR
 
 import ovotools.ignite_tools
 import ovotools.pytorch_tools
@@ -118,14 +118,14 @@ else:
         def lr_scheduler_step(engine):
             call_params = {'epoch': engine.state.epoch}
             if ctx.params.lr_scheduler.type.split('.')[-1] == 'ReduceLROnPlateau':
-                call_params['metrics'] = engine.state.metrics['test:f1']
+                call_params['metrics'] = engine.state.metrics[ctx.params.data.target_metric]
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
             ctx.lr_scheduler.step(**call_params)
 
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, 'test:f1', minimize=False, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, ctx.params.data.target_metric, minimize=False, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,

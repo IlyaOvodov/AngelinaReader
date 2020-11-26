@@ -221,8 +221,11 @@ class BrailleSubDataset:
 
         assert len(self.image_files) > 0, list_file
 
-        self.images = [None] * len(self.image_files)
+        if params.data.get('scores_filter', None):
+            self.filter_data_by_scores(params.data.scores_filter, list_file_name)
+
         self.rects = [None] * len(self.image_files)
+        self.images = [None] * len(self.image_files)
         self.aug_images = [None] * len(self.image_files)
         self.aug_bboxes = [None] * len(self.image_files)
         self.REPEAT_PROBABILITY = 0.6
@@ -233,6 +236,35 @@ class BrailleSubDataset:
         self.denominator = int(1/sample_weight)
         self.call_count = 0
         self.list_params = list_params
+
+    def filter_data_by_scores(self, scores_filter, list_file_name):
+        """
+        filters self.image_files, self.label_files, self.is_front_side by quantile scores
+        :param scores_filter: dict{ %quantile : score threshold }
+        """
+        len_before = len(self.image_files)
+        image_files = []
+        label_files = []
+        is_front_side = []
+        for item, lbl_fn in enumerate(self.label_files):
+            rects = self.read_annotation(lbl_fn, 1000, 1000)  # we need only scores so w,h are arbitrary
+            scores = sorted([r[5] for r in rects])
+            is_good = True
+            if len(scores):
+                for q,thr in scores_filter:
+                    q_score = scores[(q * len(scores))//100]
+                    if q_score < thr:
+                        is_good = False
+                        break
+            if is_good:
+                image_files.append(self.image_files[item])
+                label_files.append(self.label_files[item])
+                is_front_side.append(self.is_front_side[item])
+        self.image_files = image_files
+        self.label_files = label_files
+        self.is_front_side = is_front_side
+        if len_before != len(self.image_files):
+            print('filtering ' + list_file_name + ' for pseudolabeling: ', scores_filter, len_before, '->', len(self.image_files))
 
     def __len__(self):
         return len(self.image_files) // self.denominator
