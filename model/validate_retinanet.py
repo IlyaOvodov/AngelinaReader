@@ -17,7 +17,7 @@ show_filtered = False
 
 models = [
     #('NN_results/dsbi_lay3_100_225fc0', 'models/clr.032.t7'),
-    ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
+    ('NN_results/preudo1_all_fpn1_lay4_100_lrBy10_6a40d7', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
     #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
@@ -36,8 +36,10 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
-    #'dsbi': [r'DSBI/data/test_li2.txt', ],
-    'Angelina':[r'AngelinaDataset/books/val_books.txt', r'AngelinaDataset/handwritten/val_handwritten.txt'],
+    'dsbi': [r'DSBI/data/test_li2.txt', ],
+    #'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
+    'An-books': [r'AngelinaDataset/books/val.txt'],
+    'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
 }
 
 lang = 'RU'
@@ -485,6 +487,8 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
     :return: (<distance> avg. by documents, <distance> avg. by char, <<distance> avg. by char> avg. by documents>)
     """
     # по символам
+    infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
+
     recognizer = infer_retinanet.BrailleInference(
         params_fn=params_fn,
         model_weights_fn=model,

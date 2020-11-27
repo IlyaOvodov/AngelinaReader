@@ -4,15 +4,17 @@ import data_utils.data as data
 
 original_path = Path(local_config.data_path) / 'AngelinaDataset'
 
-original_list = 'handwritten/train.txt'
-pseudolab_root = 'pseudo1'
+original_list = 'books/train.txt'
+pseudolab_root = 'pseudo/step_1_opt_1/'
+#pseudolab_root = 'pseudo 1024/pseudo1/'
 
 pseudolab_path = original_path / pseudolab_root / Path(original_list).parent
 with open(original_path / original_list) as f:
     files = f.readlines()
 mean_scores = []
 for fn in files:
-    full_fn = pseudolab_path / fn.strip().replace('\\', '/')
+    fn = fn.strip().replace('\\', '/')
+    full_fn = pseudolab_path / fn
 
     assert full_fn.is_file(), full_fn
     rects = None
@@ -27,8 +29,15 @@ for fn in files:
         s = [mean_score]
         scores = sorted(scores)   # incompatible with boxes, labels
         s += [scores[ (k * len(scores))//100] for k in (1, 5,25,50)]
+        s += [fn]
         mean_scores.append(s)
         #print(mean_score)
-for i, v in enumerate(sorted(mean_scores)):
-    print(i, [int(vi*1000) for vi in v])
+
+print(pseudolab_root)
+for i, v in enumerate(
+    #    sorted(
+            mean_scores
+     #       , key=lambda x:x[2])
+    ):
+    print(i, [int(vi*1000) for vi in v[:-1]], v[-1])
 

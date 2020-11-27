@@ -9,9 +9,12 @@ settings = AttrDict(
     can_overwrite=False,
 )
 
+pseudo_step = '1'
+pseudo_opt = '1'
+
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/preudo4_scores_{data.scores_filter[0][1]}_{data.scores_filter[1][1]}_{model_params.loss_params.class_loss_scale}',
+    model_name = 'NN_results/pseudo'+pseudo_step+'.'+pseudo_opt+'_scores_{data.scores_filter[0][1]}_{data.scores_filter[1][1]}',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
@@ -24,8 +27,8 @@ params = AttrDict(
         train_list_file_names = [
             r'DSBI/data/train_li2.txt',
             r'DSBI/data/val_li2.txt',
-            r'AngelinaDataset/pseudo4/books/train.txt',
-            r'AngelinaDataset/pseudo4/handwritten/train.txt',
+            r'AngelinaDataset/pseudo/step_'+pseudo_step+'_opt_'+pseudo_opt+'/books/train.txt',
+            r'AngelinaDataset/pseudo/step_'+pseudo_step+'_opt_'+pseudo_opt+'/handwritten/train.txt',
             r'AngelinaDataset/not_braille/train.txt',
         ],
         val_list_file_names = {
@@ -50,7 +53,7 @@ params = AttrDict(
         target_metric='books:f1',
     ),
     augmentation = AttrDict(
-        img_width_range=( 810, 890, ),  # 768*0.8, 1536*1.2  ,550, 1150,   810, 890
+        img_width_range=( 550, 1150, ),  # 768*0.8, 1536*1.2  ,550, 1150,   810, 890
         stretch_limit = 0.1,
         rotate_limit = 5,
         #blur_limit = 0,
