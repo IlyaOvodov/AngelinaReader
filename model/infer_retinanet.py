@@ -55,7 +55,7 @@ if SAVE_FOR_PSEUDOLABELS_MODE:
     params_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/param.txt')
     model_weights_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7')
     pseudolabel_scores = (0.6, 0.8)
-	inference_width = 850
+    inference_width = 850
     cls_thresh = 0.1
     nms_thresh = 0.02
     REFINE_COEFFS = [0., 0., -0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции

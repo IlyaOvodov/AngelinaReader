@@ -4,9 +4,10 @@ from ovotools import AttrDict
 settings = AttrDict(
     max_epochs=2000,
     tensorboard_port=6006,
-    device='cuda:3',
+    device='cuda:0',
     findLR=False,
     can_overwrite=False,
+    regular_save_period = (500, 1),
 )
 
 pseudo_step = '1'
@@ -49,7 +50,7 @@ params = AttrDict(
                 r'DSBI/data/test_li2.txt',
             ]
         },
-        scores_filter=((5, 0.8), (25, 0.88)),  # quantile % : score_threshold
+        scores_filter=((5, 0.7), (25, 0.88)),  # quantile % : score_threshold
         target_metric='books:f1',
     ),
     augmentation = AttrDict(
@@ -70,7 +71,7 @@ params = AttrDict(
             scale_ratios=[1.],
             iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
             iuo_nofit_thr = 0,
-            ignored_scores = (0.3,0.82),
+            ignored_scores = (0.4,0.82),
         ),
         loss_params=AttrDict(
             class_loss_scale = 100,

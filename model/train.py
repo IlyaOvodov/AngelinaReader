@@ -86,6 +86,12 @@ train_epochs = params.lr_finder.iters_num*len(train_loader) if settings.findLR e
 trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, loss, metrics=trainer_metrics, device=settings.device)
 evaluator = ignite.engine.create_supervised_evaluator(model, metrics=eval_metrics, device=settings.device)
 
+def save_model(model, rel_dir="models", filename="last.t7"):
+    file_name = os.path.join(ctx.params.get_base_filename(), rel_dir, filename)
+    dir_name = os.path.dirname(file_name)
+    os.makedirs(dir_name, exist_ok=True)
+    torch.save(model.state_dict(), file_name)
+
 if settings.findLR:
     import math
     @trainer.on(Events.ITERATION_STARTED)
@@ -107,6 +113,16 @@ else:
                                                                model, settings.device, data_list)
                 for rk, rv in acc_res.items():
                     engine.state.metrics[key+ ':' + rk] = rv
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def eval_accuracy(engine):
+        try:
+            period, step_in_epoch = settings.regular_save_period
+            print("period, step_in_epoch", period, step_in_epoch)
+        except:  # not tuple
+            period, step_in_epoch = settings.regular_save_period, 1
+        if engine.state.epoch % period == step_in_epoch and engine.state.epoch > period:
+            save_model(model, filename="{:06}.t7".format(engine.state.epoch))
 
     if params.lr_scheduler.type == 'clr':
         clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, ctx.optimizer, target_metric, params,
@@ -155,3 +171,4 @@ def reset_resources(engine):
 
 trainer.run(train_loader, max_epochs = train_epochs)
 
+save_model(model, filename="last.t7")
