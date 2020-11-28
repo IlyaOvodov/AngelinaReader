@@ -492,6 +492,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
     """
     # по символам
     infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
+    infer_retinanet.cls_thresh = 0.5
     verbose = 0
 
     recognizer = infer_retinanet.BrailleInference(
@@ -501,6 +502,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
         inference_width=inference_width,
         device=device,
         verbose=verbose)
+    assert recognizer.impl.cls_thresh == 0.5, recognizer.impl.cls_thresh
 
     tp_c = 0
     fp_c = 0
@@ -575,6 +577,7 @@ def main(table_like_format):
             create_script=None,
             inference_width=inference_width,
             verbose=verbose)
+        assert recognizer.impl.cls_thresh == 0.5, recognizer.impl.cls_thresh
         for key, data_list in data_set.items():
             res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines=metrics_for_lines)
             # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
