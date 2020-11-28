@@ -118,7 +118,6 @@ else:
     def eval_accuracy(engine):
         try:
             period, step_in_epoch = settings.regular_save_period
-            print("period, step_in_epoch", period, step_in_epoch)
         except:  # not tuple
             period, step_in_epoch = settings.regular_save_period, 1
         if engine.state.epoch % period == step_in_epoch and engine.state.epoch > period:

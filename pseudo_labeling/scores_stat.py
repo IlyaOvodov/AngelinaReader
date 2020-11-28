@@ -5,8 +5,7 @@ import data_utils.data as data
 original_path = Path(local_config.data_path) / 'AngelinaDataset'
 
 original_list = 'books/train.txt'
-pseudolab_root = 'pseudo/step_1_opt_1/'
-#pseudolab_root = 'pseudo 1024/pseudo1/'
+pseudolab_root = 'pseudo/step_4_opt_3/'
 
 pseudolab_path = original_path / pseudolab_root / Path(original_list).parent
 with open(original_path / original_list) as f:
@@ -41,3 +40,4 @@ for i, v in enumerate(
     ):
     print(i, [int(vi*1000) for vi in v[:-1]], v[-1])
 
+for i in range(99): print(i, [len([1 for x in mean_scores if x[j]*100 > i]) for j in range(5)])

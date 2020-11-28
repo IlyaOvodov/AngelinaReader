@@ -8,6 +8,7 @@ except:
 import os
 import json
 import glob
+import shutil
 import sys
 import local_config
 sys.path.append(local_config.global_3rd_party)
@@ -48,17 +49,17 @@ nms_thresh = 0.02
 REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
                         # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
 # pseudolabeling parameters
-SAVE_FOR_PSEUDOLABELS_MODE = 1  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check
+SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check
 if SAVE_FOR_PSEUDOLABELS_MODE:
     folder = 'handwritten'  # books , handwritten
-    PSEUDOLABELS_STEP = 1
-    params_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/param.txt')
-    model_weights_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7')
+    PSEUDOLABELS_STEP = 4
+    params_fn = join(local_config.data_path, r'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/param.txt')
+    model_weights_fn = join(local_config.data_path, r'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/models/best.t7')
     pseudolabel_scores = (0.6, 0.8)
     inference_width = 850
     cls_thresh = 0.1
     nms_thresh = 0.02
-    REFINE_COEFFS = [0., 0., -0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
+    REFINE_COEFFS = [0., 0., 0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
 
 
 
@@ -691,7 +692,8 @@ if __name__ == '__main__':
         else:  # 2
             draw_redined = BrailleInference.DRAW_REFINED
 
-        os.makedirs(results_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=False)
+        shutil.copyfile(img_filename_mask, Path(results_dir) / Path(img_filename_mask).name)
         with open(Path(results_dir) / 'info.txt', 'w+') as f:
             print('SAVE_FOR_PSEUDOLABELS_MODE', SAVE_FOR_PSEUDOLABELS_MODE, file=f)
             print('inference_width', inference_width, file=f)

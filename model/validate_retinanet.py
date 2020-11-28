@@ -17,7 +17,7 @@ show_filtered = False
 
 models = [
     #('NN_results/dsbi_lay3_100_225fc0', 'models/clr.032.t7'),
-    ('NN_results/preudo1_all_fpn1_lay4_100_lrBy10_6a40d7', 'models/best.t7'),
+    ('NN_results/pseudo3.1_scores-0.63-0.8_ignore-0.25-0.8_a865fa', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
     #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
@@ -36,7 +36,7 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
-    'dsbi': [r'DSBI/data/test_li2.txt', ],
+    #'dsbi': [r'DSBI/data/test_li2.txt', ],
     #'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
     'An-books': [r'AngelinaDataset/books/val.txt'],
     'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
@@ -387,8 +387,8 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
     fp_c = 0
     fn_c = 0
 
-    score_hist_true = [0 for i in range(101)]
-    score_hist_false = [0 for i in range(101)]
+    score_hist_true = [0 for i in range(100)]
+    score_hist_false = [0 for i in range(100)]
 
     for gt_dict in data_list:
         img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
@@ -450,14 +450,18 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         fn_c += fni
 
         for s, is_false in zip(scores, rec_is_false):
-            (score_hist_true, score_hist_false)[is_false][int(s*100)] += 1
+            (score_hist_true, score_hist_false)[is_false][min(99, int(s*100))] += 1
 
     if verbose == 2:
-        print('scores: ')
+        score_hist_true, score_hist_false = (
+            hist[:1] + [hist[i] + (hist[i-1] + hist[i+1])//2 for i in range(1, 98)] + hist[-1:]
+            for hist in (score_hist_true, score_hist_false)
+        )
+        print('\nscores: value, true*1000, false*1000')
         s_true, s_false = sum(score_hist_true), sum(score_hist_false)
         for i, (v_true, v_false) in enumerate(zip(score_hist_true, score_hist_false)):
-            print(i/100, 1000*(v_true+v_false)//(s_true+s_false), 1000*v_true//s_true, 1000*v_false//s_false)
-        print('scores: ')
+            print(i/100, v_true, v_false, round(v_true/v_false, 1) if (v_false != 0) else '-')
+        print('\n')
 
     # precision = tp/(tp+fp)
     # recall = tp/(tp+fn)
@@ -488,6 +492,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
     """
     # по символам
     infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
+    verbose = 0
 
     recognizer = infer_retinanet.BrailleInference(
         params_fn=params_fn,
@@ -591,6 +596,7 @@ def main(table_like_format):
 
 if __name__ == '__main__':
     import time
+    infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
     infer_retinanet.cls_thresh = cls_thresh
     infer_retinanet.nms_thresh = nms_thresh
     postprocess.Line.LINE_THR = LINE_THR

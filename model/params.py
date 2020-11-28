@@ -15,7 +15,7 @@ pseudo_opt = '1'
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/pseudo'+pseudo_step+'.'+pseudo_opt+'_scores_{data.scores_filter[0][1]}_{data.scores_filter[1][1]}',
+    model_name = 'NN_results/pseudo'+pseudo_step+'.'+pseudo_opt+'_scores-{data.scores_filter[0][1]}-{data.scores_filter[1][1]}_ignore-{model_params.encoder_params.ignored_scores[0]}-{model_params.encoder_params.ignored_scores[1]}',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
@@ -50,7 +50,7 @@ params = AttrDict(
                 r'DSBI/data/test_li2.txt',
             ]
         },
-        scores_filter=((5, 0.7), (25, 0.88)),  # quantile % : score_threshold
+        scores_filter=((5, 0.64), (25, 0.81)),  # quantile % : score_threshold
         target_metric='books:f1',
     ),
     augmentation = AttrDict(
@@ -71,13 +71,13 @@ params = AttrDict(
             scale_ratios=[1.],
             iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
             iuo_nofit_thr = 0,
-            ignored_scores = (0.4,0.82),
+            ignored_scores = (0.35,0.81),
         ),
         loss_params=AttrDict(
             class_loss_scale = 100,
         ),
     ),
-    load_model_from = 'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
+    load_model_from = 'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/models/best.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
     optim = 'torch.optim.Adam',
     optim_params = AttrDict(
         lr=0.00001,
