@@ -65,11 +65,13 @@ A client requires a standard web-browser (Chrome, Firefox)
 ## Installation
 
 ```
-git clone --recursive git@github.com:IlyaOvodov/AngelinaReader.git
+git clone --recursive https://github.com/IlyaOvodov/AngelinaReader.git
 cd AngelinaReader
 pip install --upgrade pip
 pip install -r requirements.txt
 wget -O weights/model.t7 http://angelina-reader.ovdv.ru/retina_chars_eced60.clr.008    
+git clone https://github.com/IlyaOvodov/pytorch-retinanet
+mv pytorch-retinanet pytorch_retinanet
 python run_web_app.py
 ```
 Windows: pip directory (i.e. `<python>\Scripts`) should be added to Path .   
