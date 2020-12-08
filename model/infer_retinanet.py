@@ -422,8 +422,10 @@ class BrailleInference:
             'homography': hom.tolist() if hom is not None else hom,
         }
 
-        if SAVE_FOR_PSEUDOLABELS_MODE >= 4:
+        if SAVE_FOR_PSEUDOLABELS_MODE == 4:
             postprocess.pseudolabeling_spellchecker(lines, to_score = pseudolabel_scores[0])
+        if SAVE_FOR_PSEUDOLABELS_MODE == 5:
+            postprocess.pseudolabeling_bigram_checker(lines, to_score = pseudolabel_scores[0])
 
         if draw:
             results_dict.update(self.draw_results(aug_img, boxes, lines, labels, scores, False, draw_refined))
