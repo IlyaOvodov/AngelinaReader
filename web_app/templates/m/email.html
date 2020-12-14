@@ -9,13 +9,23 @@
 	    <div>{{ form.e_mail() }}</div>
 	</div>
     <div class="wrapper">
+	    {{ form.to_developers() }}
+    	<label for="to_developers">{{ form.to_developers.label }}</label>
+	</div>
+    <div class="wrapper">
 		<div>{{ form.title.label }}</div>
 		<div>{{ form.title() }}</div>
 	</div>
     <div class="wrapper">
+		<div>{{ form.comment.label }}</div>
+        <div>{{ form.comment(rows=5, cols=20, style="width:100%") }}</div>
+	</div>
+    <!--
+    <div class="wrapper">
 	    {{ form.as_attachment() }}
     	<label for="as_attachment">{{ form.as_attachment.label }}</label>
 	</div>
+	-->
 	{{ flashed_messages() }}
     <div class="button_wrapper">{{ form.submit(style="width:80%") }}</div>
 </form>

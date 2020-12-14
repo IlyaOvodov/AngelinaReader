@@ -217,14 +217,16 @@ def results(template):
 def email(template):
     class Form(FlaskForm):
         e_mail = StringField('E-mail', validators=[DataRequired()])
+        to_developers = BooleanField('Отправить разработчикам')
         title = StringField('Заголовок письма')
+        comment = TextAreaField('Комментарий')
         as_attachment = BooleanField("отправить как вложение")
         submit = SubmitField('Отправить')
     form = Form()
     if form.validate_on_submit():
         results_list = json.loads(request.values['results_list'])
         title = form.title.data or "Распознанный Брайль: " + Path(results_list[0][0]).with_suffix('').with_suffix('').name
-        send_mail(form.e_mail.data, results_list, title)
+        send_mail(form.e_mail.data, results_list, title, form.to_developers.data, form.comment.data)
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],
@@ -298,7 +300,7 @@ def logout():
     return redirect(url_for('index'))
 
 
-def send_mail(to_address, results_list, subject):
+def send_mail(to_address, results_list, subject, to_developers, comment):
     """
     Sends results to e-mail as text(s) + image(s)
     :param to_address: destination email as str
@@ -307,9 +309,15 @@ def send_mail(to_address, results_list, subject):
     """
     # create message object instance
     msg = MIMEMultipart()
-    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
-    msg['To'] = to_address
+    msg['From'] = "{}<{}>".format(current_user.name, current_user.e_mail)
+    if to_developers:
+        msg['To'] = to_address + ',Angelina Reader<angelina-reader@ovdv.ru>'
+    else:
+        msg['To'] = to_address
     msg['Subject'] = subject if subject else "Распознанный Брайль"
+    if comment:
+        attachment = MIMEText(comment, _charset="utf-8")
+        msg.attach(attachment)
     # attach image to message body
     for file_names in results_list:
         for file_name in reversed(file_names):  # txt before jpg
@@ -328,7 +336,8 @@ def send_mail(to_address, results_list, subject):
     server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
     server.starttls()
     server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-    server.sendmail(msg['From'], msg['To'], msg.as_string())
+    recepients = msg['To'].split(',')
+    server.sendmail(msg['From'], recepients, msg.as_string())
     server.quit()
 
 
