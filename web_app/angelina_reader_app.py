@@ -15,9 +15,10 @@ from flask_mobility.decorators import mobile_template
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
+import email.utils as email_utils
 import smtplib
-
 import time
+import uuid
 import os
 import json
 import sys
@@ -225,7 +226,7 @@ def email(template):
     form = Form()
     if form.validate_on_submit():
         results_list = json.loads(request.values['results_list'])
-        title = form.title.data or "Распознанный Брайль: " + Path(results_list[0][0]).with_suffix('').with_suffix('').name
+        title = form.title.data or "Распознанный Брайль: " + Path(results_list[0][0]).with_suffix('').with_suffix('').name.lower()
         send_mail(form.e_mail.data, results_list, title, form.to_developers.data, form.comment.data)
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
@@ -309,15 +310,16 @@ def send_mail(to_address, results_list, subject, to_developers, comment):
     """
     # create message object instance
     msg = MIMEMultipart()
-    msg['From'] = "{}<{}>".format(current_user.name, current_user.e_mail)
+    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
     if to_developers:
         msg['To'] = to_address + ',Angelina Reader<angelina-reader@ovdv.ru>'
     else:
         msg['To'] = to_address
     msg['Subject'] = subject if subject else "Распознанный Брайль"
-    if comment:
-        attachment = MIMEText(comment, _charset="utf-8")
-        msg.attach(attachment)
+    msg['Date'] = email_utils.formatdate()
+    msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
+    attachment = MIMEText(comment + "\nLetter from: {}<{}>".format(current_user.name, current_user.e_mail), _charset="utf-8")
+    msg.attach(attachment)
     # attach image to message body
     for file_names in results_list:
         for file_name in reversed(file_names):  # txt before jpg
