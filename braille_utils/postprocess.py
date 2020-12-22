@@ -454,6 +454,79 @@ def pseudolabeling_spellchecker(lines, to_score):
             check_word(hobj, ln.chars[start_i:])
 
 
+def pseudolabeling_bigram_checker(lines, to_score, err_p = 0.05):
+    """
+    checks lines by spellchecker and sets chars' score in incorrect words to to_score
+    """
+    from pathlib import Path
+    dict_path = '/home/orwell/Data/Braille/'
+    def load_dict(fn, n):
+        d = dict()
+        for ln in (Path(dict_path)/fn).open(encoding='utf-8-sig'):
+            k = ln[:n]
+            v = float(ln[n+1:])
+            d[k] = v
+        return d
+    mono_freq = load_dict('mono_freq.txt', 1)
+    bi_freq = load_dict('bi_freq.txt', 2)
+    def get_prob(ax, x_pos):
+        p_ax = bi_freq.get(ax,0)
+        p_x = mono_freq.get(ax[x_pos], 0)
+        p_a = mono_freq.get(ax[1-x_pos], 0)
+        n = len(mono_freq)
+        p1 = p_ax*(1-2*err_p) + err_p*p_x/n
+        if p1 == 0:
+            return 0
+        p_true = p1/(p1+err_p*p_a/n)
+        return p_true
+
+    for ln in lines:
+        for i, ch in enumerate(ln.chars):
+            ltr = ch.char
+            if ch.score > to_score:
+                if ltr == '':
+                    if lt.int_to_label123(ch.label) == '3456': # ##-sing
+                        if i < len(ln.chars)-1 and ln.chars[i+1].char.isdigit():
+                            continue
+                    ch.score = to_score
+                elif ltr[0] == '~':
+                    ch.score = to_score
+                else:
+                    assert len(ltr) == 1 or len(ltr) == 2 and (ltr[0]==' ' or ltr[1]==' '), ch.char
+
+                    if not (len(ltr) == 2 and ltr[0] == ' '):
+                        if len(ltr) == 2:
+                            assert ltr[1] == ' '
+                            ltr = ltr[0]
+                        assert len(ltr) == 1 and ltr != ' ', ch.char
+                        l_ch = ' '
+                        j=i
+                        while j > 0 and ln.chars[j].spaces_before==0:
+                            j -= 1
+                            if ln.chars[j].char:
+                                l_ch = ln.chars[j].char
+                                break
+                        if l_ch[0] != '~':
+                            pl = get_prob(l_ch+ltr, 1)
+                            ch.score *= pl
+                    if not (len(ltr) == 2 and ltr[1] == ' '):
+                        if len(ltr) == 2:
+                            assert ltr[0] == ' '
+                            ltr = ltr[1]
+                        assert len(ltr) == 1 and ltr != ' ', ch.char
+                        r_ch = ' '
+                        j=i+1
+                        while j < len(ln.chars) and ln.chars[j].spaces_before==0:
+                            if ln.chars[j].char:
+                                r_ch = ln.chars[j].char
+                                break
+                            j += 1
+                        if r_ch[0] != '~':
+                            pr = get_prob(ltr+r_ch, 0)
+                            ch.score *= pr
+                    ch.score = max(to_score, ch.score)  # initial ch.score was checked to be > to_score above
+
+
 #####################################
 # find transformation
 #####################################

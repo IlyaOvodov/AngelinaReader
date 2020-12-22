@@ -583,7 +583,7 @@ def main(table_like_format):
             create_script=None,
             inference_width=inference_width,
             verbose=verbose)
-        assert recognizer.impl.cls_thresh == 0.5, recognizer.impl.cls_thresh
+        assert recognizer.impl.cls_thresh == cls_thresh, (recognizer.impl.cls_thresh, cls_thresh)
         for key, data_list in data_set.items():
             res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines=metrics_for_lines)
             # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
