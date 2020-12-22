@@ -5,7 +5,7 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
-verbose = 0
+verbose = 3
 inference_width = 850
 cls_thresh = 0.5
 nms_thresh = 0.02
@@ -17,7 +17,7 @@ show_filtered = False
 
 models = [
     #('NN_results/dsbi_lay3_100_225fc0', 'models/clr.032.t7'),
-    ('NN_results/pseudo3.1_scores-0.63-0.8_ignore-0.25-0.8_a865fa', 'models/best.t7'),
+    ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
     #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
     #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
@@ -36,10 +36,10 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
-    #'dsbi': [r'DSBI/data/test_li2.txt', ],
+    'dsbi': [r'DSBI/data/test_li2.txt', ],
     #'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
-    'An-books': [r'AngelinaDataset/books/val.txt'],
-    'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
+    #'An-books': [r'AngelinaDataset/books/val.txt'],
+    #'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
 }
 
 lang = 'RU'
@@ -348,18 +348,24 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
 
         if verbose==3 and (fp or fn):
              draw = PIL.ImageDraw.Draw(img)
+             has_false = False
+             has_missed = False
              for i, is_correct in enumerate(gt_is_correct):
                  if not is_correct:
-                     # draw.rectangle(gt_boxes[i].tolist(), outline="red")
+                     #draw.rectangle(gt_boxes[i].tolist(), outline="red")
                      draw.text((gt_boxes[i][0], gt_boxes[i][3]), label_tools.int_to_label123(gt_labels[i]), fill="red")
-                 # else:
+                     has_missed = True
+                 #else:
                  #     draw.rectangle(gt_boxes[i].tolist(), outline="green")
              for i, is_false in enumerate(rec_is_false):
                  if is_false:
-                     # draw.rectangle(boxes[i].tolist(), outline="blue")
-                     draw.text((boxes[i][0], boxes[i][3]+5), label_tools.int_to_label123(labels[i]), fill="blue")
-             draw.text((10, 10), img_fn, fill="black")
-             img.show(title=img_fn)
+                     #draw.rectangle(boxes[i].tolist(), outline="blue")
+                     draw.text((boxes[i][0], boxes[i][3]+9), label_tools.int_to_label123(labels[i]), fill="blue")
+                     has_false = True
+             if has_false and has_missed:
+                 draw.text((10, 10), img_fn, fill="black")
+                 img.show(title=img_fn)
+                 #img.save(Path(r"D:\Programming\Braille\Docs\Paper1\New folder") / (Path(img_fn).name + ".bmp"))
 
     return tp, fp, fn, rec_is_false
 
@@ -444,7 +450,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
 
         tpi, fpi, fni, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
-                                          img=res_dict['labeled_image'], do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
+                                          img=res_dict['image'], do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
         tp_c += tpi
         fp_c += fpi
         fn_c += fni
