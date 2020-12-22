@@ -8,6 +8,9 @@
 	</div>
     <div class="button_wrapper">
         {{ form.submit(style="width:80%") }}
+        <div style="font-size: 60%;">
+        <p/>Отправить результат себе и/или сообщить разработчикам об ошибках распознавания, чтобы программа стала лучше.
+    	</div>
     </div>
     {% for image_path, text in image_paths_and_texts %}
 	<img src="{{image_path}}" alt="Recognized image" style="height:100%; width:100%; object-fit:contain" align="top">
