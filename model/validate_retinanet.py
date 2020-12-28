@@ -575,15 +575,15 @@ def main(table_like_format):
                       'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
 
 if __name__ == '__main__':
-    import time
+    import timeit
     infer_retinanet.nms_thresh = 0.02
     postprocess.Line.LINE_THR = 0.6
     do_filter_lonely_rects = False
     metrics_for_lines = True  # was False
     show_filtered = False
-    t0 = time.clock()
+    t0 = timeit.default_timer()
     # for thr in (0.5, 0.6, 0.7, 0.8):
     #     postprocess.Line.LINE_THR = thr
     #     print(thr)
     main(table_like_format=True)
-    print(time.clock() - t0)
+    print(timeit.default_timer() - t0)

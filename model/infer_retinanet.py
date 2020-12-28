@@ -16,7 +16,7 @@ from ovotools.params import AttrDict
 import numpy as np
 from collections import OrderedDict
 import torch
-import time
+import timeit
 import copy
 from pathlib import Path
 import PIL.ImageDraw
@@ -97,7 +97,7 @@ class BraileInferenceImpl(torch.nn.Module):
 
     def forward(self, input_tensor, input_tensor_rotated, find_orientation, process_2_sides):
         # type: (Tensor, Tensor, int)->Tuple[Tensor,Tensor,Tensor,int, Tuple[Tensor, Tensor, Tensor]]
-        t = time.clock()
+        t = timeit.default_timer()
         orientation_attempts = [OrientationAttempts.NONE]
         if find_orientation:
             orientation_attempts += [OrientationAttempts.ROT180, OrientationAttempts.ROT90, OrientationAttempts.ROT270]
@@ -122,16 +122,16 @@ class BraileInferenceImpl(torch.nn.Module):
         loc_preds: List[Tensor] = [torch.tensor(0)]*8
         cls_preds: List[Tensor] = [torch.tensor(0)]*8
         if self.verbose >= 2:
-            print("        forward.prepare", time.clock() - t)
-            t = time.clock()
+            print("        forward.prepare", timeit.default_timer() - t)
+            t = timeit.default_timer()
         for i, input_data_i in enumerate(input_data):
             if i in orientation_attempts:
                 loc_pred, cls_pred = self.model(input_data_i)
                 loc_preds[i] = loc_pred
                 cls_preds[i] = cls_pred
         if self.verbose >= 2:
-            print("        forward.model", time.clock() - t)
-            t = time.clock()
+            print("        forward.model", timeit.default_timer() - t)
+            t = timeit.default_timer()
         if find_orientation:
             best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh, orientation_attempts)
         else:
@@ -142,8 +142,8 @@ class BraileInferenceImpl(torch.nn.Module):
         if best_idx in [OrientationAttempts.INV, OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]:
             best_idx -= 2
         if self.verbose >= 2:
-            print("        forward.calc_letter_statistics", time.clock() - t)
-            t = time.clock()
+            print("        forward.calc_letter_statistics", timeit.default_timer() - t)
+            t = timeit.default_timer()
         h,w = input_data[best_idx].shape[2:]
         boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data,
                                                     cls_preds[best_idx][0].cpu().data, (w,h),
@@ -159,8 +159,8 @@ class BraileInferenceImpl(torch.nn.Module):
         else:
             boxes2, labels2, scores2 = None, None, None
         if self.verbose >= 2:
-            print("        forward.decode", time.clock() - t)
-            t = time.clock()
+            print("        forward.decode", timeit.default_timer() - t)
+            t = timeit.default_timer()
         return boxes, labels, scores, best_idx, err_score, boxes2, labels2, scores2
 
 
@@ -175,6 +175,10 @@ class BrailleInference:
     def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None,
                  verbose=1, inference_width=inference_width, device=device):
         self.verbose = verbose
+        if not torch.cuda.is_available() and device != 'cpu':
+            print('CUDA not availabel. CPU is used')
+            device = 'cpu'
+
         params = AttrDict.load(params_fn, verbose=verbose)
         params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
         params.data.batch_size = 1 #######
@@ -232,7 +236,7 @@ class BrailleInference:
         """
         if gt_rects:
             assert find_orientation == False, "gt_rects можно передавать только если ориентация задана"
-        t = time.clock()
+        t = timeit.default_timer()
         if not isinstance(img, PIL.Image.Image):
             try:
                 if Path(img).suffix=='.pdf':
@@ -242,18 +246,18 @@ class BrailleInference:
             except Exception as e:
                 return None
         if self.verbose >= 2:
-            print("run.reading image", time.clock() - t)
+            print("run.reading image", timeit.default_timer() - t)
             # img.save(Path(results_dir) / 'original.jpg')
             # img.save(Path(results_dir) / 'original_100.jpg', quality=100)
-            t = time.clock()
+            t = timeit.default_timer()
         if repeat_on_aligned and not process_2_sides:
             results_dict0 = self.run_impl(img, lang, draw_refined, find_orientation,
                                           process_2_sides=False, align=True, draw=False, gt_rects=gt_rects)
             if self.verbose >= 2:
-                print("run.run_impl_1", time.clock() - t)
+                print("run.run_impl_1", timeit.default_timer() - t)
                 # results_dict0['image'].save(Path(results_dir) / 're1.jpg')
                 # results_dict0['image'].save(Path(results_dir) / 're1_100.jpg', quality=100)
-                t = time.clock()
+                t = timeit.default_timer()
             results_dict = self.run_impl(results_dict0['image'], lang, draw_refined, find_orientation=False,
                                          process_2_sides=process_2_sides, align=False, draw=True,
                                          gt_rects=results_dict0['gt_rects'])
@@ -266,7 +270,7 @@ class BrailleInference:
         if self.verbose >= 2:
             # results_dict['image'].save(Path(results_dir) / 're2.jpg')
             # results_dict['image'].save(Path(results_dir) / 're2_100.jpg', quality=100)
-            print("run.run_impl", time.clock() - t)
+            print("run.run_impl", timeit.default_timer() - t)
         return results_dict
 
 
@@ -295,11 +299,11 @@ class BrailleInference:
                 ch.refined_box = (np.array(ch.refined_box) + deltas).tolist()
 
     def run_impl(self, img, lang, draw_refined, find_orientation, process_2_sides, align, draw, gt_rects=[]):
-        t = time.clock()
+        t = timeit.default_timer()
         np_img = np.asarray(img)
         aug_img, aug_gt_rects = self.preprocessor.preprocess_and_augment(np_img, gt_rects)
         aug_img = data.unify_shape(aug_img)
-        input_tensor = self.preprocessor.to_normalized_tensor(aug_img).to(self.impl.device)
+        input_tensor = self.preprocessor.to_normalized_tensor(aug_img, device=self.impl.device)
         input_tensor_rotated = torch.tensor(0).to(self.impl.device)
 
         aug_img_rot = None
@@ -307,18 +311,18 @@ class BrailleInference:
             np_img_rot = np.rot90(np_img, 1, (0,1))
             aug_img_rot = self.preprocessor.preprocess_and_augment(np_img_rot)[0]
             aug_img_rot = data.unify_shape(aug_img_rot)
-            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot).to(self.impl.device)
+            input_tensor_rotated = self.preprocessor.to_normalized_tensor(aug_img_rot, device=self.impl.device)
 
         if self.verbose >= 2:
-            print("    run_impl.make_batch", time.clock() - t)
-            t = time.clock()
+            print("    run_impl.make_batch", timeit.default_timer() - t)
+            t = timeit.default_timer()
 
         with torch.no_grad():
             boxes, labels, scores, best_idx, err_score, boxes2, labels2, scores2 = self.impl(
                 input_tensor, input_tensor_rotated, find_orientation=find_orientation, process_2_sides=process_2_sides)
         if self.verbose >= 2:
-            print("    run_impl.impl", time.clock() - t)
-            t = time.clock()
+            print("    run_impl.impl", timeit.default_timer() - t)
+            t = timeit.default_timer()
 
         #boxes = self.refine_boxes(boxes)
         boxes = boxes.tolist()
@@ -340,10 +344,10 @@ class BrailleInference:
             aug_img = aug_img.transpose(PIL.Image.ROTATE_180)
 
         if self.verbose >= 2:
-            print("    run_impl.postprocess", time.clock() - t)
+            print("    run_impl.postprocess", timeit.default_timer() - t)
             # aug_img.save(Path(results_dir) / 'aug_{}.jpg'.format(align))
             # aug_img.save(Path(results_dir) / 'aug_{}_100.jpg'.format(align), quality = 100)
-            t = time.clock()
+            t = timeit.default_timer()
 
         if align and not process_2_sides:
             hom = postprocess.find_transformation(lines, (aug_img.width, aug_img.height))
@@ -354,10 +358,10 @@ class BrailleInference:
                 self.refine_lines(lines)
                 aug_gt_rects = postprocess.transform_rects(aug_gt_rects, hom)
             if self.verbose >= 2:
-                print("    run_impl.align", time.clock() - t)
+                print("    run_impl.align", timeit.default_timer() - t)
                 # aug_img.save(Path(results_dir) / 'aligned_{}.jpg'.format(align))
                 # aug_img.save(Path(results_dir) / 'aligned_{}_100.jpg'.format(align), quality = 100)
-                t = time.clock()
+                t = timeit.default_timer()
         else:
             hom = None
 
@@ -375,7 +379,7 @@ class BrailleInference:
                 aug_img = aug_img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
                 results_dict.update(self.draw_results(aug_img, boxes2, lines2, labels2, scores2, True, draw_refined))
             if self.verbose >= 2:
-                print("    run_impl.draw", time.clock() - t)
+                print("    run_impl.draw", timeit.default_timer() - t)
 
         return results_dict
 
@@ -475,15 +479,15 @@ class BrailleInference:
         :param target_stem: starting part of result files names (i.e. <target_stem>.protocol.txt etc.) Is used when
             img is image, not filename. When target_stem is None, it is taken from img stem.
         """
-        t = time.clock()
+        t = timeit.default_timer()
         result_dict = self.run(img, lang=lang, draw_refined=draw_refined,
                                find_orientation=find_orientation,
                                process_2_sides=process_2_sides, align_results=align_results, repeat_on_aligned=repeat_on_aligned)
         if result_dict is None:
             return None
         if self.verbose >= 2:
-            print("run_and_save.run", time.clock() - t)
-            t = time.clock()
+            print("run_and_save.run", timeit.default_timer() - t)
+            t = timeit.default_timer()
 
         os.makedirs(results_dir, exist_ok=True)
         if target_stem is None:
@@ -513,7 +517,7 @@ class BrailleInference:
             results += [self.save_results(result_dict, True, results_dir, target_stem, save_development_info)]
 
         if self.verbose >= 2:
-            print("run_and_save.save results", time.clock() - t)
+            print("run_and_save.save results", timeit.default_timer() - t)
         return results
 
     def process_dir_and_save(self, img_filename_mask, results_dir, lang, extra_info, draw_refined,

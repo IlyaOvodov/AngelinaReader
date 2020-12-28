@@ -113,12 +113,12 @@ class ImagePreprocessor:
         new_height = ((new_height+31)//32)*32
         return albu_f.resize(img, height=new_height, width=new_width, interpolation=cv2.INTER_LINEAR)
 
-    def to_normalized_tensor(self, img):
+    def to_normalized_tensor(self, img, device='cpu'):
         '''
         returns image converted to FloatTensor and normalized
         '''
         assert img.ndim == 3
-        ten_img = torch.from_numpy(img.transpose((2, 0, 1))).cuda().float()
+        ten_img = torch.from_numpy(img.transpose((2, 0, 1))).to(device).float()
         means = ten_img.view(3, -1).mean(dim=1)
         std = torch.max(ten_img.view(3, -1).std(dim=1), torch.tensor(self.params.data.get('max_std',0)*255).to(ten_img))
                         #(ten_img.view(3, -1).max(dim=1)[0] - ten_img.view(3, -1).min(dim=1)[0])/6)

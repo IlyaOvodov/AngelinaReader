@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 import email.utils as email_utils
 import smtplib
 import time
+import timeit
 import uuid
 import os
 import json
@@ -31,12 +32,12 @@ from .config import Config
 model_weights = 'model.t7'
 
 print("infer_retinanet.BrailleInference()")
-t = time.clock()
+t = timeit.default_timer()
 recognizer = infer_retinanet.BrailleInference(
     params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
     model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
     create_script=None)
-print(time.clock()-t)
+print(timeit.default_timer()-t)
 
 app = Flask(__name__)
 Mobility(app)
