@@ -12,6 +12,7 @@ from flask_uploads import UploadSet, configure_uploads, IMAGES, ARCHIVES
 from flask_mobility import Mobility
 from flask_mobility.decorators import mobile_template
 
+import atexit
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
@@ -22,12 +23,47 @@ import timeit
 import uuid
 import os
 import json
+import signal
 import sys
 import argparse
 from pathlib import Path
+import socket
 import local_config
 import model.infer_retinanet as infer_retinanet
 from .config import Config
+
+def send_startup_email(what):
+    """
+    Sends results to e-mail as text(s) + image(s)
+    :param to_address: destination email as str
+    :param results_list: list of tuples with file names(txt or jpg)
+    :param subject: message subject or None
+    """
+    # create message object instance
+    txt = 'Angelina Reader is {} at {}'.format(what, socket.gethostname())
+    msg = MIMEText(txt, _charset="utf-8")
+    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
+    msg['To'] = 'Angelina Reader<angelina-reader@ovdv.ru>'
+    msg['Subject'] = txt
+    msg['Date'] = email_utils.formatdate()
+    msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
+
+    # create server and send
+    server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
+    server.starttls()
+    server.login(Config.SMTP_FROM, Config.SMTP_PWD)
+    recepients = [msg['To']]
+    server.sendmail(msg['From'], recepients, msg.as_string())
+    server.quit()
+
+send_startup_email('started')
+
+# TODO.  Doesn't work yet
+atexit.register(send_startup_email, 'stopped')
+def signal_handler(sig, frame):
+    send_startup_email('interrupted')
+    sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
 model_weights = 'model.t7'
 
