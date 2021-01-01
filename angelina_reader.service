@@ -1,0 +1,16 @@
+#/home/ovod/AngelinaReader/angelina_reader.service
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/bin/python3 /home/ovod/AngelinaReader/run_web_app.py
+StartLimitInterval=0
+User=ovod
+WorkingDirectory=/home/ovod/AngelinaReader/
+[Unit]
+StartLimitIntervalSec=0
+[Install]
+WantedBy=multi-user.target
+#activate autostart by
+#sudo systemctl enable /home/ovod/AngelinaReader/angelina_reader.service
+#view stdout by
+#sudo journalctl --unit=angelina_reader
