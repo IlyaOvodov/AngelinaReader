@@ -32,6 +32,7 @@ import local_config
 import model.infer_retinanet as infer_retinanet
 from .config import Config
 
+hostname = socket.gethostname()
 def send_startup_email(what):
     """
     Sends results to e-mail as text(s) + image(s)
@@ -40,7 +41,7 @@ def send_startup_email(what):
     :param subject: message subject or None
     """
     # create message object instance
-    txt = 'Angelina Reader is {} at {}'.format(what, socket.gethostname())
+    txt = 'Angelina Reader is {} at {}'.format(what, hostname)
     msg = MIMEText(txt, _charset="utf-8")
     msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
     msg['To'] = 'Angelina Reader<angelina-reader@ovdv.ru>'
@@ -61,9 +62,10 @@ send_startup_email('started')
 # TODO.  Doesn't work yet
 atexit.register(send_startup_email, 'stopped')
 def signal_handler(sig, frame):
-    send_startup_email('interrupted')
+    send_startup_email('interrupted by caught {}'.format(sig))
     sys.exit(0)
-signal.signal(signal.SIGINT, signal_handler)
+for s in set(signal.Signals) - {signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT}:
+    signal.signal(s, signal_handler)
 
 model_weights = 'model.t7'
 
