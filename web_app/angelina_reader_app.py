@@ -64,7 +64,7 @@ atexit.register(send_startup_email, 'stopped')
 def signal_handler(sig, frame):
     send_startup_email('interrupted by caught {}'.format(sig))
     sys.exit(0)
-for s in set(signal.Signals) - {signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT}:
+for s in set(signal.Signals) - {0,1}: #{signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT}:
     signal.signal(s, signal_handler)
 
 model_weights = 'model.t7'
