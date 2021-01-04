@@ -15,9 +15,9 @@ def annonation_to_text(json_filename, lang):
     return postprocess.lines_to_text(lines)
 
 
-def process_json_annotation(json_filename):
+def process_json_annotation(json_filename, lang='RU'):
     print('processing ' + json_filename)
-    txt = annonation_to_text(json_filename, 'RU')
+    txt = annonation_to_text(json_filename, lang)
     if json_filename.endswith('.labeled.json'):
         out_fn = json_filename[:-len('.labeled.json')]+'.marked.txt'
     else:

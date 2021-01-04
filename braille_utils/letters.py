@@ -72,6 +72,15 @@ alpha_map_RU = {
     '346': '§',  # mark as &&
 }
 
+# UZ symbols
+alpha_map_UZ = {
+    **alpha_map_RU,
+    '1236': 'ў',
+    '13456': 'қ',
+    '12456': 'ғ',
+    '1456': 'ҳ',
+}
+
 # EN symbols
 alpha_map_EN = {
     '1': 'a',
@@ -101,7 +110,7 @@ alpha_map_EN = {
     '13456': 'y',
     '1356': 'z',
 
-    #'6': caps_sign, # TODO duplicate оа RU caps_sign
+    #'6': caps_sign, # TODO duplicate оf RU caps_sign
     '3': "'",
     '236': '«',  # <<
     '356': '»',  # >>
@@ -164,6 +173,7 @@ letter_dicts = {
     'SYM': sym_map,
     'EN': alpha_map_EN,
     'RU': alpha_map_RU,
+    'UZ': alpha_map_UZ,
     'NUM': num_map,
     'NUM_DENOMINATOR': num_denominator_map,
     'MATH_RU': math_RU,

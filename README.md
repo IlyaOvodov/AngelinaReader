@@ -54,7 +54,7 @@ Standalone workstation requires NVIDIA GPU with at least 3GB memory (i.e. GeForc
 
 OS: Ubuntu, Windows   
  CUDA 10.2   
- Python 3.6   
+ Python 3.6+   
  python packages see requirements.txt   
  
  Python path should be added to PATH.
@@ -103,7 +103,7 @@ Parameters:
 `input` - image file (jpg, png etc.), pdf file, zip file with images or directory name.   
 If directory name or zip file is supplied, all image and pdf files in it will be processed.   
 `results_dir` - folder to place results in. If not supplied, the input files folder will be used. For every input file will be created files `<input file>.marked.txt` with results in a plain text form and `<input file>.marked.jpg` with plain text printed over input image.   
-`-l LANG` - input document language (default is RU). Use `-l EN` for English texts.   
+`-l LANG` - input document language (default is RU). Use `-l EN` for English texts, `-l UZ` for Uzbek.   
 `-o` - switch off automatic orientation search. Sometimes auto orientation can work incorrectly (for non-typical texts or if there are many recognition errors). In such cases adjust image orientation manually and use `-o` option.   
 `-2` - recognize both recto and verso sides of two-side printouts. Verso side results are stored in `<input file>.rev.marked.txt` и `<input file>.rev.marked.jpg` files.   
 `-h` - print help.   
