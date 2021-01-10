@@ -28,47 +28,49 @@ import sys
 import argparse
 from pathlib import Path
 import socket
+
 import local_config
 import model.infer_retinanet as infer_retinanet
 from .config import Config
+from .angelina_reader_core import AngelinaSolver
 
-hostname = socket.gethostname()
-def send_startup_email(what):
-    """
-    Sends results to e-mail as text(s) + image(s)
-    :param to_address: destination email as str
-    :param results_list: list of tuples with file names(txt or jpg)
-    :param subject: message subject or None
-    """
-    # create message object instance
-    txt = 'Angelina Reader is {} at {}'.format(what, hostname)
-    msg = MIMEText(txt, _charset="utf-8")
-    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
-    msg['To'] = 'Angelina Reader<angelina-reader@ovdv.ru>'
-    msg['Subject'] = txt
-    msg['Date'] = email_utils.formatdate()
-    msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
+def startup_logger():
+    hostname = socket.gethostname()
+    def send_startup_email(what):
+        """
+        Sends results to e-mail as text(s) + image(s)
+        :param to_address: destination email as str
+        :param results_list: list of tuples with file names(txt or jpg)
+        :param subject: message subject or None
+        """
+        # create message object instance
+        txt = 'Angelina Reader is {} at {}'.format(what, hostname)
+        msg = MIMEText(txt, _charset="utf-8")
+        msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
+        msg['To'] = 'Angelina Reader<angelina-reader@ovdv.ru>'
+        msg['Subject'] = txt
+        msg['Date'] = email_utils.formatdate()
+        msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
 
-    # create server and send
-    server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
-    server.starttls()
-    server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-    recepients = [msg['To']]
-    server.sendmail(msg['From'], recepients, msg.as_string())
-    server.quit()
+        # create server and send
+        server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
+        server.starttls()
+        server.login(Config.SMTP_FROM, Config.SMTP_PWD)
+        recepients = [msg['To']]
+        server.sendmail(msg['From'], recepients, msg.as_string())
+        server.quit()
 
-send_startup_email('started')
+    send_startup_email('started')
 
-# TODO.  Doesn't work yet
-atexit.register(send_startup_email, 'stopped')
-def signal_handler(sig, frame):
-    send_startup_email('interrupted by caught {}'.format(sig))
-    sys.exit(0)
-for s in set(signal.Signals):
-    try:
-        signal.signal(s, signal_handler)
-    except:
-        print('failed to set handler for signal {}'.format(s))
+    atexit.register(send_startup_email, 'stopped')
+    def signal_handler(sig, frame):
+        send_startup_email('interrupted by caught {}'.format(sig))
+        sys.exit(0)
+    for s in set(signal.Signals):
+        try:
+            signal.signal(s, signal_handler)
+        except:
+            print('failed to set handler for signal {}'.format(s))
 
 
 model_weights = 'model.t7'
@@ -96,34 +98,12 @@ app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
 
 users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.json'
-if os.path.isfile(users_file):
-    with open(users_file, encoding='utf-8') as f:
-        all_users = json.load(f)
-else:
-    all_users = dict()
 
-class User:
-    def __init__(self, e_mail, name, is_new):
-        self.is_authenticated = True
-        self.is_active = True
-        self.is_anonymous = False
-        self.e_mail = e_mail
-        self.name = name
-        if is_new:
-            assert e_mail not in all_users.keys()
-            all_users[e_mail] = {'name':name}
-            with open(users_file, 'w', encoding='utf8') as f:
-                json.dump(all_users, f, sort_keys=True, indent=4, ensure_ascii=False)
-    def get_id(self):
-        return self.e_mail
-
+core = AngelinaSolver(users_file)
 
 @login_manager.user_loader
 def load_user(user_id):
-    user = all_users.get(user_id, None)
-    if user:
-        user = User(user_id, user["name"], is_new=False)
-    return user
+    return core.find_user(id=user_id)
 
 
 @app.route("/", methods=['GET', 'POST'])
@@ -303,11 +283,10 @@ def login(template):
 
     form = LoginForm()
     if form.validate_on_submit():
-        user = all_users.get(form.e_mail.data, None)
+        user = core.find_user(email=form.e_mail.data)  # TODO by network
         if user is None:
             flash('Пользователь не найден. Если вы - новый пользователь, зарегистрируйтесь')
             return redirect(url_for('register'))
-        user = User(form.e_mail.data, user['name'], is_new=False)
         #if user is None or not user.check_password(form.password.data):
         #    return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
@@ -326,13 +305,11 @@ def register(template):
 
     form = RegisterForm()
     if form.validate_on_submit():
-        user = all_users.get(form.e_mail.data, None)
-        if user:
+        found_users = core.find_users_by_email(email=form.e_mail.data)
+        if len(found_users):
             flash('Пользователь с таким E-mail уже существует')
             return redirect(url_for('register'))
-        user = User(e_mail=form.e_mail.data, name=form.username.data, is_new=True)
-        #if user is None or not user.check_password(form.password.data):
-        #    return redirect(url_for('login'))
+        user = core.register_user(name=form.username.data, email=form.e_mail.data, password_hash=None, network_name=None, network_id=None)  # TODO only email registration now
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('index'))
     return render_template(template, title='Sign In', form=form)
@@ -403,6 +380,6 @@ def run():
     else:
         app.run(host='0.0.0.0', threaded=True)
 
-
+startup_logger()
 if __name__ == "__main__":
     run()
