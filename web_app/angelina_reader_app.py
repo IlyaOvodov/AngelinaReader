@@ -256,7 +256,7 @@ def email(template):
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
-    form = Form(e_mail=current_user.e_mail)
+    form = Form(e_mail=current_user.email)
     return render_template(template, form=form)
 
 
@@ -338,7 +338,7 @@ def send_mail(to_address, results_list, subject, to_developers, comment):
     msg['Subject'] = subject if subject else "Распознанный Брайль"
     msg['Date'] = email_utils.formatdate()
     msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
-    attachment = MIMEText(comment + "\nLetter from: {}<{}>".format(current_user.name, current_user.e_mail), _charset="utf-8")
+    attachment = MIMEText(comment + "\nLetter from: {}<{}>".format(current_user.name, current_user.email), _charset="utf-8")
     msg.attach(attachment)
     # attach image to message body
     for file_names in results_list:
