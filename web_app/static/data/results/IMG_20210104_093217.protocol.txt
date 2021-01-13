@@ -1,0 +1,20 @@
+{
+    "ver": "20200816",
+    "best_idx": 0,
+    "err_scores": [
+        [
+            0.0
+        ],
+        [
+            0.0
+        ],
+        [
+            0.0
+        ]
+    ],
+    "homography": null,
+    "model_weights": "D:\\Programming.Data\\Braille\\weights\\model.t7",
+    "user": "4f123d98d18c4e458e3248ea13f3a9ca",
+    "has_public_confirm": true,
+    "lang": "RU"
+}

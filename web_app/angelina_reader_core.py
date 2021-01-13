@@ -3,8 +3,11 @@
 """
 Описание интерфейсов между UI и алгоритмическим модулями
 """
+import PIL
+from datetime import datetime
 import json
 import os
+import time
 import uuid
 
 class User:
@@ -193,7 +196,11 @@ class AngelinaSolver:
         """
         return self.user_manager.find_users_by_email(email)
     
-    
+    #GVNC
+    TMP_RESULT_SELECTOR = 1
+    TMP_RESILTS = ['IMG_20210104_093412', 'IMG_20210104_093217']
+    PREFIX = "" #"static/data/results/"
+
     # собственно распознавание
     def process(self, user, img_paths, lang, find_orientation, process_2_sides, has_public_confirm, timeout):
         """
@@ -208,14 +215,17 @@ class AngelinaSolver:
         Ставит задачу в очередь на распознавание и ждет ее завершения в пределах timeout.
         Возвращает пару task_id (id задачи), завершена ли
         """
-        raise NotImplementedError
-        return "fsgfdsdfsdf", True
+        if timeout and timeout > 0:
+            time.sleep(timeout)
+
+        AngelinaSolver.TMP_RESULT_SELECTOR = 1 - AngelinaSolver.TMP_RESULT_SELECTOR
+        return AngelinaSolver.TMP_RESILTS[AngelinaSolver.TMP_RESULT_SELECTOR], True
         
     def is_completed(self, task_id):
         """
         Проверяет, завершена ли задача с заданным id
         """
-        raise NotImplementedError
+        assert task_id in AngelinaSolver.TMP_RESILTS
         return True
         
     def get_results(self, task_id):
@@ -227,15 +237,14 @@ class AngelinaSolver:
         results_list - список (list) результатов по количеству страниц в задании. Каждый элемени списка - tuple из полных путей к файлам с изображением, распознанным текстом, распознанным брайлем
         params - полный путь к файлу с сохраненным словарем параметров распознавания
         """
-        raise NotImplementedError
-        return [("/res/file.marked.jpg", "/res/file.marked.txt", "/res/file.marked_braille.txt",),], "/res/file.params.txt"
+        prefix = AngelinaSolver.PREFIX
+        return [(prefix + task_id + ".marked.jpg", prefix + task_id + ".marked.txt", prefix + task_id + ".marked.brl",),], prefix + task_id + ".protocol.txt"
         
     def get_tasks_list(self, user):
         """
         Возвращает список task_id задач для данного юзера, отсортированный от старых к новым
         """
-        raise NotImplementedError
-        return ["fsgfdsdfsdf"]
+        return AngelinaSolver.TMP_RESILTS
         
     def get_task_breif(self, task_id):
         """
@@ -243,8 +252,13 @@ class AngelinaSolver:
         время, имя, маленькую картинку, первые 3 строки текста, признак публичной доступности, признак, что задача завершена.
         TOFO открытый вопрос: 1) в каком формате время, 2) как возвращать картиннку (имя файла или битмап).
         """
-        raise NotImplementedError
-        return "20200104 200001", "pic1609257409433.jpg", "/res/file.thumbnail.jpg", "буря\nмглою\nнебо", True, True
+
+        return (datetime.fromisoformat('2011-11-04T00:05:23'),
+                task_id + ".jpg",
+                PIL.Image.Open("web_app/static/data/results/pic.jpg"),
+                "буря\nмглою\nнебо",
+                True,
+                True)
 
     CONTENT_IMAGE = 1
     CONTENT_TEXT = 2

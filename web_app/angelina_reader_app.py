@@ -34,55 +34,6 @@ import model.infer_retinanet as infer_retinanet
 from .config import Config
 from .angelina_reader_core import AngelinaSolver
 
-def startup_logger():
-    hostname = socket.gethostname()
-    def send_startup_email(what):
-        """
-        Sends results to e-mail as text(s) + image(s)
-        :param to_address: destination email as str
-        :param results_list: list of tuples with file names(txt or jpg)
-        :param subject: message subject or None
-        """
-        # create message object instance
-        txt = 'Angelina Reader is {} at {}'.format(what, hostname)
-        msg = MIMEText(txt, _charset="utf-8")
-        msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
-        msg['To'] = 'Angelina Reader<angelina-reader@ovdv.ru>'
-        msg['Subject'] = txt
-        msg['Date'] = email_utils.formatdate()
-        msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
-
-        # create server and send
-        server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
-        server.starttls()
-        server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-        recepients = [msg['To']]
-        server.sendmail(msg['From'], recepients, msg.as_string())
-        server.quit()
-
-    send_startup_email('started')
-
-    atexit.register(send_startup_email, 'stopped')
-    def signal_handler(sig, frame):
-        send_startup_email('interrupted by caught {}'.format(sig))
-        sys.exit(0)
-    for s in set(signal.Signals):
-        try:
-            signal.signal(s, signal_handler)
-        except:
-            print('failed to set handler for signal {}'.format(s))
-
-
-model_weights = 'model.t7'
-
-print("infer_retinanet.BrailleInference()")
-t = timeit.default_timer()
-recognizer = infer_retinanet.BrailleInference(
-    params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
-    model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
-    create_script=None)
-print(timeit.default_timer()-t)
-
 app = Flask(__name__)
 Mobility(app)
 app.config.from_object(Config)
@@ -191,46 +142,24 @@ def results(template):
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
 
-    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm']=='True',
-                  'lang': request.values['lang']}
-    ext = Path(request.values['img_path']).suffix[1:]  # exclude leading dot
-    if ext in IMAGES or ext == 'pdf':
-        results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT, target_stem=None,
-                                               lang=request.values['lang'], extra_info=extra_info,
-                                               draw_refined=recognizer.DRAW_NONE,
-                                               remove_labeled_from_filename=False,
-                                               find_orientation=request.values['find_orientation']=='True',
-                                               align_results=True,
-                                               process_2_sides=request.values['process_2_sides']=='True',
-                                               repeat_on_aligned=False)
-    elif ext == 'zip':
-        results_list = recognizer.process_archive_and_save(request.values['img_path'], RESULTS_ROOT,
-                                               lang=request.values['lang'], extra_info=extra_info,
-                                               draw_refined=recognizer.DRAW_NONE,
-                                               remove_labeled_from_filename=False,
-                                               find_orientation=request.values['find_orientation']=='True',
-                                               align_results=True,
-                                               process_2_sides=request.values['process_2_sides']=='True',
-                                               repeat_on_aligned=False)
-    else:
-        assert False, "incorrect file type: " + str(request.values['img_path'])
-    if results_list is None:
-        flash('Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
-        return redirect(url_for('index',
-                                has_public_confirm=request.values['has_public_confirm'],
-                                lang=request.values['lang'],
-                                find_orientation=request.values['find_orientation'],
-                                process_2_sides=request.values['process_2_sides']))
+    image_fn = request.values['img_path']
+
+    task_id, is_task_ready = core.process(current_user, image_fn, 'RU', True, False, True, 1)
+
+    is_task_ready = core.is_completed(task_id)
+
+    results_list, _ = core.get_results(task_id)
+
+
     # convert OS path to flask html path
-    root_dir = str(Path(app.root_path))
     image_paths_and_texts = list()
     file_names = list()
-    for marked_image_path, recognized_text_path, out_text in results_list:
-        flask_image_path = str(Path(marked_image_path))
-        assert(flask_image_path[:len(root_dir)]) == root_dir
-        flask_image_path = flask_image_path[len(root_dir):].replace("\\", "/")
-        out_text = '\n'.join(out_text)
-        image_paths_and_texts.append((flask_image_path, out_text,))
+    root_dir = "/static/data/results/"
+    for marked_image_path, recognized_text_path, braille_text_path in results_list:
+        flask_image_path = root_dir + marked_image_path
+        out_text = Path('web_app' + root_dir + recognized_text_path).read_text(encoding="utf-8")
+        out_braille_text = Path('web_app' + root_dir + braille_text_path).read_text(encoding="utf-8")
+        image_paths_and_texts.append((flask_image_path, out_text, out_braille_text))
         file_names.append((marked_image_path, recognized_text_path))
     form = ResultsForm(results_list=json.dumps(file_names))
     return render_template(template, form=form, image_paths_and_texts=image_paths_and_texts)
@@ -380,6 +309,5 @@ def run():
     else:
         app.run(host='0.0.0.0', threaded=True)
 
-startup_logger()
 if __name__ == "__main__":
     run()
