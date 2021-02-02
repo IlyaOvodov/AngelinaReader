@@ -27,7 +27,7 @@ This service is available at the address: http://angelina-reader.ru
   * pdf files
   * zip-archives with images
 * Results can be sent to the user's e-mail
-* Can recognize Russian and English braille texts
+* Can recognize Russian, English, Uzbek and Greek braille texts
 
 ### Limitations
 
@@ -103,7 +103,7 @@ Parameters:
 `input` - image file (jpg, png etc.), pdf file, zip file with images or directory name.   
 If directory name or zip file is supplied, all image and pdf files in it will be processed.   
 `results_dir` - folder to place results in. If not supplied, the input files folder will be used. For every input file will be created files `<input file>.marked.txt` with results in a plain text form and `<input file>.marked.jpg` with plain text printed over input image.   
-`-l LANG` - input document language (default is RU). Use `-l EN` for English texts, `-l UZ` for Uzbek.   
+`-l LANG` - input document language (default is RU). Use `-l EN` for English texts, `-l UZ` for Uzbek, `-l GR` for Greek.
 `-o` - switch off automatic orientation search. Sometimes auto orientation can work incorrectly (for non-typical texts or if there are many recognition errors). In such cases adjust image orientation manually and use `-o` option.   
 `-2` - recognize both recto and verso sides of two-side printouts. Verso side results are stored in `<input file>.rev.marked.txt` и `<input file>.rev.marked.jpg` files.   
 `-h` - print help.   

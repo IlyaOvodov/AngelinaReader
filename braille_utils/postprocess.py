@@ -269,6 +269,7 @@ def interpret_line_RU(line, lang, mode = None):
 interpret_line_funcs = {
     'RU': interpret_line_RU,
     'UZ': interpret_line_RU,
+    'GR': interpret_line_RU,
     'EN': interpret_line_RU, # TODO in can work with some errors for EN
 }
 
