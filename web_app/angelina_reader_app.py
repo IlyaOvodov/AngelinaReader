@@ -321,6 +321,11 @@ def logout():
     return redirect(url_for('index'))
 
 
+@app.route("/donate", methods=['GET', 'POST'])
+@mobile_template('{m/}donate.html')
+def donate(template):
+    return render_template(template)
+
 def send_mail(to_address, results_list, subject, to_developers, comment):
     """
     Sends results to e-mail as text(s) + image(s)
