@@ -79,7 +79,29 @@ class User:
         """
         raise NotImplementedError
         pass
-       
+
+def exec_sqlite(con, query, params, timeout=10):
+    """
+    Пытается выполнить команду над sqlite, при ошибке повторяет в течение timeout секунд.
+    :param con: connection
+    :param query: sql text
+    :param params: tuple or dict of params
+    :param timeout: seconds
+    :return: result of query
+    """
+    t0 = timeit.default_timer()
+    i = 0
+    while True:
+        i += 1
+        try:
+            res = con.cursor().execute(query, params).fetchall()
+            con.commit()
+            return res
+        except sqlite3.OperationalError as e:
+            t = timeit.default_timer()
+            if t > t0 + timeout:
+                raise Exception("{} {} times {} to {} for {}".format(str(e), i, t, t0, query))
+            time.sleep(0.1)
 
 class UserManager:
     def __init__(self, db_file_name):
@@ -108,8 +130,7 @@ class UserManager:
         existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
         assert not existing_user, ("such user already exists", network_name, network_id, email)
         con = self._sql_conn()
-        con.cursor().execute("insert into users(id, name, email, network_name, network_id, password_hash, reg_date) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date)", new_user).fetchall()
-        con.commit()
+        exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date)", new_user)
         return User(id, new_user)
 
     def find_user(self, network_name=None, network_id=None, email=None, id=None):
@@ -128,8 +149,7 @@ class UserManager:
         else:
             assert email and not network_name and not network_id, ("incorrect call to find_user 3", network_name, network_id, email)
             query = ("select * from users where email = ? and (network_name is NULL or network_name='') and (network_id is NULL or network_id='')", (email,))
-        res = con.cursor().execute(query[0], query[1]).fetchall()
-        con.commit()
+        res = exec_sqlite(con, query[0], query[1])
         if len(res):
             user_dict = dict(res[0])  # sqlite row -> dict
             assert len(res) <= 1, ("more then 1 user found", user_dict)
@@ -146,8 +166,7 @@ class UserManager:
         """
         con = self._sql_conn()
         con.row_factory = sqlite3.Row
-        res = con.cursor().execute("select * from users where email = ?", (email,)).fetchall()
-        con.commit()
+        res = exec_sqlite(con, "select * from users where email = ?", (email,))
         found = dict()
         for row in res:
             user_dict = dict(row)  # sqlite row -> dict
@@ -155,13 +174,13 @@ class UserManager:
         return found
 
     def _sql_conn(self):
-        if not os.path.isfile(self.db_file_name):
-            con = sqlite3.connect(self.db_file_name)
+        timeout = 0.1
+        new_db = not os.path.isfile(self.db_file_name)
+        con = sqlite3.connect(self.db_file_name, timeout=timeout)
+        if new_db:
             con.cursor().execute(
                 "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text)")
             con.commit()
-        else:
-            con = sqlite3.connect(self.db_file_name)
         return con
 
 
