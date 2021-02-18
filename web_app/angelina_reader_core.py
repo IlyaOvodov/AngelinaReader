@@ -4,8 +4,8 @@
 Описание интерфейсов между UI и алгоритмическим модулями
 """
 from datetime import datetime
-import json
 import os
+import sqlite3
 import time
 import timeit
 import uuid
@@ -82,8 +82,8 @@ class User:
        
 
 class UserManager:
-    def __init__(self, user_file_name):
-        self.user_file_name = user_file_name
+    def __init__(self, db_file_name):
+        self.db_file_name = db_file_name
 
     def register_user(self, name, email, password_hash, network_name, network_id):
         """
@@ -97,16 +97,19 @@ class UserManager:
         """
         id = uuid.uuid4().hex
         new_user = {
+            "id": id,
             "name": name,
             "email": email,
+            "password_hash": password_hash,
+            "network_name": network_name,
+            "network_id": network_id,
+            "reg_date": datetime.now()
         }
-        if password_hash:
-            new_user["password_hash"] = password_hash
-        if network_name:
-            new_user["network_name"] = network_name
-        if network_id:
-            new_user["network_id"] = network_id
-        self._update_users_dict(id, new_user)
+        existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
+        assert not existing_user, ("such user already exists", network_name, network_id, email)
+        con = self._sql_conn()
+        con.cursor().execute("insert into users(id, name, email, network_name, network_id, password_hash, reg_date) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date)", new_user).fetchall()
+        con.commit()
         return User(id, new_user)
 
     def find_user(self, network_name=None, network_id=None, email=None, id=None):
@@ -114,58 +117,60 @@ class UserManager:
         Возвращает объект User по регистрационным данным: id или паре network_name+network_id или регистрации по email (для этого указать network_name = None или network_name = "")
         Если юзер не найден, возвращает None
         """
-        all_users = self._read_users_dict()
+        con = self._sql_conn()
+        con.row_factory = sqlite3.Row
         if id:
-            assert not network_name and not network_id and not email
-            user_dict = all_users.get(id, None)
-            if user_dict:
-                user = User(id=id, user_dict=user_dict)
-                return user
+            assert not network_name and not network_id and not email, ("incorrect call to find_user 1", network_name, network_id, email)
+            query = ("select * from users where id = ?", (id,))
+        elif network_name or network_id:
+            assert network_name and network_id, ("incorrect call to find_user 2", network_name, network_id, email)
+            query = ("select * from users where network_name = ? and network_id = ?", (network_name,network_id,))
         else:
-            if email:
-                assert not network_name and not network_id
-            found_user_dicts = dict()
-            for id, user_dict in all_users.items():
-                if (network_name and user_dict.get("network_name") == network_name and network_id and user_dict.get("network_id") == network_id
-                    or email and user_dict["email"] == email):
-                    found_user_dicts[id] = user_dict
-            assert len(found_user_dicts) <= 1, found_user_dicts
-            for id, user_dict in found_user_dicts.items():
-                return User(id=id, user_dict=user_dict)
+            assert email and not network_name and not network_id, ("incorrect call to find_user 3", network_name, network_id, email)
+            query = ("select * from users where email = ? and (network_name is NULL or network_name='') and (network_id is NULL or network_id='')", (email,))
+        res = con.cursor().execute(query[0], query[1]).fetchall()
+        con.commit()
+        if len(res):
+            user_dict = dict(res[0])  # sqlite row -> dict
+            assert len(res) <= 1, ("more then 1 user found", user_dict)
+            user = User(id=user_dict["id"], user_dict=user_dict)
+            return user
         return None  # Nothing found
+
 
     def find_users_by_email(self, email):
         """
         Используется для проверки, что юзер случайно не регистрируется повторно
-        Возвращает Dict(Dict) пользователей с указанным е-мейлом: id: used_dict.
+        Возвращает Dict(Dict) пользователей с указанным е-мейлом: id: user_dict.
         Может вернуть пустой словарь, словарь из одного или список из нескольких юзеров.
         """
-        all_users = self._read_users_dict()
-        found = {id: user for id, user in all_users.items() if user['email'] == email}
+        con = self._sql_conn()
+        con.row_factory = sqlite3.Row
+        res = con.cursor().execute("select * from users where email = ?", (email,)).fetchall()
+        con.commit()
+        found = dict()
+        for row in res:
+            user_dict = dict(row)  # sqlite row -> dict
+            found[user_dict["id"]] = user_dict
         return found
 
-    def _read_users_dict(self):
-        if os.path.isfile(self.user_file_name):
-            with open(self.user_file_name, encoding='utf-8') as f:
-                all_users = json.load(f)
+    def _sql_conn(self):
+        if not os.path.isfile(self.db_file_name):
+            con = sqlite3.connect(self.db_file_name)
+            con.cursor().execute(
+                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text)")
+            con.commit()
         else:
-            all_users = dict()
-        return all_users
-
-    def _update_users_dict(self, id, user_dict):
-        # TODO concurrent update
-        all_users_dict = self._read_users_dict()
-        all_users_dict[id] = user_dict
-        with open(self.user_file_name, 'w', encoding='utf8') as f:
-            json.dump(all_users_dict, f, sort_keys=True, indent=4, ensure_ascii=False)
+            con = sqlite3.connect(self.db_file_name)
+        return con
 
 
 class AngelinaSolver:
     """
     Обеспечивает интерфейс с вычислительной системой: пользователи, задачи и результаты обработки
     """
-    def __init__(self, user_file_name="static/data/all_users.json"):
-        self.user_manager = UserManager(user_file_name)
+    def __init__(self, db_file_name="static/data/all_users.db"):
+        self.user_manager = UserManager(db_file_name)
 
     help_articles = ["test_about", "test_photo"]
     help_contents = {
@@ -369,3 +374,16 @@ class AngelinaSolver:
         if not user_id or user_id == "false":
             return []
         return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]
+
+
+if __name__ == "__main__":
+    core = AngelinaSolver()
+    #r = core.register_user(name="керогаз Керогазов", email="b1@ovdv.ru", password_hash="", network_name="", network_id=None)
+    r = core.register_user(name="керогаз Керогазов", email="b@ovdv.ru", password_hash="qqwe", network_name="nnn", network_id=123)
+    print(r)
+    r = core.find_user(id="0162c109d0614ec2bf8dd21d025e816b")
+    print(r)
+    r = core.find_user(email="b@ovdv.ru")
+    print(r)
+    r = core.find_users_by_email(email="b@ovdv.ru")
+    print(r)
