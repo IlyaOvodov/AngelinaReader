@@ -144,21 +144,23 @@ def results(template):
 
     image_fn = request.values['img_path']
 
-    task_id, is_task_ready = core.process(current_user, image_fn, 'RU', True, False, True, 1)
+    task_id = core.process(current_user.id, image_fn, 'RU', True, False, True)
 
-    is_task_ready = core.is_completed(task_id)
+    while not core.is_completed(task_id):
+        pass
 
-    results_list, _ = core.get_results(task_id)
+    results_dict = core.get_results(task_id)
+    results_list = results_dict["item_data"]
 
 
     # convert OS path to flask html path
     image_paths_and_texts = list()
     file_names = list()
-    root_dir = "/static/data/results/"
+    root_dir = ""  #"/static/data/results/"
     for marked_image_path, recognized_text_path, braille_text_path in results_list:
-        flask_image_path = root_dir + marked_image_path
-        out_text = Path('web_app' + root_dir + recognized_text_path).read_text(encoding="utf-8")
-        out_braille_text = Path('web_app' + root_dir + braille_text_path).read_text(encoding="utf-8")
+        flask_image_path = root_dir + marked_image_path.replace("\\", "/")
+        out_text = (Path('web_app') / root_dir / recognized_text_path).read_text(encoding="utf-8")
+        out_braille_text = (Path('web_app') / root_dir / braille_text_path).read_text(encoding="utf-8")
         image_paths_and_texts.append((flask_image_path, out_text, out_braille_text))
         file_names.append((marked_image_path, recognized_text_path))
     form = ResultsForm(results_list=json.dumps(file_names))
