@@ -176,12 +176,23 @@ class UserManager:
     def _sql_conn(self):
         timeout = 0.1
         new_db = not os.path.isfile(self.db_file_name)
-        con = sqlite3.connect(self.db_file_name, timeout=timeout)
+        con = sqlite3.connect(str(self.db_file_name), timeout=timeout)
         if new_db:
             con.cursor().execute(
                 "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text)")
+            self._convert_from_json(con)
             con.commit()
         return con
+
+    def _convert_from_json(self, con):
+        import json
+        json_file = os.path.splitext(self.db_file_name)[0]+'.json'
+        if os.path.isfile(json_file):
+            with open(json_file, encoding='utf-8') as f:
+                all_users = json.load(f)
+            for id, user_dict in all_users.items():
+                con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
+                                     (id, user_dict["name"], user_dict["email"]))
 
 
 class AngelinaSolver:

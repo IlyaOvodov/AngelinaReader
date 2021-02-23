@@ -97,7 +97,7 @@ photos = UploadSet('photos', extensions=IMAGES + ('pdf','zip'))
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
 
-users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.json'
+users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.db'
 
 core = AngelinaSolver(users_file)
 
