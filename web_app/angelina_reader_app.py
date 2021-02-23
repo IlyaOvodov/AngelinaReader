@@ -19,7 +19,6 @@ from email.mime.text import MIMEText
 import email.utils as email_utils
 import smtplib
 import time
-import timeit
 import uuid
 import os
 import json
@@ -29,8 +28,6 @@ import argparse
 from pathlib import Path
 import socket
 
-import local_config
-import model.infer_retinanet as infer_retinanet
 from .config import Config
 from .angelina_reader_core import AngelinaSolver
 
@@ -73,23 +70,12 @@ def startup_logger():
             print('failed to set handler for signal {}'.format(s))
 
 
-model_weights = 'model.t7'
-
-print("infer_retinanet.BrailleInference()")
-t = timeit.default_timer()
-recognizer = infer_retinanet.BrailleInference(
-    params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
-    model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
-    create_script=None)
-print(timeit.default_timer()-t)
-
 app = Flask(__name__)
 Mobility(app)
 app.config.from_object(Config)
 login_manager = LoginManager(app)
 
 IMG_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'raw'
-RESULTS_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'results'
 os.makedirs(Path(app.root_path) / app.config['DATA_ROOT'], exist_ok=True)
 
 photos = UploadSet('photos', extensions=IMAGES + ('pdf','zip'))
@@ -97,9 +83,9 @@ photos = UploadSet('photos', extensions=IMAGES + ('pdf','zip'))
 app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
 configure_uploads(app, photos)
 
-users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.db'
+data_root_path = Path(app.root_path) / app.config['DATA_ROOT']
 
-core = AngelinaSolver(users_file)
+core = AngelinaSolver(data_root_path=data_root_path)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -190,48 +176,44 @@ def results(template):
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
-
-    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm']=='True',
-                  'lang': request.values['lang']}
+    user_id = current_user.get_id()
+    extra_info = {'user': user_id,
+                  'has_public_confirm': request.values['has_public_confirm']=='True',
+                  'lang': request.values['lang'],
+                  'find_orientation': request.values['find_orientation'] == 'True',
+                  'process_2_sides': request.values['process_2_sides']=='True',
+                  }
     ext = Path(request.values['img_path']).suffix[1:]  # exclude leading dot
-    if ext in IMAGES or ext == 'pdf':
-        results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT, target_stem=None,
-                                               lang=request.values['lang'], extra_info=extra_info,
-                                               draw_refined=recognizer.DRAW_NONE,
-                                               remove_labeled_from_filename=False,
-                                               find_orientation=request.values['find_orientation']=='True',
-                                               align_results=True,
-                                               process_2_sides=request.values['process_2_sides']=='True',
-                                               repeat_on_aligned=False)
-    elif ext == 'zip':
-        results_list = recognizer.process_archive_and_save(request.values['img_path'], RESULTS_ROOT,
-                                               lang=request.values['lang'], extra_info=extra_info,
-                                               draw_refined=recognizer.DRAW_NONE,
-                                               remove_labeled_from_filename=False,
-                                               find_orientation=request.values['find_orientation']=='True',
-                                               align_results=True,
-                                               process_2_sides=request.values['process_2_sides']=='True',
-                                               repeat_on_aligned=False)
+    if ext in IMAGES or ext == 'pdf' or ext == 'zip':
+        results_list = None
+        task_id = core.process(user_id=user_id, img_paths=request.values['img_path'], param_dict=extra_info)
+        if task_id:
+            assert core.is_completed(task_id)
+            results_list = core.get_results(task_id)
+        if results_list is None:
+            flash(
+                'Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
+            return redirect(url_for('index',
+                                    has_public_confirm=request.values['has_public_confirm'],
+                                    lang=request.values['lang'],
+                                    find_orientation=request.values['find_orientation'],
+                                    process_2_sides=request.values['process_2_sides']))
     else:
         assert False, "incorrect file type: " + str(request.values['img_path'])
-    if results_list is None:
-        flash('Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
-        return redirect(url_for('index',
-                                has_public_confirm=request.values['has_public_confirm'],
-                                lang=request.values['lang'],
-                                find_orientation=request.values['find_orientation'],
-                                process_2_sides=request.values['process_2_sides']))
     # convert OS path to flask html path
     root_dir = str(Path(app.root_path))
     image_paths_and_texts = list()
     file_names = list()
-    for marked_image_path, recognized_text_path, out_text in results_list:
-        flask_image_path = str(Path(marked_image_path))
-        assert(flask_image_path[:len(root_dir)]) == root_dir
-        flask_image_path = flask_image_path[len(root_dir):].replace("\\", "/")
-        out_text = '\n'.join(out_text)
-        image_paths_and_texts.append((flask_image_path, out_text,))
-        file_names.append((marked_image_path, recognized_text_path))
+    for marked_image_path, recognized_text_path, recognized_braille_path in results_list["item_data"]:
+        # полный путь к картинке -> "/static/..."
+        # даннные для отображения в форме
+        with open(data_root_path / recognized_text_path, encoding="utf-8") as f:
+            out_text = ''.join(f.readlines())
+        image_paths_and_texts.append(("/" + app.config['DATA_ROOT'] + "/" + marked_image_path, out_text,))
+
+        # список c полными путями для передачи в форму почты
+        file_names.append((str(data_root_path / marked_image_path), str(data_root_path / recognized_text_path)))  # список для
+
     form = ResultsForm(results_list=json.dumps(file_names))
     return render_template(template, form=form, image_paths_and_texts=image_paths_and_texts)
 
@@ -374,6 +356,8 @@ def run():
                         help='enable debug mode (default: off)')
     args = parser.parse_args()
     debug = args.debug
+    if not debug:
+        startup_logger()
     if debug:
         print('running in DEBUG mode!')
     else:
@@ -385,6 +369,5 @@ def run():
     else:
         app.run(host='0.0.0.0', threaded=True)
 
-startup_logger()
 if __name__ == "__main__":
     run()

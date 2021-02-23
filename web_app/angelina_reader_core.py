@@ -5,10 +5,18 @@
 """
 from datetime import datetime
 import os
+from pathlib import Path
 import sqlite3
 import time
 import timeit
 import uuid
+
+import local_config
+import model.infer_retinanet as infer_retinanet
+
+model_weights = 'model.t7'
+
+recognizer = None
 
 class User:
     """
@@ -199,8 +207,24 @@ class AngelinaSolver:
     """
     Обеспечивает интерфейс с вычислительной системой: пользователи, задачи и результаты обработки
     """
-    def __init__(self, db_file_name="static/data/all_users.db"):
-        self.user_manager = UserManager(db_file_name)
+    def __init__(self, data_root_path="static/data"):
+        self.data_root = Path(data_root_path)
+        self.results_root = self.data_root / 'results'
+        self.tasks_root = self.data_root / 'tasks'
+
+        os.makedirs(self.data_root, exist_ok=True)
+        self.user_manager = UserManager(self.data_root / "all_users.db")
+
+        global recognizer
+        if recognizer is None:
+            print("infer_retinanet.BrailleInference()")
+            t = timeit.default_timer()
+            recognizer = infer_retinanet.BrailleInference(
+                params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
+                model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
+                create_script=None)
+            print(timeit.default_timer() - t)
+        self.recognizer = recognizer
 
     help_articles = ["test_about", "test_photo"]
     help_contents = {
@@ -276,33 +300,59 @@ class AngelinaSolver:
         return self.user_manager.find_users_by_email(email)
     
     #GVNC
-    TMP_RESULT_SELECTOR = 1  # index in TMP_RESILTS
     TMP_RESILTS = ['IMG_20210104_093412', 'IMG_20210104_093217']
-    PREFIX = "/static/data/results/"
-    TMP_TASK_POST_TIMES = {}
-    TMP_RECOG_DELAY = 2  # sec.
 
     # собственно распознавание
-    def process(self, user_id, img_paths, lang, find_orientation, process_2_sides, has_public_confirm, timeout=0):
+    def process(self, user_id, img_paths, param_dict, timeout=0):
         """
         user: User ID or None для анонимного доступа
         img_paths: полный пусть к загруженному изображению, pdf или zip или список (list) полных путей к изображению
-        lang: выбранный пользователем язык ('RU', 'EN')
-        find_orientation: bool, поиск ориентации
-        process_2_sides: bool, распознавание обеих сторон
-        has_public_confirm: bool, пользователь подтвердило публичную доступность результатов
+        param_dict: включает
+            lang: выбранный пользователем язык ('RU', 'EN')
+            find_orientation: bool, поиск ориентации
+            process_2_sides: bool, распознавание обеих сторон
+            has_public_confirm: bool, пользователь подтвердило публичную доступность результатов
         timeout: время ожидания результата. Если None или < 0 - жадть пока не будет завершена. 0 поставить в очередь и не ждать.
         
         Ставит задачу в очередь на распознавание и ждет ее завершения в пределах timeout.
         После успешной загрузки возвращаем id материалов в системе распознавания или False если в процессе обработки 
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
         """
-        if timeout and timeout > 0:
-            time.sleep(timeout)
+        task_id = Path(img_paths).stem
+        self.last_task_id = task_id
 
-        AngelinaSolver.TMP_RESULT_SELECTOR = 1 - AngelinaSolver.TMP_RESULT_SELECTOR
-        AngelinaSolver.TMP_TASK_POST_TIMES[AngelinaSolver.TMP_RESILTS[AngelinaSolver.TMP_RESULT_SELECTOR]] = timeit.default_timer()
-        return AngelinaSolver.TMP_RESILTS[AngelinaSolver.TMP_RESULT_SELECTOR]
+        #lang, find_orientation, process_2_sides, has_public_confirm
+
+        ext = Path(img_paths).suffix[1:]  # exclude leading dot
+        if ext == 'zip':
+            results_list = self.recognizer.process_archive_and_save(img_paths, self.results_root,
+                                                   lang=param_dict['lang'], extra_info=param_dict,
+                                                   draw_refined=self.recognizer.DRAW_NONE,
+                                                   remove_labeled_from_filename=False,
+                                                   find_orientation=param_dict['find_orientation'],
+                                                   align_results=True,
+                                                   process_2_sides=param_dict['process_2_sides'],
+                                                   repeat_on_aligned=False)
+
+        else:
+            results_list = self.recognizer.run_and_save(img_paths, self.results_root, target_stem=None,
+                                                   lang=param_dict['lang'], extra_info=param_dict,
+                                                   draw_refined=self.recognizer.DRAW_NONE,
+                                                   remove_labeled_from_filename=False,
+                                                   find_orientation=param_dict['find_orientation'],
+                                                   align_results=True,
+                                                   process_2_sides=param_dict['process_2_sides'],
+                                                   repeat_on_aligned=False)
+        if results_list is None:
+            return False
+        # full path -> relative to data path
+        self.last_results_list = list()
+        for marked_image_path, recognized_text_path, _ in results_list:
+            marked_image_path = str(Path(marked_image_path).relative_to(self.data_root))
+            recognized_text_path =  str(Path(recognized_text_path).relative_to(self.data_root))
+            recognized_braille_path = str(Path(recognized_text_path).with_suffix(".brl"))  # TODO GVNC
+            self.last_results_list.append((marked_image_path, recognized_text_path, recognized_braille_path))
+        return task_id
         
     def is_completed(self, task_id):
         """
@@ -311,11 +361,7 @@ class AngelinaSolver:
         """
         В тестовом варианте отображется как не готовый в течение 2 с после загрузки
         """
-        assert task_id in AngelinaSolver.TMP_RESILTS
-        if task_id in AngelinaSolver.TMP_TASK_POST_TIMES.keys():
-            return timeit.default_timer() - AngelinaSolver.TMP_TASK_POST_TIMES[task_id] > AngelinaSolver.TMP_RECOG_DELAY
-        else:
-            return False
+        return True  # TODO GVNC
 
     def get_results(self, task_id):
         """
@@ -333,15 +379,13 @@ class AngelinaSolver:
         """
         В тестововм варианте по очереди выдается то 1 документ, то 2.
         """
-        prefix = AngelinaSolver.PREFIX
+        assert task_id == self.last_task_id
+
         return {"name":task_id,
                 "create_date": datetime.strptime('2011-11-04 00:05:23', "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
-                "item_data":
-        [
-        (prefix + task_id + ".marked.jpg", prefix[1:] + task_id + ".marked.txt", prefix[1:] + task_id + ".marked.brl",),
-        (prefix + task_id + ".marked.jpg", prefix[1:] + task_id + ".marked-2.txt", prefix[1:] + task_id + ".marked.brl",),
-        ][:(AngelinaSolver.TMP_RESULT_SELECTOR+1)],  # возвращает 1 или 2 результаты попеременно
-        "protocol": prefix + task_id + ".protocol.txt"}
+                "item_data": self.last_results_list,
+                "protocol": task_id + ".protocol.txt"   # TODO
+                }
 
     def get_tasks_list(self, user_id, count):
         """
