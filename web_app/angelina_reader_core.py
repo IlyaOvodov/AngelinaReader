@@ -4,6 +4,8 @@
 Описание интерфейсов между UI и алгоритмическим модулями
 """
 from datetime import datetime
+from enum import Enum
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -17,6 +19,15 @@ import model.infer_retinanet as infer_retinanet
 model_weights = 'model.t7'
 
 recognizer = None
+
+class TaskState(Enum):
+    CREATED = 0
+    RAW_FILE_LOADED = 1
+    PROCESSING_STARTED = 2
+    PROCESSING_DONE = 3
+    ERROR = 4
+
+VALID_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff pdf zip'.split())
 
 class User:
     """
@@ -203,14 +214,30 @@ class AngelinaSolver:
             for id, user_dict in all_users.items():
                 con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
                                      (id, user_dict["name"], user_dict["email"]))
+
+    def _user_tasks_sql_conn(self, user_id):
+        timeout = 0.1
+        db_dir = self.data_root / self.tasks_dir
+        db_path = db_dir / (user_id + ".db")
+        new_db = not os.path.isfile(db_path)
+        if new_db:
+            os.makedirs(db_dir, exist_ok=True)
+        con = sqlite3.connect(str(db_path), timeout=timeout)
+        if new_db:
+            con.cursor().execute(
+                "CREATE TABLE tasks(task_id text PRIMARY KEY, create_date text, name text, user_id text, params text, raw_paths text, state int, results text)")
+            con.commit()
+        return con
+
+
     ##########################################
 
 
     def __init__(self, data_root_path="static/data"):
         self.data_root = Path(data_root_path)
-        self.results_root = self.data_root / 'results'
-        self.tasks_root = self.data_root / 'tasks'
-
+        self.tasks_dir = Path('tasks')
+        self.raw_images_dir = Path('raw')
+        self.results_dir = Path('results')
         os.makedirs(self.data_root, exist_ok=True)
         self.users_db_file_name = self.data_root / "all_users.db"
 
@@ -275,10 +302,10 @@ class AngelinaSolver:
     TMP_RESILTS = ['IMG_20210104_093412', 'IMG_20210104_093217']
 
     # собственно распознавание
-    def process(self, user_id, img_paths, lang=None, find_orientation=None, process_2_sides=None, has_public_confirm=None, param_dict=None, timeout=0):
+    def process(self, user_id, file_storage, lang=None, find_orientation=None, process_2_sides=None, has_public_confirm=None, param_dict=None, timeout=0):
         """
         user: User ID or None для анонимного доступа
-        img_paths: полный пусть к загруженному изображению, pdf или zip или список (list) полных путей к изображению
+        file_storage: werkzeug.datastructures.FileStorage: загруженное изображение, pdf или zip или список (list) полных путей к изображению
         param_dict: включает
             lang: выбранный пользователем язык ('RU', 'EN')
             find_orientation: bool, поиск ориентации
@@ -289,59 +316,88 @@ class AngelinaSolver:
         Ставит задачу в очередь на распознавание и ждет ее завершения в пределах timeout.
         После успешной загрузки возвращаем id материалов в системе распознавания или False если в процессе обработки 
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
-
-        img_fn = img_paths['file'].filename
-        task_id = uuid.uuid4().hex
-        os.makedirs('static/data/raw', exist_ok=True)
-        img_paths['file'].save('static/data/raw' + "/" + img_fn)
-
         """
-        task_id = Path(img_paths).stem
-        self.last_task_id = task_id
+        task_id = uuid.uuid4().hex
+        task_name = file_storage.filename  #<class 'werkzeug.datastructures.FileStorage'>   , img_paths['file']
+        task = {
+            "task_id": task_id,
+            "create_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "name": task_name,
+            "user_id": user_id,
+            "params": None,
+            "raw_paths": None,
+            "state": TaskState.CREATED.value,
+            "results": None
+        }
+        con = self._user_tasks_sql_conn(user_id)
+        exec_sqlite(con, "insert into tasks(task_id, create_date, name, user_id, params, raw_paths, state, results) \
+                          values(:task_id, :create_date, :name, :user_id, :params, :raw_paths, :state, :results)", task)
 
-        #lang, find_orientation, process_2_sides, has_public_confirm
+        file_ext = Path(task_name).suffix.lower()
+        assert file_ext[1:] in VALID_EXTENTIONS, "incorrect file type: " + str(task_name)
 
-        ext = Path(img_paths).suffix[1:]  # exclude leading dot
-        if ext == 'zip':
-            results_list = self.recognizer.process_archive_and_save(img_paths, self.results_root,
-                                                   lang=param_dict['lang'], extra_info=param_dict,
-                                                   draw_refined=self.recognizer.DRAW_NONE,
-                                                   remove_labeled_from_filename=False,
-                                                   find_orientation=param_dict['find_orientation'],
-                                                   align_results=True,
-                                                   process_2_sides=param_dict['process_2_sides'],
-                                                   repeat_on_aligned=False)
+        os.makedirs(self.data_root / self.raw_images_dir, exist_ok=True)
+        raw_image_fn = task_id + file_ext
+        raw_path = self.data_root / self.raw_images_dir / raw_image_fn
+        file_storage.save(str(raw_path))
+
+        # GVNC для совместимости с V2. Переделать (убрать отдельные парметры, оставить только обязательный params_dict)
+        if param_dict is None:
+            param_dict = {"lang": lang, "find_orientation": find_orientation,
+                          "process_2_sides": process_2_sides, "has_public_confirm": has_public_confirm}
+
+        task["params"] = json.dumps(param_dict)
+        task["raw_paths"] = raw_image_fn
+        task["state"] = TaskState.RAW_FILE_LOADED.value
+        exec_sqlite(con, "update tasks set raw_paths=:raw_paths, state=:state, params=:params where task_id=:task_id", task)
+
+        ### вычисления
+        task["state"] = TaskState.PROCESSING_STARTED.value
+        exec_sqlite(con, "update tasks set state=:state where task_id=:task_id", task)
+        if file_ext[1:] == 'zip':
+            results_list = self.recognizer.process_archive_and_save(raw_path, self.data_root / self.results_dir,
+                                                                    lang=param_dict['lang'], extra_info=param_dict,
+                                                                    draw_refined=self.recognizer.DRAW_NONE,
+                                                                    remove_labeled_from_filename=False,
+                                                                    find_orientation=param_dict['find_orientation'],
+                                                                    align_results=True,
+                                                                    process_2_sides=param_dict['process_2_sides'],
+                                                                    repeat_on_aligned=False)
 
         else:
-            results_list = self.recognizer.run_and_save(img_paths, self.results_root, target_stem=None,
-                                                   lang=param_dict['lang'], extra_info=param_dict,
-                                                   draw_refined=self.recognizer.DRAW_NONE,
-                                                   remove_labeled_from_filename=False,
-                                                   find_orientation=param_dict['find_orientation'],
-                                                   align_results=True,
-                                                   process_2_sides=param_dict['process_2_sides'],
-                                                   repeat_on_aligned=False)
+            results_list = self.recognizer.run_and_save(raw_path, self.data_root / self.results_dir, target_stem=None,
+                                                        lang=param_dict['lang'], extra_info=param_dict,
+                                                        draw_refined=self.recognizer.DRAW_NONE,
+                                                        remove_labeled_from_filename=False,
+                                                        find_orientation=param_dict['find_orientation'],
+                                                        align_results=True,
+                                                        process_2_sides=param_dict['process_2_sides'],
+                                                        repeat_on_aligned=False)
         if results_list is None:
+            task["state"] = TaskState.ERROR.value
+            exec_sqlite(con, "update tasks set state=:state where task_id=:task_id", task)
             return False
+
         # full path -> relative to data path
-        self.last_results_list = list()
+        result_files = list()
         for marked_image_path, recognized_text_path, _ in results_list:
-            marked_image_path = str(Path(marked_image_path).relative_to(self.data_root))
-            recognized_text_path =  str(Path(recognized_text_path).relative_to(self.data_root))
-            recognized_braille_path = str(Path(recognized_text_path).with_suffix(".brl"))  # TODO GVNC
-            self.last_results_list.append((marked_image_path, recognized_text_path, recognized_braille_path))
+            marked_image_path = str(Path(marked_image_path).relative_to(self.data_root / self.results_dir))
+            recognized_text_path =  str(Path(recognized_text_path).relative_to(self.data_root / self.results_dir))
+            recognized_braille_path = str(Path(recognized_text_path).with_suffix(".brl"))  # TODO GVNC самого кода пока нет
+            result_files.append((marked_image_path, recognized_text_path, recognized_braille_path))
 
-        #TODO добавить в DB
+        task["state"] = TaskState.PROCESSING_DONE.value
+        task["results"] = json.dumps(result_files)
+        exec_sqlite(con, "update tasks set state=:state, results=:results where task_id=:task_id", task)
 
-        return task_id
+        return user_id + "_" + task_id  # GVNC
         
     def is_completed(self, task_id):
         """
         Проверяет, завершена ли задача с заданным id
         """
-        """
-        В тестовом варианте отображется как не готовый в течение 2 с после загрузки
-        """
+        user_id, task_id = task_id.split("_")  # GVNC
+
         return True  # TODO GVNC
 
     def get_results(self, task_id):
@@ -360,17 +416,24 @@ class AngelinaSolver:
         """
         В тестововм варианте по очереди выдается то 1 документ, то 2.
         """
+        user_id, task_id = task_id.split("_")  # GVNC
 
-        #TODO взять из DB
-        assert task_id == self.last_task_id
-
+        con = self._user_tasks_sql_conn(user_id)
+        result = exec_sqlite(con, "select name, create_date, params, state, results from tasks where task_id=:task_id",
+                    {"task_id": task_id})
+        assert len(result) == 1, (user_id, task_id)
+        result = result[0]
+        assert result[3] == TaskState.PROCESSING_DONE.value, (user_id, task_id, result[3])
         return {
                 "prev_slag":None,
                 "next_slag":None,
-                "name":task_id,
-                "create_date": datetime.strptime('2011-11-04 00:05:23', "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
-                "item_data": self.last_results_list,
-                "protocol": task_id + ".protocol.txt"   # TODO
+                "name":result[0],
+                "create_date": datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
+                "item_data": [
+                    (str(self.results_dir / item) for item in id)
+                    for id in json.loads(result[4])
+                    ],
+                "protocol": json.loads(result[2])
                 }
 
     def get_tasks_list(self, user_id, count):

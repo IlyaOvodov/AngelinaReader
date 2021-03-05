@@ -8,7 +8,7 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField, SelectField
 from wtforms.validators import DataRequired
-from flask_uploads import UploadSet, configure_uploads, IMAGES, ARCHIVES
+from flask_uploads import UploadSet, configure_uploads
 from flask_mobility import Mobility
 from flask_mobility.decorators import mobile_template
 
@@ -29,7 +29,7 @@ from pathlib import Path
 import socket
 
 from .config import Config
-from .angelina_reader_core import AngelinaSolver
+from .angelina_reader_core import AngelinaSolver, VALID_EXTENTIONS
 
 def startup_logger():
     hostname = socket.gethostname()
@@ -69,19 +69,10 @@ def startup_logger():
         except:
             print('failed to set handler for signal {}'.format(s))
 
-
 app = Flask(__name__)
 Mobility(app)
 app.config.from_object(Config)
 login_manager = LoginManager(app)
-
-IMG_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'raw'
-os.makedirs(Path(app.root_path) / app.config['DATA_ROOT'], exist_ok=True)
-
-photos = UploadSet('photos', extensions=IMAGES + ('pdf','zip'))
-
-app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
-configure_uploads(app, photos)
 
 data_root_path = Path(app.root_path) / app.config['DATA_ROOT']
 
@@ -108,7 +99,7 @@ def index(template, is_mobile=False):
                     disgree=request.values.get('has_public_confirm', '') == 'False',
                     lang=request.values.get('lang', 'RU'),
                     find_orientation=request.values.get('find_orientation', 'True') == 'True',
-                    process_2_sides=request.values.get('process_2_sides', 'False') == 'True',
+                    process_2_sides=request.values.get('process_2_sides', 'False') == 'True'
                     )
     if form.validate_on_submit():
         file_data = form.camera_file.data or form.file.data
@@ -118,18 +109,29 @@ def index(template, is_mobile=False):
         if form.agree.data and form.disgree.data or not form.agree.data and not form.disgree.data:
             flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template(template, form=form)
-        os.makedirs(IMG_ROOT, exist_ok=True)
-        filename = photos.save(file_data)
-        img_path = IMG_ROOT / filename
+        filename = file_data.filename
+        file_ext = Path(filename).suffix[1:].lower()
+        if file_ext not in VALID_EXTENTIONS:
+            flash('Не подхожящий тип файла {}: {}'.format(file_ext, filename))
+            return render_template(template, form=form)
+
+        user_id = current_user.get_id()
+        extra_info = {'user': user_id,
+                      'has_public_confirm': form.agree.data,
+                      'lang': form.lang.data,
+                      'find_orientation': form.find_orientation.data,
+                      'process_2_sides': form.process_2_sides.data,
+                      }
+        task_id = core.process(user_id=user_id, file_storage=file_data, param_dict=extra_info)
 
         if not form.agree.data:
             return redirect(url_for('confirm',
-                                    img_path=img_path,
+                                    task_id=task_id,
                                     lang=form.lang.data,
                                     find_orientation=form.find_orientation.data,
                                     process_2_sides=form.process_2_sides.data))
         return redirect(url_for('results',
-                                img_path=img_path,
+                                task_id=task_id,
                                 has_public_confirm=form.agree.data,
                                 lang=form.lang.data,
                                 find_orientation=form.find_orientation.data,
@@ -153,7 +155,7 @@ def confirm(template):
             return render_template(template, form=form)
         has_public_confirm = form.agree.data
         return redirect(url_for('results',
-                                img_path=request.values['img_path'],
+                                task_id=request.values['task_id'],
                                 has_public_confirm=has_public_confirm,
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
@@ -176,32 +178,20 @@ def results(template):
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
-    user_id = current_user.get_id()
-    extra_info = {'user': user_id,
-                  'has_public_confirm': request.values['has_public_confirm']=='True',
-                  'lang': request.values['lang'],
-                  'find_orientation': request.values['find_orientation'] == 'True',
-                  'process_2_sides': request.values['process_2_sides']=='True',
-                  }
-    ext = Path(request.values['img_path']).suffix[1:]  # exclude leading dot
-    if ext in IMAGES or ext == 'pdf' or ext == 'zip':
-        results_list = None
-        task_id = core.process(user_id=user_id, img_paths=request.values['img_path'], param_dict=extra_info)
-        if task_id:
-            assert core.is_completed(task_id)
-            results_list = core.get_results(task_id)
-        if results_list is None:
-            flash(
-                'Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
-            return redirect(url_for('index',
-                                    has_public_confirm=request.values['has_public_confirm'],
-                                    lang=request.values['lang'],
-                                    find_orientation=request.values['find_orientation'],
-                                    process_2_sides=request.values['process_2_sides']))
-    else:
-        assert False, "incorrect file type: " + str(request.values['img_path'])
+    results_list = None
+    task_id = request.values['task_id']
+    if task_id:
+        assert core.is_completed(task_id)
+        results_list = core.get_results(task_id)
+    if results_list is None:
+        flash(
+            'Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
+        return redirect(url_for('index',
+                                has_public_confirm=request.values['has_public_confirm'],
+                                lang=request.values['lang'],
+                                find_orientation=request.values['find_orientation'],
+                                process_2_sides=request.values['process_2_sides']))
     # convert OS path to flask html path
-    root_dir = str(Path(app.root_path))
     image_paths_and_texts = list()
     file_names = list()
     for marked_image_path, recognized_text_path, recognized_braille_path in results_list["item_data"]:
