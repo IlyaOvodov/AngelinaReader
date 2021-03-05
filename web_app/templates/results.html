@@ -18,7 +18,7 @@
             </div>
         </td>
     </tr>
-    {% for image_path, text in image_paths_and_texts %}
+    {% for image_path, text, braille_text in image_paths_and_texts %}
     <tr>
         <td width="60%" valign="top">
             <img src="{{image_path}}" alt="Recognized image" style="width:100%; object-fit:contain" align="top">
@@ -26,6 +26,9 @@
         <td width="40%" valign="top">
 			<div class="button_wrapper">
                 <textarea cols="40" id="text" name="text" rows="30">{{ text }}</textarea>
+			</div>
+			<div class="button_wrapper">
+                <textarea cols="40" id="text" name="text" rows="30">{{ braille_text }}</textarea>
 			</div>
         </td>
     </tr>

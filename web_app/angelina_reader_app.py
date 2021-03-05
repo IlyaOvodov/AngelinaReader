@@ -209,7 +209,7 @@ def results(template):
         # даннные для отображения в форме
         with open(data_root_path / recognized_text_path, encoding="utf-8") as f:
             out_text = ''.join(f.readlines())
-        image_paths_and_texts.append(("/" + app.config['DATA_ROOT'] + "/" + marked_image_path, out_text,))
+        image_paths_and_texts.append(("/" + app.config['DATA_ROOT'] + "/" + marked_image_path, out_text, out_text,))
 
         # список c полными путями для передачи в форму почты
         file_names.append((str(data_root_path / marked_image_path), str(data_root_path / recognized_text_path)))  # список для

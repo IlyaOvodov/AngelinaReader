@@ -111,10 +111,13 @@ def exec_sqlite(con, query, params, timeout=10):
                 raise Exception("{} {} times {} to {} for {}".format(str(e), i, t, t0, query))
             time.sleep(0.1)
 
-class UserManager:
-    def __init__(self, db_file_name):
-        self.db_file_name = db_file_name
-
+class AngelinaSolver:
+    """
+    Обеспечивает интерфейс с вычислительной системой: пользователи, задачи и результаты обработки
+    """
+    ##########################################
+    ## работа с пользователями
+    ##########################################
     def register_user(self, name, email, password_hash, network_name, network_id):
         """
         Регистрирует юзера с заданными параметрами через email-пароль или через соцсеть.
@@ -137,7 +140,7 @@ class UserManager:
         }
         existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
         assert not existing_user, ("such user already exists", network_name, network_id, email)
-        con = self._sql_conn()
+        con = self._users_sql_conn()
         exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date)", new_user)
         return User(id, new_user)
 
@@ -146,7 +149,7 @@ class UserManager:
         Возвращает объект User по регистрационным данным: id или паре network_name+network_id или регистрации по email (для этого указать network_name = None или network_name = "")
         Если юзер не найден, возвращает None
         """
-        con = self._sql_conn()
+        con = self._users_sql_conn()
         con.row_factory = sqlite3.Row
         if id:
             assert not network_name and not network_id and not email, ("incorrect call to find_user 1", network_name, network_id, email)
@@ -165,14 +168,13 @@ class UserManager:
             return user
         return None  # Nothing found
 
-
     def find_users_by_email(self, email):
         """
         Используется для проверки, что юзер случайно не регистрируется повторно
         Возвращает Dict(Dict) пользователей с указанным е-мейлом: id: user_dict.
         Может вернуть пустой словарь, словарь из одного или список из нескольких юзеров.
         """
-        con = self._sql_conn()
+        con = self._users_sql_conn()
         con.row_factory = sqlite3.Row
         res = exec_sqlite(con, "select * from users where email = ?", (email,))
         found = dict()
@@ -181,39 +183,36 @@ class UserManager:
             found[user_dict["id"]] = user_dict
         return found
 
-    def _sql_conn(self):
+    def _users_sql_conn(self):
         timeout = 0.1
-        new_db = not os.path.isfile(self.db_file_name)
-        con = sqlite3.connect(str(self.db_file_name), timeout=timeout)
+        new_db = not os.path.isfile(self.users_db_file_name)
+        con = sqlite3.connect(str(self.users_db_file_name), timeout=timeout)
         if new_db:
             con.cursor().execute(
                 "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text)")
-            self._convert_from_json(con)
+            self._convert_users_from_json(con)
             con.commit()
         return con
 
-    def _convert_from_json(self, con):
+    def _convert_users_from_json(self, con):
         import json
-        json_file = os.path.splitext(self.db_file_name)[0]+'.json'
+        json_file = os.path.splitext(self.users_db_file_name)[0] + '.json'
         if os.path.isfile(json_file):
             with open(json_file, encoding='utf-8') as f:
                 all_users = json.load(f)
             for id, user_dict in all_users.items():
                 con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
                                      (id, user_dict["name"], user_dict["email"]))
+    ##########################################
 
 
-class AngelinaSolver:
-    """
-    Обеспечивает интерфейс с вычислительной системой: пользователи, задачи и результаты обработки
-    """
     def __init__(self, data_root_path="static/data"):
         self.data_root = Path(data_root_path)
         self.results_root = self.data_root / 'results'
         self.tasks_root = self.data_root / 'tasks'
 
         os.makedirs(self.data_root, exist_ok=True)
-        self.user_manager = UserManager(self.data_root / "all_users.db")
+        self.users_db_file_name = self.data_root / "all_users.db"
 
         global recognizer
         if recognizer is None:
@@ -228,15 +227,15 @@ class AngelinaSolver:
 
     help_articles = ["test_about", "test_photo"]
     help_contents = {
-        "rus": {
+        "RU": {
             "test_about": {"title": "О программе",
-                           "announce": "Это очень крутая программа! <b>Не пожалеете</b>! Просто нажмите кнопку",
-                           "text": "Ну что вам еще надо. <b>Вы не верите</b>?"},
+                           "announce": 'Это очень крутая программа!<img src="/static/images/br_text.jpg" alt="alt_img" style="width: 200px; height: auto "> <b>Не пожалеете</b>! <a href="http://angelina-reader.ru/">angelina-reader</a>.Просто нажмите кнопку',
+                           "text": '"Ну что вам еще надо.<img src="/static/images/br_text.jpg" alt="alt_img" style="width: 300px; height: auto ">  <b>Вы не верите</b>?'},
             "test_photo": {"title": "Как сделать фото",
                            "announce": "Чтобы сделать фото нужен фотоаппарат",
                            "text": "Просто нажмите кнопку!"}
         },
-        "eng": {
+        "EN": {
             "test_about": {"title": "About",
                            "announce": "It a stunning program! <b>Dont miss it</b>! Just press the button",
                            "text": "Why don't you believe! What do you need <b>more</b>!"},
@@ -272,38 +271,11 @@ class AngelinaSolver:
 
 
     #Работа с записями пользователей: создание (регистрация), обработка логина:
-    def register_user(self, name, email, password_hash, network_name, network_id):
-        """
-        Регистрирует юзера с заданными параметрами через email-пароль или через соцсеть.
-        name, email указываются всегда. 
-        указывается или password (при регистрации через email) или network_name + network_id (при регистрации через сети)
-        Проверяет, что юзера с таким email с регистрацией по email (при регистрации через email)
-        или network_name + network_id (при регистрации через сети), не существует.
-        Если существует, выдает exception.
-        Возвращает класс User
-        """
-        return self.user_manager.register_user(name=name, email=email, password_hash=password_hash, network_name=network_name, network_id=network_id)
-
-    def find_user(self, network_name=None, network_id=None, email=None, id=None):
-        """
-        Возвращает объект User по регистрационным данным: паре network_name+network_id или регистрации по email (для этого указать network_name = None или network_name = "")
-        Если юзер не найден, возвращает None
-        """
-        return self.user_manager.find_user(network_name, network_id, email, id)
-
-    def find_users_by_email(self, email):
-        """
-        Используется для проверки, что юзер случайно не регистрируется повторно
-        Возвращает Dict(Dict) пользователей с указанным е-мейлом: id: used_dict.
-        Может вернуть пустой словарь, словарь из одного или список из нескольких юзеров.
-        """
-        return self.user_manager.find_users_by_email(email)
-    
     #GVNC
     TMP_RESILTS = ['IMG_20210104_093412', 'IMG_20210104_093217']
 
     # собственно распознавание
-    def process(self, user_id, img_paths, param_dict, timeout=0):
+    def process(self, user_id, img_paths, lang=None, find_orientation=None, process_2_sides=None, has_public_confirm=None, param_dict=None, timeout=0):
         """
         user: User ID or None для анонимного доступа
         img_paths: полный пусть к загруженному изображению, pdf или zip или список (list) полных путей к изображению
@@ -317,6 +289,12 @@ class AngelinaSolver:
         Ставит задачу в очередь на распознавание и ждет ее завершения в пределах timeout.
         После успешной загрузки возвращаем id материалов в системе распознавания или False если в процессе обработки 
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
+
+        img_fn = img_paths['file'].filename
+        task_id = uuid.uuid4().hex
+        os.makedirs('static/data/raw', exist_ok=True)
+        img_paths['file'].save('static/data/raw' + "/" + img_fn)
+
         """
         task_id = Path(img_paths).stem
         self.last_task_id = task_id
@@ -352,6 +330,9 @@ class AngelinaSolver:
             recognized_text_path =  str(Path(recognized_text_path).relative_to(self.data_root))
             recognized_braille_path = str(Path(recognized_text_path).with_suffix(".brl"))  # TODO GVNC
             self.last_results_list.append((marked_image_path, recognized_text_path, recognized_braille_path))
+
+        #TODO добавить в DB
+
         return task_id
         
     def is_completed(self, task_id):
@@ -379,9 +360,14 @@ class AngelinaSolver:
         """
         В тестововм варианте по очереди выдается то 1 документ, то 2.
         """
+
+        #TODO взять из DB
         assert task_id == self.last_task_id
 
-        return {"name":task_id,
+        return {
+                "prev_slag":None,
+                "next_slag":None,
+                "name":task_id,
                 "create_date": datetime.strptime('2011-11-04 00:05:23', "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
                 "item_data": self.last_results_list,
                 "protocol": task_id + ".protocol.txt"   # TODO
@@ -398,7 +384,7 @@ class AngelinaSolver:
         более реалистично: пример выдается как не готовый 2 сек после запуска распознавания
         Публичный -приватный - через одного
         """
-        if not user_id or user_id == "false":
+        if not user_id:
             return []
 
         lst = [
@@ -436,6 +422,7 @@ class AngelinaSolver:
             title - заголовок
             comment - комментарий, ставится в начале письма
         """
+        #TODO взять из DB
         # raise NotImplementedError
         return True
 
@@ -445,7 +432,7 @@ class AngelinaSolver:
         :param user_id: string
         :return: list of e-mails
         """
-        if not user_id or user_id == "false":
+        if not user_id:
             return []
         return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]
 
