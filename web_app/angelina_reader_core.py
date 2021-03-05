@@ -29,6 +29,7 @@ class TaskState(Enum):
 
 VALID_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff pdf zip'.split())
 
+
 class User:
     """
     Пользователь системы и его атрибуты
@@ -53,8 +54,7 @@ class User:
         self.is_authenticated = True
         self.is_active = True
         self.is_anonymous = False
-        
-        
+
     def get_id(self):
         return self.id        
         
@@ -200,7 +200,7 @@ class AngelinaSolver:
         con = sqlite3.connect(str(self.users_db_file_name), timeout=timeout)
         if new_db:
             con.cursor().execute(
-                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text)")
+                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text, params text)")
             self._convert_users_from_json(con)
             con.commit()
         return con
@@ -225,7 +225,7 @@ class AngelinaSolver:
         con = sqlite3.connect(str(db_path), timeout=timeout)
         if new_db:
             con.cursor().execute(
-                "CREATE TABLE tasks(task_id text PRIMARY KEY, create_date text, name text, user_id text, params text, raw_paths text, state int, results text)")
+                "CREATE TABLE tasks(doc_id text PRIMARY KEY, create_date text, name text, user_id text, params text, raw_paths text, state int, results text)")
             con.commit()
         return con
 
@@ -296,13 +296,8 @@ class AngelinaSolver:
         return self.help_contents[target_language][slug]
         # {"title":"name","text":"def_text"}
 
-
-    #Работа с записями пользователей: создание (регистрация), обработка логина:
-    #GVNC
-    TMP_RESILTS = ['IMG_20210104_093412', 'IMG_20210104_093217']
-
     # собственно распознавание
-    def process(self, user_id, file_storage, lang=None, find_orientation=None, process_2_sides=None, has_public_confirm=None, param_dict=None, timeout=0):
+    def process(self, user_id, file_storage, lang=None, find_orientation=None, process_2_sides=None, has_public_confirm=None, param_dict=None):
         """
         user: User ID or None для анонимного доступа
         file_storage: werkzeug.datastructures.FileStorage: загруженное изображение, pdf или zip или список (list) полных путей к изображению
@@ -317,10 +312,10 @@ class AngelinaSolver:
         После успешной загрузки возвращаем id материалов в системе распознавания или False если в процессе обработки 
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
         """
-        task_id = uuid.uuid4().hex
+        doc_id = uuid.uuid4().hex
         task_name = file_storage.filename  #<class 'werkzeug.datastructures.FileStorage'>   , img_paths['file']
         task = {
-            "task_id": task_id,
+            "doc_id": doc_id,
             "create_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "name": task_name,
             "user_id": user_id,
@@ -330,14 +325,14 @@ class AngelinaSolver:
             "results": None
         }
         con = self._user_tasks_sql_conn(user_id)
-        exec_sqlite(con, "insert into tasks(task_id, create_date, name, user_id, params, raw_paths, state, results) \
-                          values(:task_id, :create_date, :name, :user_id, :params, :raw_paths, :state, :results)", task)
+        exec_sqlite(con, "insert into tasks(doc_id, create_date, name, user_id, params, raw_paths, state, results) \
+                          values(:doc_id, :create_date, :name, :user_id, :params, :raw_paths, :state, :results)", task)
 
         file_ext = Path(task_name).suffix.lower()
         assert file_ext[1:] in VALID_EXTENTIONS, "incorrect file type: " + str(task_name)
 
         os.makedirs(self.data_root / self.raw_images_dir, exist_ok=True)
-        raw_image_fn = task_id + file_ext
+        raw_image_fn = doc_id + file_ext
         raw_path = self.data_root / self.raw_images_dir / raw_image_fn
         file_storage.save(str(raw_path))
 
@@ -349,11 +344,35 @@ class AngelinaSolver:
         task["params"] = json.dumps(param_dict)
         task["raw_paths"] = raw_image_fn
         task["state"] = TaskState.RAW_FILE_LOADED.value
-        exec_sqlite(con, "update tasks set raw_paths=:raw_paths, state=:state, params=:params where task_id=:task_id", task)
+        exec_sqlite(con, "update tasks set raw_paths=:raw_paths, state=:state, params=:params where doc_id=:doc_id", task)
+        return user_id + "_" + doc_id
+
+    def is_completed(self, task_id, timeout=0):
+        """
+        Проверяет, завершена ли задача с заданным id
+        """
+        user_id, doc_id = task_id.split("_")
+        task = { "doc_id": doc_id }
+        con = self._user_tasks_sql_conn(user_id)
+        result = exec_sqlite(con, "select params, raw_paths, state from tasks where doc_id=:doc_id", task)
+        assert len(result) == 1, (user_id, doc_id, len(result))
+        task = {
+            **task,
+            "params": result[0][0],
+            "raw_paths": result[0][1],
+            "state": result[0][2]
+        }
+        if task["state"] == TaskState.PROCESSING_DONE.value:
+            return True
+        if task["state"] != TaskState.RAW_FILE_LOADED.value or not timeout:
+            return False
 
         ### вычисления
         task["state"] = TaskState.PROCESSING_STARTED.value
-        exec_sqlite(con, "update tasks set state=:state where task_id=:task_id", task)
+        exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
+        file_ext = Path(task["raw_paths"]).suffix.lower()
+        raw_path = self.data_root / self.raw_images_dir / task["raw_paths"]
+        param_dict = json.loads(task["params"])
         if file_ext[1:] == 'zip':
             results_list = self.recognizer.process_archive_and_save(raw_path, self.data_root / self.results_dir,
                                                                     lang=param_dict['lang'], extra_info=param_dict,
@@ -375,7 +394,7 @@ class AngelinaSolver:
                                                         repeat_on_aligned=False)
         if results_list is None:
             task["state"] = TaskState.ERROR.value
-            exec_sqlite(con, "update tasks set state=:state where task_id=:task_id", task)
+            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
             return False
 
         # full path -> relative to data path
@@ -383,22 +402,13 @@ class AngelinaSolver:
         for marked_image_path, recognized_text_path, _ in results_list:
             marked_image_path = str(Path(marked_image_path).relative_to(self.data_root / self.results_dir))
             recognized_text_path =  str(Path(recognized_text_path).relative_to(self.data_root / self.results_dir))
-            recognized_braille_path = str(Path(recognized_text_path).with_suffix(".brl"))  # TODO GVNC самого кода пока нет
+            recognized_braille_path = str(Path(recognized_text_path).with_suffix(".txt"))  # TODO GVNC самого кода пока нет, расширение brl
             result_files.append((marked_image_path, recognized_text_path, recognized_braille_path))
 
         task["state"] = TaskState.PROCESSING_DONE.value
         task["results"] = json.dumps(result_files)
-        exec_sqlite(con, "update tasks set state=:state, results=:results where task_id=:task_id", task)
-
-        return user_id + "_" + task_id  # GVNC
-        
-    def is_completed(self, task_id):
-        """
-        Проверяет, завершена ли задача с заданным id
-        """
-        user_id, task_id = task_id.split("_")  # GVNC
-
-        return True  # TODO GVNC
+        exec_sqlite(con, "update tasks set state=:state, results=:results where doc_id=:doc_id", task)
+        return True
 
     def get_results(self, task_id):
         """
@@ -416,14 +426,14 @@ class AngelinaSolver:
         """
         В тестововм варианте по очереди выдается то 1 документ, то 2.
         """
-        user_id, task_id = task_id.split("_")  # GVNC
+        user_id, doc_id = task_id.split("_")
 
         con = self._user_tasks_sql_conn(user_id)
-        result = exec_sqlite(con, "select name, create_date, params, state, results from tasks where task_id=:task_id",
-                    {"task_id": task_id})
-        assert len(result) == 1, (user_id, task_id)
+        result = exec_sqlite(con, "select name, create_date, params, state, results from tasks where doc_id=:doc_id",
+                    {"doc_id": doc_id})
+        assert len(result) == 1, (user_id, doc_id)
         result = result[0]
-        assert result[3] == TaskState.PROCESSING_DONE.value, (user_id, task_id, result[3])
+        assert result[3] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[3])
         return {
                 "prev_slag":None,
                 "next_slag":None,
@@ -476,7 +486,7 @@ class AngelinaSolver:
     CONTENT_ALL = CONTENT_IMAGE | CONTENT_TEXT | CONTENT_BRAILLE
 
     # отправка почты
-    def send_results_to_mail(self, mail, item_id, parameters=None):
+    def send_results_to_mail(self, mail, task_id, parameters=None):
         """
         Отправляет результаты на to_email и/или разработчикам. Что-то одно - обязательно.
         results_list - список результатов такой же, как возвращает get_results(...)
