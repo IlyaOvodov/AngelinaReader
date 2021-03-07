@@ -181,7 +181,7 @@ def results(template):
     results_list = None
     task_id = request.values['task_id']
     if task_id:
-        assert core.is_completed(task_id)
+        assert core.is_completed(task_id, timeout=1)
         results_list = core.get_results(task_id)
     if results_list is None:
         flash(

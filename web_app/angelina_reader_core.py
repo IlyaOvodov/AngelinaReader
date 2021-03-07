@@ -225,7 +225,8 @@ class AngelinaSolver:
         con = sqlite3.connect(str(db_path), timeout=timeout)
         if new_db:
             con.cursor().execute(
-                "CREATE TABLE tasks(doc_id text PRIMARY KEY, create_date text, name text, user_id text, params text, raw_paths text, state int, results text)")
+                "CREATE TABLE tasks(doc_id text PRIMARY KEY, create_date text, name text, user_id text, params text,"
+                " raw_paths text, state int, results text, thumbnail text, is_public int, thumbnail_desc text)")
             con.commit()
         return con
 
@@ -322,11 +323,16 @@ class AngelinaSolver:
             "params": None,
             "raw_paths": None,
             "state": TaskState.CREATED.value,
-            "results": None
+            "results": None,
+            "thumbnail": "",
+            "is_public": 0,
+            "thumbnail_desc": ""
         }
         con = self._user_tasks_sql_conn(user_id)
-        exec_sqlite(con, "insert into tasks(doc_id, create_date, name, user_id, params, raw_paths, state, results) \
-                          values(:doc_id, :create_date, :name, :user_id, :params, :raw_paths, :state, :results)", task)
+        exec_sqlite(con, "insert into tasks(doc_id, create_date, name, user_id, params, raw_paths, state, results,"
+                         " thumbnail, is_public, thumbnail_desc)"
+                         " values(:doc_id, :create_date, :name, :user_id, :params, :raw_paths, :state, :results,"
+                         " :thumbnail, :is_public, :thumbnail_desc)", task)
 
         file_ext = Path(task_name).suffix.lower()
         assert file_ext[1:] in VALID_EXTENTIONS, "incorrect file type: " + str(task_name)
@@ -344,6 +350,7 @@ class AngelinaSolver:
         task["params"] = json.dumps(param_dict)
         task["raw_paths"] = raw_image_fn
         task["state"] = TaskState.RAW_FILE_LOADED.value
+        task["public"] = int(param_dict["has_public_confirm"])
         exec_sqlite(con, "update tasks set raw_paths=:raw_paths, state=:state, params=:params where doc_id=:doc_id", task)
         return user_id + "_" + doc_id
 
@@ -407,6 +414,9 @@ class AngelinaSolver:
 
         task["state"] = TaskState.PROCESSING_DONE.value
         task["results"] = json.dumps(result_files)
+        task["thumbnail"] = "pic.jpg",  # TODO
+        with (self.data_root / self.results_dir / result_files[0][1]).open(encoding="utf-8") as f:
+            task["thumbnail_desc"] = f.readlines()[:3]
         exec_sqlite(con, "update tasks set state=:state, results=:results where doc_id=:doc_id", task)
         return True
 
@@ -459,21 +469,23 @@ class AngelinaSolver:
         """
         if not user_id:
             return []
-
+        con = self._user_tasks_sql_conn(user_id)
+        results = exec_sqlite(con, "select doc_id, create_date, name, thumbnail, thumbnail_desc, is_public, status"
+                                   " from tasks where user_id=:user_id"
+                                   " order by create_date desc",
+                    {"user_id": user_id})
         lst = [
                   {
-                    "id":task,
-                    "date": datetime.strptime('2011-11-04 00:05:23', "%Y-%m-%d %H:%M:%S"),  # "20200104 200001",  #datetime.fromisoformat('2011-11-04T00:05:23')
-                    "name":task + ".jpg",
-                    "img_url":"/static/data/results/pic.jpg",  # PIL.Image.Open("web_app/static/data/results/pic.jpg")
-                    #"desc":"буря\nмглою\nнебо",
-                    "desc":"I            B             101\nкоторые созвучны друг с дру-\r\nгом. например, в первых четырёх ~?~",
-                    "public": i%2 ==0,
-                    "sost": self.is_completed(task)
+                    "id": user_id + "_" + rec[0],
+                    "date": datetime.strptime(rec[1]),
+                    "name": rec[2],
+                    "img_url":"/" + str(self.data_root / self.results_dir / rec[3]),
+                    "desc": rec[4],
+                    "public": bool(rec[5]),
+                    "sost": rec[6] == TaskState.PROCESSING_DONE.value
                    }
-            for i, task in enumerate(AngelinaSolver.TMP_RESILTS)
-        ]*10
-
+            for rec in results
+        ]
         if count:
             lst = lst[:count]
         return lst
