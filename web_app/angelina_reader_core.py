@@ -4,16 +4,21 @@
 Описание интерфейсов между UI и алгоритмическим модулями
 """
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
+import email.utils as email_utils
 from enum import Enum
 import json
 import os
 from pathlib import Path
+import smtplib
 import sqlite3
 import time
 import timeit
 import uuid
 
-import local_config
+from .config import Config
 import model.infer_retinanet as infer_retinanet
 
 model_weights = 'model.t7'
@@ -28,6 +33,24 @@ class TaskState(Enum):
     ERROR = 4
 
 VALID_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff pdf zip'.split())
+
+
+def fill_message_headers(msg, to_address, subject):
+    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
+    msg['To'] = to_address
+    msg['Subject'] = subject
+    msg['Date'] = email_utils.formatdate()
+    msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
+    return msg
+
+def send_email(msg):
+    # create server and send
+    server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
+    server.starttls()
+    server.login(Config.SMTP_FROM, Config.SMTP_PWD)
+    recepients = msg['To'].split(',')
+    server.sendmail(msg['From'], recepients, msg.as_string())
+    server.quit()
 
 
 class User:
@@ -247,8 +270,8 @@ class AngelinaSolver:
             print("infer_retinanet.BrailleInference()")
             t = timeit.default_timer()
             recognizer = infer_retinanet.BrailleInference(
-                params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
-                model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
+                params_fn=os.path.join(Config.MODEL_PATH, 'weights', 'param.txt'),
+                model_weights_fn=os.path.join(Config.MODEL_PATH, 'weights', model_weights),
                 create_script=None)
             print(timeit.default_timer() - t)
         self.recognizer = recognizer
@@ -470,7 +493,7 @@ class AngelinaSolver:
         if not user_id:
             return []
         con = self._user_tasks_sql_conn(user_id)
-        results = exec_sqlite(con, "select doc_id, create_date, name, thumbnail, thumbnail_desc, is_public, status"
+        results = exec_sqlite(con, "select doc_id, create_date, name, thumbnail, thumbnail_desc, is_public, state"
                                    " from tasks where user_id=:user_id"
                                    " order by create_date desc",
                     {"user_id": user_id})
@@ -490,14 +513,33 @@ class AngelinaSolver:
             lst = lst[:count]
         return lst
 
-
-
-    CONTENT_IMAGE = 1
-    CONTENT_TEXT = 2
-    CONTENT_BRAILLE = 4
-    CONTENT_ALL = CONTENT_IMAGE | CONTENT_TEXT | CONTENT_BRAILLE
-
     # отправка почты
+    def send_mail(self, to_address, subject, comment, results_list):
+        """
+        Sends results to e-mail as text(s) + image(s)
+        :param to_address: destination email as str
+        :param results_list: list of tuples with file names(txt or jpg)
+        :param subject: message subject or None
+        """
+        # create message object instance
+        msg = fill_message_headers(MIMEMultipart(), to_address, subject)
+        attachment = MIMEText(comment, _charset="utf-8")
+        msg.attach(attachment)
+        # attach image to message body
+        for file_names in results_list:
+            for file_name in reversed(file_names):  # txt before jpg
+                if Path(file_name).suffix in (".txt", ".brl"):
+                    txt = (self.data_root / self.results_dir / file_name).read_text(encoding="utf-8")
+                    attachment = MIMEText(txt, _charset="utf-8")
+                    attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+                elif Path(file_name).suffix == ".jpg":
+                    attachment = MIMEImage((self.data_root / self.results_dir / file_name).read_bytes())
+                    attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+                else:
+                    assert False, str(file_name)
+                msg.attach(attachment)
+        send_email(msg)
+
     def send_results_to_mail(self, mail, task_id, parameters=None):
         """
         Отправляет результаты на to_email и/или разработчикам. Что-то одно - обязательно.
@@ -507,8 +549,25 @@ class AngelinaSolver:
             title - заголовок
             comment - комментарий, ставится в начале письма
         """
-        #TODO взять из DB
-        # raise NotImplementedError
+        user_id, doc_id = task_id.split("_")
+        con = self._user_tasks_sql_conn(user_id)
+        result = exec_sqlite(con, "select name, results, state from tasks where doc_id=:doc_id",
+                    {"doc_id": doc_id})
+        assert len(result) == 1, (user_id, doc_id)
+        result = result[0]
+
+        with self._users_sql_conn() as con:  # TODO проще получить User из flask наружи
+            user_result = exec_sqlite(con, "select name, email from users where id=:user_id",
+                    {"user_id": user_id})
+            assert len(user_result) == 1, (user_id)
+            user_name, user_email  = user_result[0][0], user_result[0][1]
+
+        assert result[2] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[2])
+        if parameters.get('to_developers'):
+            mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
+        subject = parameters.get('subject') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
+        comment = (parameters.get('comment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
+        self.send_mail(mail, subject, comment, json.loads(result[1]))
         return True
 
     def get_user_emails(self, user_id):
@@ -519,7 +578,7 @@ class AngelinaSolver:
         """
         if not user_id:
             return []
-        return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]
+        return ["angelina-reader@ovdv.ru", "il@ovdv.ru"]  # TODO
 
 
 if __name__ == "__main__":

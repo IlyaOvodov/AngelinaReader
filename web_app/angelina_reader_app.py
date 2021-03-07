@@ -8,19 +8,12 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField, SelectField
 from wtforms.validators import DataRequired
-from flask_uploads import UploadSet, configure_uploads
 from flask_mobility import Mobility
 from flask_mobility.decorators import mobile_template
 
 import atexit
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
-import email.utils as email_utils
-import smtplib
 import time
-import uuid
-import os
 import json
 import signal
 import sys
@@ -29,33 +22,18 @@ from pathlib import Path
 import socket
 
 from .config import Config
-from .angelina_reader_core import AngelinaSolver, VALID_EXTENTIONS
+from .angelina_reader_core import AngelinaSolver, VALID_EXTENTIONS, fill_message_headers, send_email
+
 
 def startup_logger():
     hostname = socket.gethostname()
     def send_startup_email(what):
         """
-        Sends results to e-mail as text(s) + image(s)
-        :param to_address: destination email as str
-        :param results_list: list of tuples with file names(txt or jpg)
-        :param subject: message subject or None
         """
         # create message object instance
         txt = 'Angelina Reader is {} at {}'.format(what, hostname)
-        msg = MIMEText(txt, _charset="utf-8")
-        msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
-        msg['To'] = 'Angelina Reader<angelina-reader@ovdv.ru>'
-        msg['Subject'] = txt
-        msg['Date'] = email_utils.formatdate()
-        msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
-
-        # create server and send
-        server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
-        server.starttls()
-        server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-        recepients = [msg['To']]
-        server.sendmail(msg['From'], recepients, msg.as_string())
-        server.quit()
+        msg = fill_message_headers(MIMEText(txt, _charset="utf-8"), 'Angelina Reader<angelina-reader@ovdv.ru>', txt)
+        send_email(msg)
 
     send_startup_email('started')
 
@@ -173,7 +151,7 @@ def results(template):
     form = ResultsForm()
     if form.validate_on_submit():
         return redirect(url_for('email',
-                                results_list=request.form['results_list'],
+                                task_id=request.values['task_id'],
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
@@ -220,9 +198,10 @@ def email(template):
         submit = SubmitField('Отправить')
     form = Form()
     if form.validate_on_submit():
-        results_list = json.loads(request.values['results_list'])
-        title = form.title.data or "Распознанный Брайль: " + Path(results_list[0][0]).with_suffix('').with_suffix('').name.lower()
-        send_mail(form.e_mail.data, results_list, title, form.to_developers.data, form.comment.data)
+        core.send_results_to_mail(mail=form.e_mail.data, task_id=request.values['task_id'],
+                                  parameters={'subject': form.title.data,
+                                              'to_developers': form.to_developers.data,
+                                              'comment': form.comment.data})
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],
@@ -297,47 +276,6 @@ def logout():
 @mobile_template('{m/}donate.html')
 def donate(template):
     return render_template(template)
-
-def send_mail(to_address, results_list, subject, to_developers, comment):
-    """
-    Sends results to e-mail as text(s) + image(s)
-    :param to_address: destination email as str
-    :param results_list: list of tuples with file names(txt or jpg)
-    :param subject: message subject or None
-    """
-    # create message object instance
-    msg = MIMEMultipart()
-    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
-    if to_developers:
-        msg['To'] = to_address + ',Angelina Reader<angelina-reader@ovdv.ru>'
-    else:
-        msg['To'] = to_address
-    msg['Subject'] = subject if subject else "Распознанный Брайль"
-    msg['Date'] = email_utils.formatdate()
-    msg['Message-Id'] = email_utils.make_msgid(idstring=str(uuid.uuid4()), domain=Config.SMTP_FROM.split('@')[1])
-    attachment = MIMEText(comment + "\nLetter from: {}<{}>".format(current_user.name, current_user.email), _charset="utf-8")
-    msg.attach(attachment)
-    # attach image to message body
-    for file_names in results_list:
-        for file_name in reversed(file_names):  # txt before jpg
-            if Path(file_name).suffix == ".txt":
-                txt = Path(file_name).read_text(encoding="utf-8")
-                attachment = MIMEText(txt, _charset="utf-8")
-                attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-            elif Path(file_name).suffix == ".jpg":
-                attachment = MIMEImage(Path(file_name).read_bytes())
-                attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-            else:
-                assert False, str(file_name)
-            msg.attach(attachment)
-
-    # create server and send
-    server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
-    server.starttls()
-    server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-    recepients = msg['To'].split(',')
-    server.sendmail(msg['From'], recepients, msg.as_string())
-    server.quit()
 
 
 def run():
