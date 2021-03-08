@@ -462,10 +462,10 @@ class AngelinaSolver:
 
         task["state"] = TaskState.PROCESSING_DONE.value
         task["results"] = json.dumps(result_files)
-        task["thumbnail"] = "pic.jpg",  # TODO
+        task["thumbnail"] = "pic.jpg"  # TODO
         with (self.data_root / self.results_dir / result_files[0][1]).open(encoding="utf-8") as f:
-            task["thumbnail_desc"] = f.readlines()[:3]
-        exec_sqlite(con, "update tasks set state=:state, results=:results where doc_id=:doc_id", task)
+            task["thumbnail_desc"] = ''.join(f.readlines()[:3])
+        exec_sqlite(con, "update tasks set state=:state, results=:results, thumbnail=:thumbnail, thumbnail_desc=:thumbnail_desc where doc_id=:doc_id", task)
         if gvnc_mode:  # GVNC
             return False
         return True
