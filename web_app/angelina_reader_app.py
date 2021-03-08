@@ -175,6 +175,13 @@ def results(template):
     for marked_image_path, recognized_text_path, recognized_braille_path in results_list["item_data"]:
         # полный путь к картинке -> "/static/..."
         # даннные для отображения в форме
+
+        # GVNC для совместимости с V2:
+        marked_image_path = marked_image_path[1:]
+        marked_image_path = str(Path(marked_image_path).relative_to(data_root_path))
+        recognized_text_path = str(Path(recognized_text_path).relative_to(data_root_path))
+        recognized_braille_path = str(Path(recognized_braille_path).relative_to(data_root_path))
+
         with open(data_root_path / recognized_text_path, encoding="utf-8") as f:
             out_text = ''.join(f.readlines())
         image_paths_and_texts.append(("/" + app.config['DATA_ROOT'] + "/" + marked_image_path, out_text, out_text,))

@@ -17,6 +17,7 @@ import sqlite3
 import time
 import timeit
 import uuid
+import werkzeug.datastructures
 
 from .config import Config
 import model.infer_retinanet as infer_retinanet
@@ -31,6 +32,7 @@ class TaskState(Enum):
     PROCESSING_STARTED = 2
     PROCESSING_DONE = 3
     ERROR = 4
+    START_TEXT_TIME = 5  # GVNC
 
 VALID_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff pdf zip'.split())
 
@@ -241,6 +243,8 @@ class AngelinaSolver:
     def _user_tasks_sql_conn(self, user_id):
         timeout = 0.1
         db_dir = self.data_root / self.tasks_dir
+        if not user_id:
+            user_id = "unregistered"
         db_path = db_dir / (user_id + ".db")
         new_db = not os.path.isfile(db_path)
         if new_db:
@@ -337,7 +341,12 @@ class AngelinaSolver:
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
         """
         doc_id = uuid.uuid4().hex
-        task_name = file_storage.filename  #<class 'werkzeug.datastructures.FileStorage'>   , img_paths['file']
+        if type(file_storage) == werkzeug.datastructures.ImmutableMultiDict:
+            file_storage = file_storage['file']
+        assert type(file_storage) == werkzeug.datastructures.FileStorage, type(file_storage)
+        task_name = file_storage.filename
+        if not user_id:
+            user_id = ""
         task = {
             "doc_id": doc_id,
             "create_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -367,6 +376,9 @@ class AngelinaSolver:
 
         # GVNC для совместимости с V2. Переделать (убрать отдельные парметры, оставить только обязательный params_dict)
         if param_dict is None:
+            find_orientation = find_orientation and find_orientation != 'False'
+            process_2_sides = process_2_sides and process_2_sides != 'False'
+            has_public_confirm = has_public_confirm and has_public_confirm != 'False'
             param_dict = {"lang": lang, "find_orientation": find_orientation,
                           "process_2_sides": process_2_sides, "has_public_confirm": has_public_confirm}
 
@@ -394,6 +406,19 @@ class AngelinaSolver:
         }
         if task["state"] == TaskState.PROCESSING_DONE.value:
             return True
+
+        # GVNC
+        gvnc_mode = False
+        if task["state"] == TaskState.RAW_FILE_LOADED.value and not timeout:
+            task["state"] = TaskState.START_TEXT_TIME.value
+            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
+            return False
+        if task["state"] == TaskState.START_TEXT_TIME.value:
+            task["state"] = TaskState.RAW_FILE_LOADED.value
+            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
+            timeout = 2
+            gvnc_mode = True
+
         if task["state"] != TaskState.RAW_FILE_LOADED.value or not timeout:
             return False
 
@@ -441,6 +466,8 @@ class AngelinaSolver:
         with (self.data_root / self.results_dir / result_files[0][1]).open(encoding="utf-8") as f:
             task["thumbnail_desc"] = f.readlines()[:3]
         exec_sqlite(con, "update tasks set state=:state, results=:results where doc_id=:doc_id", task)
+        if gvnc_mode:  # GVNC
+            return False
         return True
 
     def get_results(self, task_id):
@@ -472,14 +499,14 @@ class AngelinaSolver:
                 "next_slag":None,
                 "name":result[0],
                 "create_date": datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
-                "item_data": [
-                    (str(self.results_dir / item) for item in id)
+                "item_data": list([
+                    tuple(("/" if item_idx==0 else "") + str(self.data_root / self.results_dir / item) for item_idx, item in enumerate(id))  # GVNC "/" + str(self.data_root / надо перенести в UI
                     for id in json.loads(result[4])
-                    ],
+                    ]),
                 "protocol": json.loads(result[2])
                 }
 
-    def get_tasks_list(self, user_id, count):
+    def get_tasks_list(self, user_id, count=None):
         """
         count - кол-во запиисей
         Возвращает список task_id задач для данного юзера, отсортированный от старых к новым
@@ -500,7 +527,7 @@ class AngelinaSolver:
         lst = [
                   {
                     "id": user_id + "_" + rec[0],
-                    "date": datetime.strptime(rec[1]),
+                    "date": datetime.strptime(rec[1], "%Y-%m-%d %H:%M:%S"),
                     "name": rec[2],
                     "img_url":"/" + str(self.data_root / self.results_dir / rec[3]),
                     "desc": rec[4],
@@ -556,17 +583,23 @@ class AngelinaSolver:
         assert len(result) == 1, (user_id, doc_id)
         result = result[0]
 
-        with self._users_sql_conn() as con:  # TODO проще получить User из flask наружи
-            user_result = exec_sqlite(con, "select name, email from users where id=:user_id",
-                    {"user_id": user_id})
-            assert len(user_result) == 1, (user_id)
-            user_name, user_email  = user_result[0][0], user_result[0][1]
+        if user_id:
+            with self._users_sql_conn() as con:  # TODO проще получить User из flask наружи
+                user_result = exec_sqlite(con, "select name, email from users where id=:user_id",
+                        {"user_id": user_id})
+                assert len(user_result) == 1, (user_id)
+                user_name, user_email  = user_result[0][0], user_result[0][1]
+        else:
+            user_name, user_email = "", ""
 
         assert result[2] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[2])
-        if parameters.get('to_developers'):
-            mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
+        if parameters.get('to_developers') or parameters.get('razRab'):  # GVNC
+            if mail:
+                mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
+            else:
+                mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
         subject = parameters.get('subject') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
-        comment = (parameters.get('comment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
+        comment = (parameters.get('comment') or parameters.get('koment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
         self.send_mail(mail, subject, comment, json.loads(result[1]))
         return True
 
