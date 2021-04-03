@@ -100,7 +100,6 @@ class User:
         if self.params:
             params = json.loads(self.params)
             if params.get('tmp_password') == password_hash:
-                self.set_new_tmp_password(None)
                 return True
         return False
 
@@ -125,8 +124,9 @@ class User:
         assert password
         password_hash = self.hash_password(password)
         self.password_hash = password_hash
-        con = self.solver._users_sql_conn()
-        exec_sqlite(con, "update users set password_hash = ? where id = ?", (self.password_hash, self.id))
+        with self.solver._users_sql_conn() as con:
+            exec_sqlite(con, "update users set password_hash = ? where id = ?", (self.password_hash, self.id))
+        self.set_new_tmp_password(None)
 
     def get_param_default(self, param_name):
         """
@@ -143,17 +143,17 @@ class User:
         pass
 
     def set_new_tmp_password(self, new_tmp_password_hash):
-        con = self.solver._users_sql_conn()
-        res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
-        assert len(res) == 1, (self.id)
-        params = res[0][0]
-        if params:
-            params = json.loads(params)
-        else:
-            params = dict()
-        params["tmp_password"] = new_tmp_password_hash
-        self.params = json.dumps(params)
-        exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
+        with self.solver._users_sql_conn() as con:
+            res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
+            assert len(res) == 1, (self.id)
+            params = res[0][0]
+            if params:
+                params = json.loads(params)
+            else:
+                params = dict()
+            params["tmp_password"] = new_tmp_password_hash
+            self.params = json.dumps(params)
+            exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
 
     def send_new_pass_to_mail(self):
         """
@@ -388,6 +388,14 @@ class AngelinaSolver:
         После успешной загрузки возвращаем id материалов в системе распознавания или False если в процессе обработки 
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
         """
+        # GVNC для совместимости с V2. Переделать (убрать отдельные парметры, оставить только обязательный params_dict)
+        if param_dict is None:
+            find_orientation = find_orientation and find_orientation != 'False'
+            process_2_sides = process_2_sides and process_2_sides != 'False'
+            has_public_confirm = has_public_confirm and has_public_confirm != 'False'
+            param_dict = {"lang": lang, "find_orientation": find_orientation,
+                          "process_2_sides": process_2_sides, "has_public_confirm": has_public_confirm}
+
         doc_id = uuid.uuid4().hex
         if type(file_storage) == werkzeug.datastructures.ImmutableMultiDict:
             file_storage = file_storage['file']
@@ -400,12 +408,12 @@ class AngelinaSolver:
             "create_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "name": task_name,
             "user_id": user_id,
-            "params": None,
+            "params": json.dumps(param_dict),
             "raw_paths": None,
             "state": TaskState.CREATED.value,
             "results": None,
             "thumbnail": "",
-            "is_public": 0,
+            "is_public": int(param_dict["has_public_confirm"]),
             "thumbnail_desc": "",
             "is_deleted": 0
         }
@@ -423,19 +431,9 @@ class AngelinaSolver:
         raw_path = self.data_root / self.raw_images_dir / raw_image_fn
         file_storage.save(str(raw_path))
 
-        # GVNC для совместимости с V2. Переделать (убрать отдельные парметры, оставить только обязательный params_dict)
-        if param_dict is None:
-            find_orientation = find_orientation and find_orientation != 'False'
-            process_2_sides = process_2_sides and process_2_sides != 'False'
-            has_public_confirm = has_public_confirm and has_public_confirm != 'False'
-            param_dict = {"lang": lang, "find_orientation": find_orientation,
-                          "process_2_sides": process_2_sides, "has_public_confirm": has_public_confirm}
-
-        task["params"] = json.dumps(param_dict)
         task["raw_paths"] = raw_image_fn
         task["state"] = TaskState.RAW_FILE_LOADED.value
-        task["public"] = int(param_dict["has_public_confirm"])
-        exec_sqlite(con, "update tasks set raw_paths=:raw_paths, state=:state, params=:params where doc_id=:doc_id", task)
+        exec_sqlite(con, "update tasks set raw_paths=:raw_paths, state=:state where doc_id=:doc_id", task)
         return user_id + "_" + doc_id
 
     def is_completed(self, task_id, timeout=0):
@@ -537,22 +535,43 @@ class AngelinaSolver:
         """
         user_id, doc_id = task_id.split("_")
 
+        prev_slag = next_slag = result = None
         con = self._user_tasks_sql_conn(user_id)
-        result = exec_sqlite(con, "select name, create_date, params, state, results from tasks where doc_id=:doc_id",
-                    {"doc_id": doc_id})
-        assert len(result) == 1, (user_id, doc_id)
-        result = result[0]
-        assert result[3] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[3])
+        if user_id:
+            results = exec_sqlite(con, "select doc_id, name, create_date, params, state, results, is_public"
+                                       " from tasks"
+                                       " where user_id=:user_id and is_deleted=0"
+                                       " order by create_date desc",
+                                       {"user_id": user_id})
+            for r in results:
+                if r[0] == doc_id:
+                    result = r
+                else:
+                    if result is None:
+                        next_slag = user_id + "_" + r[0]
+                    else:
+                        prev_slag = user_id + "_" + r[0]
+                        break
+        else:
+            results = exec_sqlite(con, "select doc_id, name, create_date, params, state, results, is_public"
+                                      " from tasks"
+                                      " where doc_id=:doc_id and is_deleted=0",
+                                      {"doc_id": doc_id})
+            assert len(results) == 1, (user_id, doc_id)
+            result = results[0]
+        assert result is not None
+        assert result[4] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[4])
         return {
-                "prev_slag":None,
-                "next_slag":None,
-                "name":result[0],
-                "create_date": datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
+                "prev_slag":prev_slag,
+                "next_slag":next_slag,
+                "name":result[1],
+                "create_date": datetime.strptime(result[2], "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
                 "item_data": list([
                     tuple(("/" if item_idx==0 else "") + str(self.data_root / self.results_dir / item) for item_idx, item in enumerate(id))  # GVNC "/" + str(self.data_root / надо перенести в UI
-                    for id in json.loads(result[4])
+                    for id in json.loads(result[5])
                     ]),
-                "protocol": json.loads(result[2])
+                "public": bool(result[6]),
+                "protocol": json.loads(result[3])
                 }
 
     def get_tasks_list(self, user_id, count=None):
@@ -570,7 +589,7 @@ class AngelinaSolver:
             return []
         con = self._user_tasks_sql_conn(user_id)
         results = exec_sqlite(con, "select doc_id, create_date, name, thumbnail, thumbnail_desc, is_public, state"
-                                   " from tasks where user_id=:user_id"
+                                   " from tasks where user_id=:user_id and is_deleted=0"
                                    " order by create_date desc",
                     {"user_id": user_id})
         lst = [
