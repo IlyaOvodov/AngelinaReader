@@ -391,14 +391,20 @@ class BrailleInference:
         fntA = PIL.ImageFont.truetype(font_fn, 20)
         fntErr = PIL.ImageFont.truetype(font_fn, 12)
         out_text = []
+        out_braille = []
         for ln in lines:
             if ln.has_space_before:
                 out_text.append('')
+                out_braille.append('')
             s = ''
+            s_brl = ''
             for ch in ln.chars:
                 if ch.char.startswith('~') and not (draw_refined & self.DRAW_FULL_CHARS):
                     ch.char = '~?~'
+                # if ch.char.startswith('~'):
+                #     ch.char = lt.int_to_unicode(ch.label)
                 s += ' ' * ch.spaces_before + ch.char
+                s_brl += lt.int_to_unicode(0) * ch.spaces_before + lt.int_to_unicode(ch.label)
                 if draw_refined & self.DRAW_ORIGINAL:
                     ch_box = ch.original_box
                     draw.rectangle(list(ch_box), outline='blue')
@@ -414,10 +420,12 @@ class BrailleInference:
                 #score = '{:.1f}'.format(score*10)
                 #draw.text((box[0],box[3]+12), score, font=fnt, fill='green')
             out_text.append(s)
+            out_braille.append(s_brl)
         return {
             'labeled_image' + suff: aug_img,
             'lines' + suff: lines,
             'text' + suff: out_text,
+            'braille' + suff: out_braille,
             'dict' + suff: self.to_dict(aug_img, lines, draw_refined),
             'boxes' + suff: boxes,
             'labels' + suff: labels,
@@ -463,12 +471,17 @@ class BrailleInference:
                 json.dump(result_dict['dict'], opened_json, sort_keys=False, indent=4)
         marked_image_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.jpg')
         recognized_text_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.txt')
+        recognized_braille_path = Path(results_dir) / (filename_stem + '.marked' + suff + '.brl')
         result_dict['labeled_image' + suff].save(marked_image_path)
         with open(recognized_text_path, encoding='utf-8', mode='w') as f:
             for s in result_dict['text' + suff]:
                 f.write(s)
                 f.write('\n')
-        return str(marked_image_path), str(recognized_text_path), result_dict['text' + suff]
+        with open(recognized_braille_path, encoding='utf-8', mode='w') as f:
+            for s in result_dict['braille' + suff]:
+                f.write(s)
+                f.write('\n')
+        return str(marked_image_path), str(recognized_text_path), str(recognized_braille_path), result_dict['text' + suff]
 
 
     def run_and_save(self, img, results_dir, target_stem, lang, extra_info, draw_refined,

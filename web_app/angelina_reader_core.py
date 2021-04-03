@@ -10,8 +10,10 @@ from email.mime.text import MIMEText
 import email.utils as email_utils
 from enum import Enum
 import json
+import hashlib
 import os
 from pathlib import Path
+import random
 import smtplib
 import sqlite3
 import time
@@ -60,12 +62,13 @@ class User:
     Пользователь системы и его атрибуты
     Экземпляры класса создавать через AngelinaSolver.find_user или AngelinaSolver.register_user
     """
-    def __init__(self, id, user_dict):
+    def __init__(self, id, user_dict, solver):
         """
         Ниже список атрибутов для demo
         Все атрибуты - read only, изменять через вызовы соответствующих методов
         """
         self.id = id  # уникальный для системы id пользователя. Присваивается при регистрации.
+        self.solver = solver
         self.name = user_dict["name"]
         self.email = user_dict["email"]
 
@@ -74,6 +77,7 @@ class User:
         self.network_name = user_dict.get("network_name")       # TODO понять как кодировать соцсети. Для регистрации через email = None
         self.network_id = user_dict.get("network_id")
         self.password_hash = user_dict.get("password_hash")
+        self.params = user_dict.get("params")
 
         # поля для Flask:
         self.is_authenticated = True
@@ -81,13 +85,24 @@ class User:
         self.is_anonymous = False
 
     def get_id(self):
-        return self.id        
+        return self.id
+
+    def hash_password(self, password):
+        return hashlib.sha512(password.encode('utf-8')).hexdigest()
         
-    def check_password(self, password_hash):
+    def check_password(self, password):
         """
         Проверяет пароль. Вызывать про логине по email.
         """
-        return self.password_hash is None or self.password_hash == password_hash
+        password_hash = self.hash_password(password)
+        if self.password_hash is None or self.password_hash == password_hash:  # GVNC изменить для новой версии, чтобы пустой пароль не работал
+            return True
+        if self.params:
+            params = json.loads(self.params)
+            if params.get('tmp_password') == password_hash:
+                self.set_new_tmp_password(None)
+                return True
+        return False
 
     def set_name(self, name):
         """
@@ -107,9 +122,12 @@ class User:
         """
         Обновляет пароль. Вызывать про логине по email.
         """
-        # TODO raise NotImplementedError
-        pass
-        
+        assert password
+        password_hash = self.hash_password(password)
+        self.password_hash = password_hash
+        con = self.solver._users_sql_conn()
+        exec_sqlite(con, "update users set password_hash = ? where id = ?", (self.password_hash, self.id))
+
     def get_param_default(self, param_name):
         """
         Возвращает занчение по умолчанию для параметра param_name (установки по умолчанию параметров в разных формах)
@@ -123,6 +141,35 @@ class User:
         """
         raise NotImplementedError
         pass
+
+    def set_new_tmp_password(self, new_tmp_password_hash):
+        con = self.solver._users_sql_conn()
+        res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
+        assert len(res) == 1, (self.id)
+        params = res[0][0]
+        if params:
+            params = json.loads(params)
+        else:
+            params = dict()
+        params["tmp_password"] = new_tmp_password_hash
+        self.params = json.dumps(params)
+        exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
+
+    def send_new_pass_to_mail(self):
+        """
+        Генерируем новый пароль и отправляем его на почту
+        Возвращаем True или False в зависимости от результата работы функции
+        """
+        new_tmp_password = str(random.randint(10000000, 99999999))
+        new_tmp_password_hash = self.hash_password(new_tmp_password)
+        self.set_new_tmp_password(new_tmp_password_hash)
+        # TODO язык
+        msg_text = "Ваш одноразовый пароль на angelina-reader.ru: " + new_tmp_password + ". Измените пароль после входа в систему"
+        subject = "Восстановление пароля"
+        msg = fill_message_headers(MIMEText(msg_text, _charset="utf-8"), self.email, subject)
+        send_email(msg)
+        return True
+
 
 def exec_sqlite(con, query, params, timeout=10):
     """
@@ -172,13 +219,14 @@ class AngelinaSolver:
             "password_hash": password_hash,
             "network_name": network_name,
             "network_id": network_id,
-            "reg_date": datetime.now()
+            "reg_date": datetime.now(),
+            "params": None
         }
         existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
         assert not existing_user, ("such user already exists", network_name, network_id, email)
         con = self._users_sql_conn()
-        exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date)", new_user)
-        return User(id, new_user)
+        exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date, params) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date, :params)", new_user)
+        return User(id, new_user, solver=self)
 
     def find_user(self, network_name=None, network_id=None, email=None, id=None):
         """
@@ -200,7 +248,7 @@ class AngelinaSolver:
         if len(res):
             user_dict = dict(res[0])  # sqlite row -> dict
             assert len(res) <= 1, ("more then 1 user found", user_dict)
-            user = User(id=user_dict["id"], user_dict=user_dict)
+            user = User(id=user_dict["id"], user_dict=user_dict, solver=self)
             return user
         return None  # Nothing found
 
@@ -253,7 +301,7 @@ class AngelinaSolver:
         if new_db:
             con.cursor().execute(
                 "CREATE TABLE tasks(doc_id text PRIMARY KEY, create_date text, name text, user_id text, params text,"
-                " raw_paths text, state int, results text, thumbnail text, is_public int, thumbnail_desc text)")
+                " raw_paths text, state int, results text, thumbnail text, is_public int, thumbnail_desc text, is_deleted int)")
             con.commit()
         return con
 
@@ -358,13 +406,14 @@ class AngelinaSolver:
             "results": None,
             "thumbnail": "",
             "is_public": 0,
-            "thumbnail_desc": ""
+            "thumbnail_desc": "",
+            "is_deleted": 0
         }
         con = self._user_tasks_sql_conn(user_id)
         exec_sqlite(con, "insert into tasks(doc_id, create_date, name, user_id, params, raw_paths, state, results,"
-                         " thumbnail, is_public, thumbnail_desc)"
+                         " thumbnail, is_public, thumbnail_desc, is_deleted)"
                          " values(:doc_id, :create_date, :name, :user_id, :params, :raw_paths, :state, :results,"
-                         " :thumbnail, :is_public, :thumbnail_desc)", task)
+                         " :thumbnail, :is_public, :thumbnail_desc, :is_deleted)", task)
 
         file_ext = Path(task_name).suffix.lower()
         assert file_ext[1:] in VALID_EXTENTIONS, "incorrect file type: " + str(task_name)
@@ -454,10 +503,10 @@ class AngelinaSolver:
 
         # full path -> relative to data path
         result_files = list()
-        for marked_image_path, recognized_text_path, _ in results_list:
+        for marked_image_path, recognized_text_path, recognized_braille_path, _ in results_list:
             marked_image_path = str(Path(marked_image_path).relative_to(self.data_root / self.results_dir))
             recognized_text_path =  str(Path(recognized_text_path).relative_to(self.data_root / self.results_dir))
-            recognized_braille_path = str(Path(recognized_text_path).with_suffix(".txt"))  # TODO GVNC самого кода пока нет, расширение brl
+            recognized_braille_path = str(Path(recognized_braille_path).relative_to(self.data_root / self.results_dir))
             result_files.append((marked_image_path, recognized_text_path, recognized_braille_path))
 
         task["state"] = TaskState.PROCESSING_DONE.value
@@ -611,7 +660,7 @@ class AngelinaSolver:
         """
         if not user_id:
             return []
-        return ["angelina-reader@ovdv.ru", "il@ovdv.ru"]  # TODO
+        return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]  # TODO
 
 
 if __name__ == "__main__":
