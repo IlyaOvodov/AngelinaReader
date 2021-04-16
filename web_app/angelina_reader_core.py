@@ -666,7 +666,7 @@ class AngelinaSolver:
                 mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
             else:
                 mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
-        subject = parameters.get('subject') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
+        subject = parameters.get('subject') or parameters.get('title') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
         comment = (parameters.get('comment') or parameters.get('koment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
         self.send_mail(mail, subject, comment, json.loads(result[1]))
         return True
@@ -680,6 +680,10 @@ class AngelinaSolver:
         if not user_id:
             return []
         return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]  # TODO
+
+    def set_public_acceess(self, task_id, is_public):
+		# TODO
+        pass
 
 
 if __name__ == "__main__":
