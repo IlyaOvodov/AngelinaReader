@@ -176,9 +176,9 @@ def results(template):
         # полный путь к картинке -> "/static/..."
         # даннные для отображения в форме
 
-        # GVNC для совместимости с V2:
+        # GVNC для совместимости с V2: "/static/..." -> имя картинки
         marked_image_path = marked_image_path[1:]
-        marked_image_path = str(Path(marked_image_path).relative_to(data_root_path))
+        marked_image_path = str(Path(marked_image_path).relative_to(app.config['DATA_ROOT']))
         recognized_text_path = str(Path(recognized_text_path).relative_to(data_root_path))
         recognized_braille_path = str(Path(recognized_braille_path).relative_to(data_root_path))
 

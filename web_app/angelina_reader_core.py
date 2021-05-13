@@ -309,7 +309,7 @@ class AngelinaSolver:
     ##########################################
 
 
-    def __init__(self, data_root_path="static/data"):
+    def __init__(self, data_root_path="/var/www/FlaskApache/static/data"):  # GVNC
         self.data_root = Path(data_root_path)
         self.tasks_dir = Path('tasks')
         self.raw_images_dir = Path('raw')
@@ -561,18 +561,25 @@ class AngelinaSolver:
             result = results[0]
         assert result is not None
         assert result[4] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[4])
-        return {
+        item_data = list([
+            tuple(
+                str(
+                    (Path("/static/data") if item_idx == 0 else self.data_root)  # GVNC надо перенести в UI "/" + str(self.data_root / надо перенести в UI
+                    / self.results_dir / item
+                )
+                for item_idx, item in enumerate(id))
+            for id in json.loads(result[5])
+        ])
+        res_dict = {
                 "prev_slag":prev_slag,
                 "next_slag":next_slag,
                 "name":result[1],
                 "create_date": datetime.strptime(result[2], "%Y-%m-%d %H:%M:%S"), #"20200104 200001",
-                "item_data": list([
-                    tuple(("/" if item_idx==0 else "") + str(self.data_root / self.results_dir / item) for item_idx, item in enumerate(id))  # GVNC "/" + str(self.data_root / надо перенести в UI
-                    for id in json.loads(result[5])
-                    ]),
+                "item_data": item_data,
                 "public": bool(result[6]),
                 "protocol": json.loads(result[3])
                 }
+        return res_dict
 
     def get_tasks_list(self, user_id, count=None):
         """
@@ -682,8 +689,16 @@ class AngelinaSolver:
         return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]  # TODO
 
     def set_public_acceess(self, task_id, is_public):
-		# TODO
-        pass
+        """
+            Состояние публичности выставляем в соответствии с переданным is_public
+            True - Публичный (Замок открыт)
+        """
+        # TODO
+        print('set_public_access', task_id, is_public)
+        if is_public is False:
+            return True
+        else:
+            return False
 
 
 if __name__ == "__main__":
