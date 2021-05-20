@@ -201,7 +201,7 @@ class AngelinaSolver:
     ##########################################
     ## работа с пользователями
     ##########################################
-    def register_user(self, name, email, password_hash, network_name, network_id):
+    def register_user(self, name, email, password, network_name, network_id):
         """
         Регистрирует юзера с заданными параметрами через email-пароль или через соцсеть.
         name, email указываются всегда.
@@ -216,7 +216,7 @@ class AngelinaSolver:
             "id": id,
             "name": name,
             "email": email,
-            "password_hash": password_hash,
+            "password_hash": User.hash_password(None, password),
             "network_name": network_name,
             "network_id": network_id,
             "reg_date": datetime.now(),
