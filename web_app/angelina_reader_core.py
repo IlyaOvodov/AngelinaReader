@@ -309,7 +309,7 @@ class AngelinaSolver:
     ##########################################
 
 
-    def __init__(self, data_root_path="/var/www/FlaskApache/static/data"):  # GVNC
+    def __init__(self, data_root_path="/var/www/FlaskApache/FlaskApache/static/data"):  # GVNC
         self.data_root = Path(data_root_path)
         self.tasks_dir = Path('tasks')
         self.raw_images_dir = Path('raw')
@@ -390,9 +390,9 @@ class AngelinaSolver:
         """
         # GVNC для совместимости с V2. Переделать (убрать отдельные парметры, оставить только обязательный params_dict)
         if param_dict is None:
-            find_orientation = find_orientation and find_orientation != 'False'
-            process_2_sides = process_2_sides and process_2_sides != 'False'
-            has_public_confirm = has_public_confirm and has_public_confirm != 'False'
+            #find_orientation = find_orientation and find_orientation != 'False'
+            #process_2_sides = process_2_sides and process_2_sides != 'False'
+            #has_public_confirm = has_public_confirm and has_public_confirm != 'False'
             param_dict = {"lang": lang, "find_orientation": find_orientation,
                           "process_2_sides": process_2_sides, "has_public_confirm": has_public_confirm}
 
@@ -604,7 +604,7 @@ class AngelinaSolver:
                     "id": user_id + "_" + rec[0],
                     "date": datetime.strptime(rec[1], "%Y-%m-%d %H:%M:%S"),
                     "name": rec[2],
-                    "img_url":"/" + str(self.data_root / self.results_dir / rec[3]),
+                    "img_url":"/static/data/" + str(self.results_dir / rec[3]),   # GVNC
                     "desc": rec[4],
                     "public": bool(rec[5]),
                     "sost": rec[6] == TaskState.PROCESSING_DONE.value
