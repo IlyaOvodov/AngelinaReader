@@ -70,7 +70,8 @@ def index(template, is_mobile=False):
         file = FileField()
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
-        lang = SelectField("Язык текста", choices=[('RU', 'Русский'), ('EN', 'English'), ('LV', 'Latviešu'), ('UZ', 'Ўзбек'), ('GR', 'Ελληνικά')])
+        lang = SelectField("Язык текста", choices=[('RU', 'Русский'), ('EN', 'English'), ('LV', 'Latviešu'),
+                                                   ('UZ', 'Ўзбек'), ('UZL', "O'zbekcha"), ('GR', 'Ελληνικά')])
         find_orientation = BooleanField("Авто-ориентация")
         process_2_sides = BooleanField("Обе стороны")
     form = MainForm(agree=request.values.get('has_public_confirm', '') == 'True',

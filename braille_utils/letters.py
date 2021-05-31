@@ -118,6 +118,15 @@ alpha_map_EN = {
     # '356': '"',  # mark as >>
 }
 
+# UZL symbols
+alpha_map_UZL = {
+    **alpha_map_EN,
+    '1236': 'o`',
+    '12456': 'g`',
+    '156': 'sh',
+    '12345': 'ch',
+}
+
 # Greek letters
 alpha_map_GR = {
     '1': 'α',
@@ -244,6 +253,7 @@ letter_dicts = {
     'LV': alpha_map_LV,
     'RU': alpha_map_RU,
     'UZ': alpha_map_UZ,
+    'UZL': alpha_map_UZL,
     'NUM': num_map,
     'NUM_DENOMINATOR': num_denominator_map,
     'MATH_RU': math_RU,
