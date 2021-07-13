@@ -270,7 +270,7 @@ def register(template):
         if len(found_users):
             flash('Пользователь с таким E-mail уже существует')
             return redirect(url_for('register'))
-        user = core.register_user(name=form.username.data, email=form.e_mail.data, password_hash=None, network_name=None, network_id=None)  # TODO only email registration now
+        user = core.register_user(name=form.username.data, email=form.e_mail.data, password="", network_name=None, network_id=None)  # TODO only email registration now
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('index'))
     return render_template(template, title='Sign In', form=form)
