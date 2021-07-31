@@ -20,6 +20,13 @@
 		<div>{{ form.comment.label }}</div>
         <div>{{ form.comment(rows=5, cols=20, style="width:100%") }}</div>
 	</div>
+    <div>
+        <table class="centered" width="100%"><tr>
+            <td>{{ form.send_braille() }} <label for="send_braille">{{ form.send_braille.label }}</label></td>
+            <td>{{ form.send_text() }} <label for="send_text">{{ form.send_text.label }}</label></td>
+            <td>{{ form.send_image() }} <label for="send_image">{{ form.send_image.label }}</label></td>
+        </tr></table>
+    </div>
     <!--
     <div class="wrapper">
 	    {{ form.as_attachment() }}

@@ -205,13 +205,20 @@ def email(template):
         title = StringField('Заголовок письма')
         comment = TextAreaField('Комментарий')
         as_attachment = BooleanField("отправить как вложение")
+        send_braille = BooleanField("Брайль", default=True)
+        send_text = BooleanField("текст", default=True)
+        send_image = BooleanField("изображение", default=True)
         submit = SubmitField('Отправить')
     form = Form()
     if form.validate_on_submit():
         core.send_results_to_mail(mail=form.e_mail.data, task_id=request.values['task_id'],
                                   parameters={'subject': form.title.data,
                                               'to_developers': form.to_developers.data,
-                                              'comment': form.comment.data})
+                                              'comment': form.comment.data,
+                                              'send_braille': form.send_braille.data,
+                                              'send_text': form.send_text.data,
+                                              'send_image': form.send_image.data,
+                                              })
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],

@@ -616,12 +616,15 @@ class AngelinaSolver:
         return lst
 
     # отправка почты
-    def send_mail(self, to_address, subject, comment, results_list):
+    def send_mail(self, to_address, subject, comment, results_list,
+                  file_types_to_send = None):
         """
         Sends results to e-mail as text(s) + image(s)
         :param to_address: destination email as str
-        :param results_list: list of tuples with file names(txt or jpg)
         :param subject: message subject or None
+        :param comment: message text before result files or None
+        :param results_list: list of tuples with file names(txt or jpg)
+        :param file_types_to_send: None or list of file extensions like [".jpg", ".txt"]
         """
         # create message object instance
         msg = fill_message_headers(MIMEMultipart(), to_address, subject)
@@ -630,11 +633,14 @@ class AngelinaSolver:
         # attach image to message body
         for file_names in results_list:
             for file_name in reversed(file_names):  # txt before jpg
-                if Path(file_name).suffix in (".txt", ".brl"):
+                file_suffix = Path(file_name).suffix
+                if file_types_to_send and not file_suffix in file_types_to_send:
+                    continue
+                if file_suffix in (".txt", ".brl"):
                     txt = (self.data_root / self.results_dir / file_name).read_text(encoding="utf-8")
                     attachment = MIMEText(txt, _charset="utf-8")
                     attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-                elif Path(file_name).suffix == ".jpg":
+                elif file_suffix == ".jpg":
                     attachment = MIMEImage((self.data_root / self.results_dir / file_name).read_bytes())
                     attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
                 else:
@@ -648,8 +654,12 @@ class AngelinaSolver:
         results_list - список результатов такой же, как возвращает get_results(...)
         to_email - адрес или список адресов
         parameters - словарь с параметрами формирования и отправки письма, в т.ч.:
-            title - заголовок
+            subject - заголовок
             comment - комментарий, ставится в начале письма
+            to_developers
+            send_image
+            send_text
+            send_braille
         """
         user_id, doc_id = task_id.split("_")
         con = self._user_tasks_sql_conn(user_id)
@@ -675,7 +685,14 @@ class AngelinaSolver:
                 mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
         subject = parameters.get('subject') or parameters.get('title') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
         comment = (parameters.get('comment') or parameters.get('koment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
-        self.send_mail(mail, subject, comment, json.loads(result[1]))
+        file_types_to_send = []
+        if parameters.get("send_image", True):
+            file_types_to_send.append(".jpg")
+        if parameters.get("send_text", True):
+            file_types_to_send.append(".txt")
+        if parameters.get("send_braille", True):
+            file_types_to_send.append(".brl")
+        self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send)
         return True
 
     def get_user_emails(self, user_id):
