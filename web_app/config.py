@@ -3,7 +3,7 @@ import datetime
 
 class Config(object):
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'angilina'
-    MODEL_PATH = "."
+    MODEL_PATH = ""
     DATA_ROOT = os.environ.get('DATA_ROOT') or 'static/data'
     # e-mail parameters:
     SMTP_SERVER = os.environ.get('SMTP_SERVER') or "ovdv.ru"

@@ -24,7 +24,8 @@ import werkzeug.datastructures
 from .config import Config
 import model.infer_retinanet as infer_retinanet
 
-model_weights = 'model.t7'
+MODEL_PATH = Config.MODEL_PATH or Path(__file__).parent.parent
+MODEL_WEIGHTS = 'model.t7'
 
 recognizer = None
 
@@ -309,7 +310,7 @@ class AngelinaSolver:
     ##########################################
 
 
-    def __init__(self, data_root_path="/var/www/FlaskApache/FlaskApache/static/data"):  # GVNC
+    def __init__(self, data_root_path):  # GVNC
         self.data_root = Path(data_root_path)
         self.tasks_dir = Path('tasks')
         self.raw_images_dir = Path('raw')
@@ -322,8 +323,8 @@ class AngelinaSolver:
             print("infer_retinanet.BrailleInference()")
             t = timeit.default_timer()
             recognizer = infer_retinanet.BrailleInference(
-                params_fn=os.path.join(Config.MODEL_PATH, 'weights', 'param.txt'),
-                model_weights_fn=os.path.join(Config.MODEL_PATH, 'weights', model_weights),
+                params_fn=os.path.join(MODEL_PATH, 'weights', 'param.txt'),
+                model_weights_fn=os.path.join(MODEL_PATH, 'weights', MODEL_WEIGHTS),
                 create_script=None)
             print(timeit.default_timer() - t)
         self.recognizer = recognizer
