@@ -374,7 +374,7 @@ class AngelinaSolver:
         # {"title":"name","text":"def_text"}
 
     # собственно распознавание
-    def process(self, user_id, file_storage, lang=None, find_orientation=None, process_2_sides=None, has_public_confirm=None, param_dict=None):
+    def process(self, user_id, file_storage, param_dict):
         """
         user: User ID or None для анонимного доступа
         file_storage: werkzeug.datastructures.FileStorage: загруженное изображение, pdf или zip или список (list) полных путей к изображению
@@ -389,14 +389,6 @@ class AngelinaSolver:
         После успешной загрузки возвращаем id материалов в системе распознавания или False если в процессе обработки 
         запроса возникла ошибка. Далее по данному id мы переходим на страницу просмотра результатов данного распознавнаия
         """
-        # GVNC для совместимости с V2. Переделать (убрать отдельные парметры, оставить только обязательный params_dict)
-        if param_dict is None:
-            #find_orientation = find_orientation and find_orientation != 'False'
-            #process_2_sides = process_2_sides and process_2_sides != 'False'
-            #has_public_confirm = has_public_confirm and has_public_confirm != 'False'
-            param_dict = {"lang": lang, "find_orientation": find_orientation,
-                          "process_2_sides": process_2_sides, "has_public_confirm": has_public_confirm}
-
         doc_id = uuid.uuid4().hex
         if type(file_storage) == werkzeug.datastructures.ImmutableMultiDict:
             file_storage = file_storage['file']
@@ -679,13 +671,13 @@ class AngelinaSolver:
             user_name, user_email = "", ""
 
         assert result[2] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[2])
-        if parameters.get('to_developers') or parameters.get('razRab'):  # GVNC
+        if parameters.get('to_developers'):
             if mail:
                 mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
             else:
                 mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
         subject = parameters.get('subject') or parameters.get('title') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
-        comment = (parameters.get('comment') or parameters.get('koment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
+        comment = (parameters.get('comment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
         file_types_to_send = []
         if parameters.get("send_image", True):
             file_types_to_send.append(".jpg")
