@@ -676,7 +676,7 @@ class AngelinaSolver:
                 mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
             else:
                 mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
-        subject = parameters.get('subject') or parameters.get('title') or "Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower()
+        subject = parameters.get('subject') or ("Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower())
         comment = (parameters.get('comment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
         file_types_to_send = []
         if parameters.get("send_image", True):
