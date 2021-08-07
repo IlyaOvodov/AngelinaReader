@@ -96,7 +96,7 @@ class User:
         Проверяет пароль. Вызывать про логине по email.
         """
         password_hash = self.hash_password(password)
-        if self.password_hash is None or self.password_hash == password_hash:  # GVNC изменить для новой версии, чтобы пустой пароль не работал
+        if self.password_hash == password_hash:
             return True
         if self.params:
             params = json.loads(self.params)
@@ -169,7 +169,6 @@ class User:
         subject = "Восстановление пароля"
         msg = fill_message_headers(MIMEText(msg_text, _charset="utf-8"), self.email, subject)
         send_email(msg)
-        return True
 
 
 def exec_sqlite(con, query, params, timeout=10):
@@ -199,6 +198,25 @@ class AngelinaSolver:
     """
     Обеспечивает интерфейс с вычислительной системой: пользователи, задачи и результаты обработки
     """
+    def __init__(self, data_root_path):
+        self.data_root = Path(data_root_path)
+        self.tasks_dir = Path('tasks')
+        self.raw_images_dir = Path('raw')
+        self.results_dir = Path('results')
+        os.makedirs(self.data_root, exist_ok=True)
+        self.users_db_file_name = self.data_root / "all_users.db"
+
+        global recognizer
+        if recognizer is None:
+            print("infer_retinanet.BrailleInference()")
+            t = timeit.default_timer()
+            recognizer = infer_retinanet.BrailleInference(
+                params_fn=os.path.join(MODEL_PATH, 'weights', 'param.txt'),
+                model_weights_fn=os.path.join(MODEL_PATH, 'weights', MODEL_WEIGHTS),
+                create_script=None)
+            print(timeit.default_timer() - t)
+        self.recognizer = recognizer
+
     ##########################################
     ## работа с пользователями
     ##########################################
@@ -308,26 +326,8 @@ class AngelinaSolver:
 
 
     ##########################################
-
-
-    def __init__(self, data_root_path):  # GVNC
-        self.data_root = Path(data_root_path)
-        self.tasks_dir = Path('tasks')
-        self.raw_images_dir = Path('raw')
-        self.results_dir = Path('results')
-        os.makedirs(self.data_root, exist_ok=True)
-        self.users_db_file_name = self.data_root / "all_users.db"
-
-        global recognizer
-        if recognizer is None:
-            print("infer_retinanet.BrailleInference()")
-            t = timeit.default_timer()
-            recognizer = infer_retinanet.BrailleInference(
-                params_fn=os.path.join(MODEL_PATH, 'weights', 'param.txt'),
-                model_weights_fn=os.path.join(MODEL_PATH, 'weights', MODEL_WEIGHTS),
-                create_script=None)
-            print(timeit.default_timer() - t)
-        self.recognizer = recognizer
+    ## работа с help_articles
+    ##########################################
 
     help_articles = ["test_about", "test_photo"]
     help_contents = {
@@ -677,7 +677,7 @@ class AngelinaSolver:
             else:
                 mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
         subject = parameters.get('subject') or ("Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower())
-        comment = (parameters.get('comment') or '') + "\nLetter from: {}<{}>".format(user_name, user_email)
+        comment = parameters.get('comment', "") + "\nLetter from: {}<{}>".format(user_name, user_email)
         file_types_to_send = []
         if parameters.get("send_image", True):
             file_types_to_send.append(".jpg")
@@ -686,7 +686,6 @@ class AngelinaSolver:
         if parameters.get("send_braille", True):
             file_types_to_send.append(".brl")
         self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send)
-        return True
 
     def get_user_emails(self, user_id):
         """
