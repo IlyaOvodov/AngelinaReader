@@ -70,8 +70,8 @@ class User:
         """
         self.id = id  # уникальный для системы id пользователя. Присваивается при регистрации.
         self.solver = solver
-        self.name = user_dict["name"]
-        self.email = user_dict["email"]
+        self.name = user_dict.get("name", "")
+        self.email = user_dict.get("email", "")
 
         # Данные, с которыми юзер был найден через find_user или создан через register_user.
         # У пользователя может быть несколько способов входа, поэтому 
@@ -79,11 +79,15 @@ class User:
         self.network_id = user_dict.get("network_id")
         self.password_hash = user_dict.get("password_hash")
         self.params = user_dict.get("params")
+        if self.params:
+            self.params_dict = json.loads(self.params)
+        else:
+            self.params_dict = dict()
 
         # поля для Flask:
-        self.is_authenticated = True
+        self.is_authenticated = id is not None
         self.is_active = True
-        self.is_anonymous = False
+        self.is_anonymous = id is None
 
     def get_id(self):
         return self.id
@@ -104,18 +108,13 @@ class User:
                 return True
         return False
 
-    def set_name(self, name):
+    def update(self):
         """
-        изменение имени ранее зарегистрированного юзера
+        изменение имени и настроек ранее зарегистрированного юзера
         """
-        raise NotImplementedError
-        pass
-        
-    def set_email(self, email):
-        """
-        изменение email ранее зарегистрированного юзера
-        """
-        raise NotImplementedError
+        with self.solver._users_sql_conn() as con:
+            self.params = json.dumps(self.params_dict)
+            exec_sqlite(con, "update users set name=?, params=? where id = ?", (self.name, self.params, self.id))
         pass
         
     def set_password(self, password):
@@ -129,31 +128,20 @@ class User:
             exec_sqlite(con, "update users set password_hash = ? where id = ?", (self.password_hash, self.id))
         self.set_new_tmp_password(None)
 
-    def get_param_default(self, param_name):
-        """
-        Возвращает занчение по умолчанию для параметра param_name (установки по умолчанию параметров в разных формах)
-        """
-        raise NotImplementedError
-        return 123
-        
-    def set_param_default(self, param_name, param_value):
-        """
-        Возвращает заначение по умолчанию для параметра param_name
-        """
-        raise NotImplementedError
-        pass
-
     def set_new_tmp_password(self, new_tmp_password_hash):
         with self.solver._users_sql_conn() as con:
             res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
             assert len(res) == 1, (self.id)
             params = res[0][0]
             if params:
-                params = json.loads(params)
+                self.params_dict = json.loads(params)
             else:
-                params = dict()
-            params["tmp_password"] = new_tmp_password_hash
-            self.params = json.dumps(params)
+                self.params_dict = dict()
+            if new_tmp_password_hash:
+                self.params_dict["tmp_password"] = new_tmp_password_hash
+            else:
+                del self.params_dict["tmp_password"]
+            self.params = json.dumps(self.params_dict)
             exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
 
     def send_new_pass_to_mail(self):
