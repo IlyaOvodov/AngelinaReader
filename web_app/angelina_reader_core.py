@@ -675,15 +675,18 @@ class AngelinaSolver:
             file_types_to_send.append(".brl")
         self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send)
 
-    def get_user_emails(self, user_id):
+    def get_user_emails(self, user):
         """
         Список адресов почты, куда пользователь отсылал письма
-        :param user_id: string
+        :param user: User
         :return: list of e-mails
         """
-        if not user_id:
+        if not user.is_authenticated:
             return []
-        return ["angelina-reader@ovdv.ru", "il@ovdv.ru", "iovodov@gmail.com"]  # TODO
+        mails = user.params_dict.get('selected_emails','')
+        mails = mails.replace('\r','').replace(';','\n').replace(',','\n').split('\n')
+        result = [x.strip() for x in mails if x.strip()]
+        return result
 
     def set_public_acceess(self, task_id, is_public):
         """
