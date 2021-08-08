@@ -688,17 +688,16 @@ class AngelinaSolver:
         result = [x.strip() for x in mails if x.strip()]
         return result
 
-    def set_public_acceess(self, task_id, is_public):
+    def set_public_acceess(self, task_id, new_is_public):
         """
             Состояние публичности выставляем в соответствии с переданным is_public
             True - Публичный (Замок открыт)
         """
-        # TODO
-        print('set_public_access', task_id, is_public)
-        if is_public is False:
-            return True
-        else:
-            return False
+        user_id, doc_id = task_id.split("_")
+        con = self._user_tasks_sql_conn(user_id)
+        exec_sqlite(con, "update tasks set is_public=:new_is_public where doc_id=:doc_id",
+                    {"new_is_public": int(new_is_public), "doc_id": doc_id})
+        return new_is_public
 
 
 if __name__ == "__main__":
