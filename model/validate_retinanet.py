@@ -5,26 +5,25 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
-verbose = 3
+verbose = 1
 inference_width = 850
 cls_thresh = 0.5
 nms_thresh = 0.02
-LINE_THR = 0.6
-iou_thr = 0.5
+LINE_THR = 0.5
+iou_thr = 0.0
 do_filter_lonely_rects = False
 metrics_for_lines = False
 show_filtered = False
 
 models = [
-    #('NN_results/dsbi_lay3_100_225fc0', 'models/clr.032.t7'),
+    #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
+    #
     ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
-    #('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/best.t7'),
-    #('NN_results/angelina_fpn1_lay3_100_noaug2_f14849', 'models/best.t7'),
-    #('NN_results/dsbi_lay3_100_225fc0', 'models/best.t7'),
+    (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
 ]
 
 model_dirs = [
-    #('NN_results/dsbi_fpn1_lay3_100_ea2e5c', 'models/*.t7'),
+    #(r'E:\_ELVEES\Braille\NN_results\dsbi_fpn1_lay4_1000_b67b68', 'models/clr.02*.t7'),
     # ('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/*.t7'),
 ]
 
@@ -37,9 +36,9 @@ datasets = {
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
     'dsbi': [r'DSBI/data/test_li2.txt', ],
-    #'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
-    #'An-books': [r'AngelinaDataset/books/val.txt'],
-    #'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
+    'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
+    # 'An-books': [r'AngelinaDataset/books/val.txt'],
+    # 'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
 }
 
 lang = 'RU'
@@ -50,6 +49,7 @@ import Levenshtein
 from pathlib import Path
 import PIL
 import torch
+import timeit
 sys.path.append(r'../..')
 sys.path.append('../NN/RetinaNet')
 import local_config
@@ -560,48 +560,53 @@ def main(table_like_format):
     prev_model_root = None
 
     if table_like_format:
-        print('model\tweights\tkey\t'
+        print('model\tweights\tkey\ttime\t'
               'precision\trecall\tf1\t'
               'precision_c\trecall_C\tf1_c\t'
               'd_by_doc\td_by_char\td_by_char_avg')
-    for model_root, model_weights in models:
-        if model_root != prev_model_root:
+    for model_root_str, model_weights in models:
+        if model_root_str != prev_model_root:
             if not table_like_format:
-                print('model: ', model_root)
+                print('model: ', model_root_str)
             else:
                 print()
-            prev_model_root = model_root
+            prev_model_root = model_root_str
         if verbose:
             print('evaluating weights: ', model_weights)
-        params_fn = Path(local_config.data_path) / model_root / 'param.txt'
+        model_root = Path(model_root_str)
+        if not model_root.is_absolute():
+            model_root = Path(local_config.data_path) / model_root
+        params_fn = model_root / 'param.txt'
         if not params_fn.is_file():
-            params_fn = Path(local_config.data_path) / (model_root + '.param.txt')  # старый вариант
+            params_fn = Path(str(model_root) + '.param.txt')  # старый вариант
             assert params_fn.is_file(), str(params_fn)
         recognizer = infer_retinanet.BrailleInference(
             params_fn=params_fn,
-            model_weights_fn=os.path.join(local_config.data_path, model_root, model_weights),
+            model_weights_fn=str(model_root / model_weights),
             create_script=None,
             inference_width=inference_width,
             verbose=verbose)
         assert recognizer.impl.cls_thresh == cls_thresh, (recognizer.impl.cls_thresh, cls_thresh)
         for key, data_list in data_set.items():
+            t0 = timeit.default_timer()
             res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines=metrics_for_lines)
+            t = timeit.default_timer() - t0
             # print('{model_weights} {key} precision: {res[precision]:.4}, recall: {res[recall]:.4} f1: {res[f1]:.4} '
             #       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
             #       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
             #       'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
             if table_like_format:
-                print('{model}\t{weights}\t{key}\t'
+                print('{model}\t{weights}\t{key}\t{t:.2}\t'
                       '{res[precision_r]:.4}\t{res[recall_r]:.4}\t{res[f1_r]:.4}\t'
                       '{res[precision_c]:.4}\t{res[recall_c]:.4}\t{res[f1_c]:.4}\t'
                       # '{res[d_by_doc]:.4}\t{res[d_by_char]:.4}\t'
                       # '{res[d_by_char_avg]:.4}'
-                      .format(model=model_root, weights=model_weights, key=key, res=res))
+                      .format(model=model_root_str, weights=model_weights, key=key, res=res, t=t))
             else:
-                print('{model_weights} {key} '
+                print('{model_weights} {key} {t:.2} '
                       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
                       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
-                      'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
+                      'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res, t=t))
 
 if __name__ == '__main__':
     import time
