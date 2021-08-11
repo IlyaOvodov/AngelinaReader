@@ -64,9 +64,10 @@ def common_aug(mode, params):
         #augs_list.append(T.MotionBlur())
         if params.augmentation.get('JpegCompression', True):
             augs_list.append(T.JpegCompression(quality_lower=30, quality_upper=100))
-        #augs_list.append(T.VerticalFlip())
         if params.augmentation.get('HorizontalFlip', True):
             augs_list.append(T.HorizontalFlip())
+        if params.augmentation.get('VerticalFlip', False):
+            augs_list.append(T.VerticalFlip())
 
     return albumentations.ReplayCompose(augs_list, p=1., bbox_params = {'format':'albumentations', 'min_visibility':0.5})
 

@@ -16,7 +16,6 @@ from ovotools.params import AttrDict
 import numpy as np
 from collections import OrderedDict
 import torch
-import time
 import copy
 from pathlib import Path
 import PIL.ImageDraw
@@ -30,7 +29,10 @@ from model import create_model_retinanet
 import braille_utils.postprocess as postprocess
 from model.my_decoder import CreateDataEncoder
 
-import time
+#import time
+import timeit
+time = timeit
+time.clock = timeit.default_timer
 decode_calls=0
 decode_t=0
 impl_calls=0
