@@ -112,7 +112,7 @@ def save_model(model, rel_dir="models", filename="last.t7"):
     os.makedirs(dir_name, exist_ok=True)
     torch.save(model.state_dict(), file_name)
 
-lif settings.findLR:
+if settings.findLR:
     import math
     @trainer.on(Events.ITERATION_STARTED)
     def upd_lr(engine):
@@ -135,7 +135,9 @@ else:
                     engine.state.metrics[key+ ':' + rk] = rv
 
     @trainer.on(Events.EPOCH_COMPLETED)
-    def eval_accuracy(engine):
+    def save_model_on_event(engine):
+        if not settings.get("regular_save_period"):
+            return
         try:
             period, step_in_epoch = settings.regular_save_period
         except:  # not tuple
