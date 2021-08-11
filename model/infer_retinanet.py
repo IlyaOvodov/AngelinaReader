@@ -11,7 +11,6 @@ import glob
 import shutil
 import sys
 import local_config
-sys.path.append(local_config.global_3rd_party)
 from os.path import join
 from ovotools.params import AttrDict
 import numpy as np

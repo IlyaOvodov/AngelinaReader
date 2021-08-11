@@ -6,7 +6,6 @@ Results are stored in local_config.data_path / params.model_name
 """
 import local_config
 import sys
-sys.path.append(local_config.global_3rd_party)
 from collections import OrderedDict
 import os
 import torch
@@ -24,28 +23,47 @@ from model import create_model_retinanet
 from model.params import params, settings
 import model.validate_retinanet as validate_retinanet
 
-if settings.findLR:
-    params.model_name += '_findLR'
-params.save(can_overwrite=settings.can_overwrite)
+if len(sys.argv) > 2:
+    dir = Path(sys.argv[1])
+    if not dir.is_absolute():
+        dir = Path(local_config.data_path) / dir
+    checkpoint = str(dir/'checkpoint') + '_{}_'+sys.argv[2]+'.pth'
+else:
+    checkpoint =  None
 
+def load_objects (to_load, checkpoint):
+    for k, obj in to_load.items():
+        f_name = checkpoint.format(k)
+        state_dict = torch.load(f_name)
+        obj.load_state_dict(state_dict)
+
+if checkpoint:
+    load_objects(to_load={"settings": settings, "params": params}, checkpoint=checkpoint)
+else:
+    if settings.findLR:
+        params.model_name += '_findLR'
+    params.save(can_overwrite=settings.can_overwrite)
 
 ctx = ovotools.pytorch.Context(settings=None, params=params, eval_func=lambda x: eval(x))
 
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
-if 'load_model_from' in params.keys():
-    preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from, map_location='cpu')
+if checkpoint:
+    load_objects(to_load={"model": model}, checkpoint=checkpoint)
+else:
+    if 'load_model_from' in params.keys():
+        preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from, map_location='cpu')
 
-    keys_to_replace = []
-    for k in preloaded_weights.keys():
-        if k[:8] in ('loc_head', 'cls_head'):
-            keys_to_replace.append(k)
-    for k in keys_to_replace:
-        k2 = k.split('.')
-        if len(k2) == 4:
-            k2 = k2[0] + '.' + k2[2] + '.' + k2[3]
-            preloaded_weights[k2] = preloaded_weights.pop(k)
+        keys_to_replace = []
+        for k in preloaded_weights.keys():
+            if k[:8] in ('loc_head', 'cls_head'):
+                keys_to_replace.append(k)
+        for k in keys_to_replace:
+            k2 = k.split('.')
+            if len(k2) == 4:
+                k2 = k2[0] + '.' + k2[2] + '.' + k2[3]
+                preloaded_weights[k2] = preloaded_weights.pop(k)
 
-    model.load_state_dict(preloaded_weights)
+        model.load_state_dict(preloaded_weights)
 
 ctx.net  = model
 ctx.loss = loss
@@ -59,6 +77,8 @@ for k,v in val_loaders.items():
     print('             {}:{} batches'.format(k, len(v)))
 
 ctx.optimizer = eval(params.optim)(model.parameters(), **params.optim_params)
+if checkpoint:
+    load_objects(to_load={"optimizer": ctx.optimizer}, checkpoint=checkpoint)
 
 metrics = OrderedDict({
     'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
@@ -92,7 +112,7 @@ def save_model(model, rel_dir="models", filename="last.t7"):
     os.makedirs(dir_name, exist_ok=True)
     torch.save(model.state_dict(), file_name)
 
-if settings.findLR:
+lif settings.findLR:
     import math
     @trainer.on(Events.ITERATION_STARTED)
     def upd_lr(engine):
@@ -123,6 +143,8 @@ else:
         if engine.state.epoch % period == step_in_epoch and engine.state.epoch > period:
             save_model(model, filename="{:06}.t7".format(engine.state.epoch))
 
+
+    clr_scheduler = None
     if params.lr_scheduler.type == 'clr':
         clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, ctx.optimizer, target_metric, params,
                                                        engine=trainer)
@@ -137,6 +159,9 @@ else:
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
             ctx.lr_scheduler.step(**call_params)
 
+    if checkpoint:
+        load_objects(to_load={"lr_scheduler": clr_scheduler or ctx.lr_scheduler}, checkpoint=checkpoint)
+
 if settings.findLR:
     best_model_buffer = None
 else:
@@ -147,6 +172,18 @@ log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = eval
                                                                 params = params,
                                                                 duty_cycles = eval_duty_cycle)
 trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
+
+checkpoint_objects = {"settings": settings,
+                      'params': params,
+                      'model': model,
+                      'optimizer': ctx.optimizer,
+                      'lr_scheduler': clr_scheduler or ctx.lr_scheduler,
+                      'trainer': trainer,
+                      'evaluator': evaluator}
+if best_model_buffer:
+    checkpoint_objects.update({"best_model_buffer": best_model_buffer})
+if checkpoint:
+    load_objects(to_load=checkpoint_objects, checkpoint=checkpoint)
 
 #@trainer.on(Events.EPOCH_COMPLETED)
 #def save_model(engine):
@@ -167,6 +204,16 @@ def reset_resources(engine):
     engine.state.batch = None
     engine.state.output = None
     #torch.cuda.empty_cache()
+
+trainer.add_event_handler(Events.EPOCH_COMPLETED,
+                          ignite.handlers.ModelCheckpoint(
+                            dirname=ctx.params.get_base_filename(),
+                            filename_prefix='checkpoint',
+                            save_interval=10, n_saved=1,
+                            atomic=True, require_empty=False,
+                            create_dir=False,
+                            save_as_state_dict=True)
+                          , checkpoint_objects)
 
 trainer.run(train_loader, max_epochs = train_epochs)
 
