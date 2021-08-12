@@ -339,7 +339,7 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
                     gt_is_correct[gt_i] = 1
         for rec_i in range(len(labels)):
             gt_i = iou[:, rec_i].argmax()
-            if iou[gt_i, rec_i] > 0.5:
+            if iou[gt_i, rec_i] > iou_thr:
                 if labels[rec_i] == gt_labels[gt_i]:
                     rec_is_false[rec_i] = 0
         tp = sum(gt_is_correct)
