@@ -180,8 +180,7 @@ checkpoint_objects = {"settings": settings,
                       'model': model,
                       'optimizer': ctx.optimizer,
                       'lr_scheduler': clr_scheduler or ctx.lr_scheduler,
-                      'trainer': trainer,
-                      'evaluator': evaluator}
+                      'trainer': trainer}
 if best_model_buffer:
     checkpoint_objects.update({"best_model_buffer": best_model_buffer})
 if checkpoint:

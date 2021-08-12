@@ -311,15 +311,22 @@ def dot_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_r
 
 
 def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_rects, img_fn):
+    """
+    :return:  correct, subst, deleted, inserted, rec_is_false
+        correct
+        subst (wrong label)
+        deleted (missed)
+        inserted (false)
+          fp = inserted + subst
+          fn = deleted + subst
+     rec_is_false - list of indexes of wrong label or false rects
+    """
     if do_filter_lonely_rects:
         boxes, labels = filter_lonely_rects(boxes, labels, img)
     gt_labels = [r[4] for r in gt_rects]
-    gt_is_correct = [0] * len(gt_rects)  # recognized label for gt, -1 - missed
-    rec_is_false = [1] * len(labels)  # recognized is false
+    rec_is_false = [1] * len(labels)  # recognized is wrong: no match or wrong label
 
-    tp = 0
-    fp = 0
-    fn = 0
+    correct = subst = deleted = inserted = 0
     if len(gt_rects) and len(labels):
         boxes = torch.tensor(boxes)
         gt_boxes = torch.tensor([r[:4] for r in gt_rects], dtype=torch.float32) * torch.tensor([image_wh[0], image_wh[1], image_wh[0], image_wh[1]])
@@ -332,25 +339,35 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
         y2 = torch.min(gt_boxes[:, 3].unsqueeze(1), boxes[:, 3].unsqueeze(0))
         intersect_area = (x2-x1).clamp(min=0)*(y2-y1).clamp(min=0)
         iou = intersect_area / (gt_areas.unsqueeze(1) + areas.unsqueeze(0) - intersect_area)
-        for gt_i in range(len(gt_labels)):
-            rec_i = iou[gt_i, :].argmax()
-            if iou[gt_i, rec_i] > iou_thr:
-                if labels[rec_i] == gt_labels[gt_i]:
-                    gt_is_correct[gt_i] = 1
-        for rec_i in range(len(labels)):
-            gt_i = iou[:, rec_i].argmax()
-            if iou[gt_i, rec_i] > iou_thr:
-                if labels[rec_i] == gt_labels[gt_i]:
-                    rec_is_false[rec_i] = 0
-        tp = sum(gt_is_correct)
-        fp = sum(rec_is_false)
-        fn = len(gt_is_correct) - tp
+        sorted_indexes = iou.view(-1).argsort(descending=True)  # [Igt, Irec] -> sorted Igt*Nrec + Irec
 
-        if verbose==3 and (fp or fn):
+        gt_correct = [0] * len(gt_rects)  #
+        gt_wrong_label = [0] * len(gt_rects)  # recognized but with wrong label
+        gt_not_matched = [1] * len(gt_rects)  # missed
+        rec_not_matched = [1] * len(labels)  # not matched to gt
+        for i in range(sorted_indexes.shape[0]):
+            gt_i = sorted_indexes[i] // len(labels)
+            rec_i = sorted_indexes[i] % len(labels)
+            if iou[gt_i, rec_i] <= iou_thr:
+                break
+            if gt_not_matched[gt_i] == 1 and rec_not_matched[rec_i] == 1:  # not already matched
+                gt_not_matched[gt_i] = 0
+                rec_not_matched[rec_i] = 0
+                if labels[rec_i] == gt_labels[gt_i]:
+                    gt_correct[gt_i] = 1
+                    rec_is_false[rec_i] = 0
+                else:
+                    gt_wrong_label[gt_i] = 1
+        correct = sum(gt_correct)
+        subst = sum(gt_wrong_label)
+        deleted = sum(gt_not_matched)
+        inserted = sum(rec_not_matched)
+
+        if verbose==3 and (subst or deleted or inserted):
              draw = PIL.ImageDraw.Draw(img)
              has_false = False
              has_missed = False
-             for i, is_correct in enumerate(gt_is_correct):
+             for i, is_correct in enumerate(gt_correct):
                  if not is_correct:
                      #draw.rectangle(gt_boxes[i].tolist(), outline="red")
                      draw.text((gt_boxes[i][0], gt_boxes[i][3]), label_tools.int_to_label123(gt_labels[i]), fill="red")
@@ -366,8 +383,7 @@ def char_metrics_rects(boxes, labels, gt_rects, image_wh, img, do_filter_lonely_
                  draw.text((10, 10), img_fn, fill="black")
                  img.show(title=img_fn)
                  #img.save(Path(r"D:\Programming\Braille\Docs\Paper1\New folder") / (Path(img_fn).name + ".bmp"))
-
-    return tp, fp, fn, rec_is_false
+    return correct, subst, deleted, inserted, rec_is_false
 
 
 def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_lines):
@@ -380,18 +396,12 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
     sum_d1 = 0.
     sum_len = 0
     # по тексту
-    tp = 0
-    fp = 0
-    fn = 0
+    tp = fp = fn = 0
     # по rect
-    tp_r = 0
-    fp_r = 0
-    fn_r = 0
-
+    tp_r = fp_r = fn_r = 0
     # по символам
-    tp_c = 0
-    fp_c = 0
-    fn_c = 0
+    tp_c = fp_c = fn_c = 0
+    subst_c = deleted_c = inserted_c = 0
 
     score_hist_true = [0 for i in range(100)]
     score_hist_false = [0 for i in range(100)]
@@ -448,12 +458,15 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         fp += fpi
         fn += fni
 
-        tpi, fpi, fni, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
+        correct, subst, deleted, inserted, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
                                           img=res_dict['image'], do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
-        tp_c += tpi
-        fp_c += fpi
-        fn_c += fni
+        tp_c += correct
+        fp_c += inserted + subst
+        fn_c += deleted + subst
+        subst_c += subst
+        deleted_c += deleted
+        inserted_c += inserted
 
         for s, is_false in zip(scores, rec_is_false):
             (score_hist_true, score_hist_false)[is_false][min(99, int(s*100))] += 1
@@ -485,6 +498,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         'precision_c': precision_c,
         'recall_c': recall_c,
         'f1_c': 2*precision_c*recall_c/(precision_c+recall_c) if precision_c+recall_c != 0 else 0.,
+        'cer': (subst_c + deleted_c + inserted_c) / (tp_c + subst_c + deleted_c),
         'd_by_doc': sum_d/len(data_list),
         'd_by_char': sum_d/sum_len,
         'd_by_char_avg': sum_d1/len(data_list)
@@ -538,12 +552,12 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
             boxes = res_dict['boxes']
             labels = res_dict['labels']
             #scores = res_dict['scores']
-        tpi, fpi, fni, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
+        correct, subst, deleted, inserted, rec_is_false = char_metrics_rects(boxes = boxes, labels = labels,
                                           gt_rects = res_dict['gt_rects'], image_wh = (res_dict['labeled_image'].width, res_dict['labeled_image'].height),
                                           img=None, do_filter_lonely_rects=do_filter_lonely_rects, img_fn=img_fn)
-        tp_c += tpi
-        fp_c += fpi
-        fn_c += fni
+        tp_c += correct
+        fp_c += inserted + subst
+        fn_c += deleted + subst
     precision_c = tp_c/(tp_c+fp_c) if tp_c+fp_c != 0 else 0.
     recall_c = tp_c/(tp_c+fn_c) if tp_c+fn_c != 0 else 0.
     return {
@@ -563,7 +577,9 @@ def main(table_like_format):
         print('model\tweights\tkey\ttime\t'
               'precision\trecall\tf1\t'
               'precision_c\trecall_C\tf1_c\t'
-              'd_by_doc\td_by_char\td_by_char_avg')
+              'cer\t'
+              #'d_by_doc\td_by_char\td_by_char_avg'
+              )
     for model_root_str, model_weights in models:
         if model_root_str != prev_model_root:
             if not table_like_format:
@@ -599,6 +615,7 @@ def main(table_like_format):
                 print('{model}\t{weights}\t{key}\t{t:.2}\t'
                       '{res[precision_r]:.4}\t{res[recall_r]:.4}\t{res[f1_r]:.4}\t'
                       '{res[precision_c]:.4}\t{res[recall_c]:.4}\t{res[f1_c]:.4}\t'
+                      '{res[cer]:.4}\t'
                       # '{res[d_by_doc]:.4}\t{res[d_by_char]:.4}\t'
                       # '{res[d_by_char_avg]:.4}'
                       .format(model=model_root_str, weights=model_weights, key=key, res=res, t=t))
