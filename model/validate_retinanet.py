@@ -498,7 +498,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         'precision_c': precision_c,
         'recall_c': recall_c,
         'f1_c': 2*precision_c*recall_c/(precision_c+recall_c) if precision_c+recall_c != 0 else 0.,
-        'cer': (subst_c + deleted_c + inserted_c) / (tp_c + subst_c + deleted_c),
+        'cer': 100 * (subst_c + deleted_c + inserted_c) / (tp_c + subst_c + deleted_c),
         'd_by_doc': sum_d/len(data_list),
         'd_by_char': sum_d/sum_len,
         'd_by_char_avg': sum_d1/len(data_list)
@@ -577,7 +577,7 @@ def main(table_like_format):
         print('model\tweights\tkey\ttime\t'
               'precision\trecall\tf1\t'
               'precision_c\trecall_C\tf1_c\t'
-              'cer\t'
+              'cer(%)\t'
               #'d_by_doc\td_by_char\td_by_char_avg'
               )
     for model_root_str, model_weights in models:
