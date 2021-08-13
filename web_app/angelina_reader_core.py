@@ -585,7 +585,8 @@ class AngelinaSolver:
                     "id": user_id + "_" + rec[0],
                     "date": datetime.strptime(rec[1], "%Y-%m-%d %H:%M:%S"),
                     "name": rec[2],
-                    "img_url":"/static/data/" + str(self.results_dir / rec[3]),   # GVNC
+                    #"img_url":"/static/data/" + str(self.results_dir / rec[3]),
+                    "img_url":"/static/images/pic.jpg",   # GVNC
                     "desc": rec[4],
                     "public": bool(rec[5]),
                     "sost": rec[6] == TaskState.PROCESSING_DONE.value
