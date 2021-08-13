@@ -100,7 +100,7 @@ if settings.findLR:
     eval_loaders['train'] = train_loader
 eval_loaders.update(val_loaders)
 eval_event = ignite.engine.Events.ITERATION_COMPLETED if settings.findLR else ignite.engine.Events.EPOCH_COMPLETED
-eval_duty_cycle = 2 if settings.findLR else 1
+eval_duty_cycle = 2 if settings.findLR else settings.get('eval_period', 1)
 train_epochs = params.lr_finder.iters_num*len(train_loader) if settings.findLR else settings.max_epochs
 
 trainer = ovotools.ignite_tools.create_supervised_trainer(model, ctx.optimizer, loss, metrics=trainer_metrics, device=settings.device)

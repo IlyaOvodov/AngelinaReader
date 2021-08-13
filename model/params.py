@@ -7,6 +7,7 @@ settings = AttrDict(
     device='cuda:0',
     findLR=False,
     can_overwrite=False,
+    eval_period=5,
     regular_save_period = None  #(500, 1),
 )
 
