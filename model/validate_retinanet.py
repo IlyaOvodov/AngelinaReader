@@ -14,17 +14,20 @@ iou_thr = 0.0
 do_filter_lonely_rects = False
 metrics_for_lines = False
 show_filtered = False
+test_on_flipped = False
+
+log_file = 'validate_retinanet.log'
 
 models = [
-    #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/clr.099.t7'),
+    (r'NN_results\210811_flip_test\210811_flip_test_1_10_100_1000\angelina_fpn1_lay4_1_10_100_1000_VTrue_f25db8', 'models/clr.015.t7'),
     #
-    ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
-    (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
+    # ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
+    # (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
 ]
 
 model_dirs = [
     #(r'E:\_ELVEES\Braille\NN_results\dsbi_fpn1_lay4_1000_b67b68', 'models/clr.02*.t7'),
-    # ('NN_results/angelina_fpn1_lay3_100_noaug_7c2028', 'models/*.t7'),
+    ('NN_results/210811_flip_test', '**/clr.*.t7'),
 ]
 
 datasets = {
@@ -58,12 +61,13 @@ import data_utils.dsbi as dsbi
 import braille_utils.postprocess as postprocess
 import model.infer_retinanet as infer_retinanet
 from braille_utils import label_tools
+import data_utils
 
 rect_margin=0.3
 
 for md in model_dirs:
     models += [
-        (str(md[0]), str(Path('models')/m.name))
+        (str(m.parent.parent.relative_to(Path(local_config.data_path))), str(Path('models')/m.name))
         for m in sorted((Path(local_config.data_path)/md[0]).glob(md[1]))
     ]
 
@@ -112,13 +116,17 @@ def prepare_data(datasets=datasets):
                                                                   rect_margin=rect_margin,
                                                                   get_points=False)
                     if rects is not None:
-                        boxes = [r[:4] for r in rects]
-                        labels = [r[4] for r in rects]
-                        scores = [r[5] for r in rects]
-                        lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely = False, min_align_score=0)
-                        gt_text = lines_to_pseudotext(lines)
-                        data_list.append({"image_fn":full_fn, "gt_text": gt_text, "gt_rects": rects})
+                        data_list.append({"image_fn":full_fn, "gt_rects": rects})
     return res_dict
+
+
+def rects_to_pseudo_text(rects):
+    boxes = [r[:4] for r in rects]
+    labels = [r[4] for r in rects]
+    scores = [r[5] for r in rects]
+    lines = postprocess.boxes_to_lines(boxes, labels, scores=scores, lang=lang, filter_lonely=False, min_align_score=0)
+    gt_text = lines_to_pseudotext(lines)
+    return gt_text
 
 
 def label_to_pseudochar(label):
@@ -407,8 +415,13 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
     score_hist_false = [0 for i in range(100)]
 
     for gt_dict in data_list:
-        img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
-        res_dict = recognizer.run(img_fn,
+        img_fn, gt_rects = gt_dict['image_fn'], gt_dict['gt_rects']
+        img = PIL.Image.open(img_fn)
+        if test_on_flipped:
+            img = img.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+            gt_rects = [data_utils.data.rect_vflip(b) for b in gt_rects]
+            gt_rects = [(b[0], 1-b[3], b[2], 1-b[1]) + b[4:] for b in gt_rects]
+        res_dict = recognizer.run(img,
                                   lang=lang,
                                   draw_refined=infer_retinanet.BrailleInference.DRAW_NONE,
                                   find_orientation=False,
@@ -416,7 +429,8 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
                                   align_results=False,
                                   repeat_on_aligned=False,
                                   gt_rects=gt_rects)
-
+        gt_rects = res_dict['gt_rects']
+        gt_text = rects_to_pseudo_text(gt_rects)
         lines = res_dict['lines']
         if do_filter_lonely_rects:
             lines, filtered_chars = postprocess.filter_lonely_rects_for_lines(lines)
@@ -528,7 +542,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
     fp_c = 0
     fn_c = 0
     for gt_dict in data_list:
-        img_fn, gt_text, gt_rects = gt_dict['image_fn'], gt_dict['gt_text'], gt_dict['gt_rects']
+        img_fn, gt_rects = gt_dict['image_fn'], gt_dict['gt_rects']
         res_dict = recognizer.run(img_fn,
                                   lang=lang,
                                   draw_refined=infer_retinanet.BrailleInference.DRAW_NONE,
@@ -572,14 +586,21 @@ def main(table_like_format):
         print(m)
     data_set = prepare_data()
     prev_model_root = None
+    log_file_path = Path(log_file)
+    if not log_file_path.is_absolute():
+        log_file_path = Path(local_config.data_path) / log_file_path
+    with open(log_file_path, "w") as f:
+        pass
 
     if table_like_format:
-        print('model\tweights\tkey\ttime\t'
+        header = ('model\tweights\tkey\ttime\t'
               'precision\trecall\tf1\t'
               'precision_c\trecall_C\tf1_c\t'
               'cer(%)\t'
               #'d_by_doc\td_by_char\td_by_char_avg'
               )
+        print(header)
+        log_file_path.write_text(header + '\n')
     for model_root_str, model_weights in models:
         if model_root_str != prev_model_root:
             if not table_like_format:
@@ -612,7 +633,7 @@ def main(table_like_format):
             #       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
             #       'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res))
             if table_like_format:
-                print('{model}\t{weights}\t{key}\t{t:.2}\t'
+                result = ('{model}\t{weights}\t{key}\t{t:.2}\t'
                       '{res[precision_r]:.4}\t{res[recall_r]:.4}\t{res[f1_r]:.4}\t'
                       '{res[precision_c]:.4}\t{res[recall_c]:.4}\t{res[f1_c]:.4}\t'
                       '{res[cer]:.4}\t'
@@ -620,10 +641,13 @@ def main(table_like_format):
                       # '{res[d_by_char_avg]:.4}'
                       .format(model=model_root_str, weights=model_weights, key=key, res=res, t=t))
             else:
-                print('{model_weights} {key} {t:.2} '
+                result = ('{model_weights} {key} {t:.2} '
                       'precision_r: {res[precision_r]:.4}, recall_r: {res[recall_r]:.4} f1_r: {res[f1_r]:.4} '
                       'd_by_doc: {res[d_by_doc]:.4} d_by_char: {res[d_by_char]:.4} '
                       'd_by_char_avg: {res[d_by_char_avg]:.4}'.format(model_weights=model_weights, key=key, res=res, t=t))
+            print(result)
+            with open(log_file_path, "a") as f:
+                f.write(result + '\n')
 
 if __name__ == '__main__':
     import time
