@@ -140,7 +140,8 @@ class User:
             if new_tmp_password_hash:
                 self.params_dict["tmp_password"] = new_tmp_password_hash
             else:
-                del self.params_dict["tmp_password"]
+                if "tmp_password" in self.params_dict.keys():
+                    del self.params_dict["tmp_password"]
             self.params = json.dumps(self.params_dict)
             exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
 
