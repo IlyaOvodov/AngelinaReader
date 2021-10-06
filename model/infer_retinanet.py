@@ -136,7 +136,7 @@ class BraileInferenceImpl(torch.nn.Module):
             best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh, orientation_attempts)
         else:
             best_idx, err_score = OrientationAttempts.NONE, (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
-        if self.verbose >= 2:
+        if self.verbose >= 2 and self.device != 'cpu':
             torch.cuda.synchronize(self.device)
 
         if best_idx in [OrientationAttempts.INV, OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]:
