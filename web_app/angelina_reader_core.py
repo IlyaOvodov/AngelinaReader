@@ -195,16 +195,17 @@ class AngelinaSolver:
         os.makedirs(self.data_root, exist_ok=True)
         self.users_db_file_name = self.data_root / "all_users.db"
 
+    def get_recognizer(self):
         global recognizer
         if recognizer is None:
             print("infer_retinanet.BrailleInference()")
             t = timeit.default_timer()
-            recognizer = infer_retinanet.BrailleInference(
+            recognizer = infer_retinanet.BrailleInference(verbose=2,
                 params_fn=os.path.join(MODEL_PATH, 'weights', 'param.txt'),
                 model_weights_fn=os.path.join(MODEL_PATH, 'weights', MODEL_WEIGHTS),
                 create_script=None)
             print(timeit.default_timer() - t)
-        self.recognizer = recognizer
+        return recognizer
 
     ##########################################
     ## работа с пользователями
@@ -458,9 +459,9 @@ class AngelinaSolver:
         raw_path = self.data_root / self.raw_images_dir / task["raw_paths"]
         param_dict = json.loads(task["params"])
         if file_ext[1:] == 'zip':
-            results_list = self.recognizer.process_archive_and_save(raw_path, self.data_root / self.results_dir,
+            results_list = self.get_recognizer().process_archive_and_save(raw_path, self.data_root / self.results_dir,
                                                                     lang=param_dict['lang'], extra_info=param_dict,
-                                                                    draw_refined=self.recognizer.DRAW_NONE,
+                                                                    draw_refined=self.get_recognizer().DRAW_NONE,
                                                                     remove_labeled_from_filename=False,
                                                                     find_orientation=param_dict['find_orientation'],
                                                                     align_results=True,
@@ -468,9 +469,9 @@ class AngelinaSolver:
                                                                     repeat_on_aligned=False)
 
         else:
-            results_list = self.recognizer.run_and_save(raw_path, self.data_root / self.results_dir, target_stem=None,
+            results_list = self.get_recognizer().run_and_save(raw_path, self.data_root / self.results_dir, target_stem=None,
                                                         lang=param_dict['lang'], extra_info=param_dict,
-                                                        draw_refined=self.recognizer.DRAW_NONE,
+                                                        draw_refined=self.get_recognizer().DRAW_NONE,
                                                         remove_labeled_from_filename=False,
                                                         find_orientation=param_dict['find_orientation'],
                                                         align_results=True,
