@@ -2,3 +2,5 @@
 .idea/
 *.pyc
 web_app/static/data/
+venv/
+Logs/

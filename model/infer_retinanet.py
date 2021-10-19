@@ -581,7 +581,7 @@ class BrailleInference:
                     try:
                         img = PIL.Image.open(file)
                     except:
-                        print('Error processing file: ' + str(entry.filename) + ' in ' + arch_path)
+                        print('Error processing file: ' + str(entry.filename) + ' in ' + str(arch_path))
                         continue
                     ith_result = self.run_and_save(
                         img, results_dir, target_stem=arch_name + '.'+ Path(entry.filename).stem,
