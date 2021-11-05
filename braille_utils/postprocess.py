@@ -219,7 +219,7 @@ def interpret_line_RU(line, lang, mode = None):
                             ch.char = ':'
                         ch.spaces_before = max(0, ch.spaces_before-1)
             if ch.char is None:
-                ch.labeling_char = ch.char = lt.int_to_letter(ch.label, ['SYM', lang])
+                ch.labeling_char = ch.char = lt.int_to_letter(ch.label, [lang, 'SYM'])
                 if ch.char not in {',', '.', '(', ')'}:
                     math_mode = False
                     math_lang = ''
@@ -268,11 +268,12 @@ def interpret_line_RU(line, lang, mode = None):
 
 interpret_line_funcs = {
     'RU': interpret_line_RU,
-    'UZ': interpret_line_RU,
-    'UZL': interpret_line_RU,
+    'EN': interpret_line_RU, # TODO in can work with some errors for EN
     'GR': interpret_line_RU,
     'LV': interpret_line_RU,
-    'EN': interpret_line_RU, # TODO in can work with some errors for EN
+    'PL': interpret_line_RU,
+    'UZ': interpret_line_RU,
+    'UZL': interpret_line_RU,
 }
 
 

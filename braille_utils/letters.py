@@ -203,6 +203,23 @@ alpha_map_LV = {
     '46': caps_sign
 }
 
+# PL symbols
+alpha_map_PL = {
+    **alpha_map_EN,
+    '16': 'ą',
+    '146': 'ć',
+    '156': 'ę',
+    '126': 'ł',
+    '1456': 'ń',
+    '346': 'ó',
+    '246': 'ś',
+    '2346': 'ź',
+    '12346': 'ż',
+
+    '3': '.',
+    '256': '/',
+    '34': '\\',
+}
 
 # Digit symbols (after num_sign)
 num_map = {
@@ -257,10 +274,11 @@ math_RU = {
 # Codes for dicts
 letter_dicts = {
     'SYM': sym_map,
+    'RU': alpha_map_RU,
     'EN': alpha_map_EN,
     'GR': alpha_map_GR,
     'LV': alpha_map_LV,
-    'RU': alpha_map_RU,
+    'PL': alpha_map_PL,
     'UZ': alpha_map_UZ,
     'UZL': alpha_map_UZL,
     'NUM': num_map,

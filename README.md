@@ -111,10 +111,11 @@ If directory name or zip file is supplied, all image and pdf files in it will be
 Languages:
 `RU` - Russian
 `EN` - English (grade 1)
+`GR` - Greek
+`LV` - Latvian
+`PL` - Polish
 `UZ` - Uzbek (cyrillic)
 `UZL` - Uzbek (latin)
-`LV` - Latvian
-`GR` - Greek
 
 ## Datasets being used
 
