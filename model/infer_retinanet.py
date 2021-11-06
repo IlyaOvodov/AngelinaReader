@@ -173,8 +173,8 @@ class BraileInferenceImpl(torch.nn.Module):
         if find_orientation:
             best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh, orientation_attempts)
             if self.verbose >= 2:
-                print("        forward.calc_letter_statistics", time.clock() - t)
-                t = time.clock()
+                print("        forward.calc_letter_statistics", timeit.default_timer() - t)
+                t = timeit.default_timer()
         else:
             best_idx, err_score = OrientationAttempts.NONE, (torch.tensor([0.]),torch.tensor([0.]),torch.tensor([0.]))
         if best_idx in [OrientationAttempts.INV, OrientationAttempts.INV_ROT180, OrientationAttempts.INV_ROT90, OrientationAttempts.INV_ROT270]:

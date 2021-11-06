@@ -219,6 +219,7 @@ alpha_map_PL = {
     '3': '.',
     '256': '/',
     '34': '\\',
+    '345': '@',
 }
 
 # Digit symbols (after num_sign)
