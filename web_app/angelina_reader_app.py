@@ -8,78 +8,57 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FileField, TextAreaField, HiddenField, SelectField
 from wtforms.validators import DataRequired
-from flask_uploads import UploadSet, configure_uploads, IMAGES, ARCHIVES
 from flask_mobility import Mobility
 from flask_mobility.decorators import mobile_template
 
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
+import atexit
 from email.mime.text import MIMEText
-import smtplib
-
 import time
-import os
 import json
+import signal
 import sys
 import argparse
 from pathlib import Path
-import local_config
-import model.infer_retinanet as infer_retinanet
+import socket
+
 from .config import Config
+from .angelina_reader_core import AngelinaSolver, VALID_EXTENTIONS, fill_message_headers, send_email
 
-model_weights = 'model.t7'
 
-print("infer_retinanet.BrailleInference()")
-t = time.clock()
-recognizer = infer_retinanet.BrailleInference(
-    params_fn=os.path.join(local_config.data_path, 'weights', 'param.txt'),
-    model_weights_fn=os.path.join(local_config.data_path, 'weights', model_weights),
-    create_script=None)
-print(time.clock()-t)
+def startup_logger():
+    hostname = socket.gethostname()
+    def send_startup_email(what):
+        """
+        """
+        # create message object instance
+        txt = 'Angelina Reader is {} at {}'.format(what, hostname)
+        msg = fill_message_headers(MIMEText(txt, _charset="utf-8"), 'Angelina Reader<angelina-reader@ovdv.ru>', txt)
+        send_email(msg)
+
+    send_startup_email('started')
+
+    atexit.register(send_startup_email, 'stopped')
+    def signal_handler(sig, frame):
+        send_startup_email('interrupted by caught {}'.format(sig))
+        sys.exit(0)
+    for s in set(signal.Signals):
+        try:
+            signal.signal(s, signal_handler)
+        except:
+            print('failed to set handler for signal {}'.format(s))
 
 app = Flask(__name__)
 Mobility(app)
 app.config.from_object(Config)
 login_manager = LoginManager(app)
 
-IMG_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'raw'
-RESULTS_ROOT = Path(app.root_path) / app.config['DATA_ROOT'] / 'results'
-os.makedirs(Path(app.root_path) / app.config['DATA_ROOT'], exist_ok=True)
+data_root_path = Path(app.root_path) / app.config['DATA_ROOT']
 
-photos = UploadSet('photos', extensions=IMAGES + ('pdf','zip'))
-
-app.config['UPLOADED_PHOTOS_DEST'] = IMG_ROOT
-configure_uploads(app, photos)
-
-users_file = Path(app.root_path) / app.config['DATA_ROOT'] / 'all_users.json'
-if os.path.isfile(users_file):
-    with open(users_file, encoding='utf-8') as f:
-        all_users = json.load(f)
-else:
-    all_users = dict()
-
-class User:
-    def __init__(self, e_mail, name, is_new):
-        self.is_authenticated = True
-        self.is_active = True
-        self.is_anonymous = False
-        self.e_mail = e_mail
-        self.name = name
-        if is_new:
-            assert e_mail not in all_users.keys()
-            all_users[e_mail] = {'name':name}
-            with open(users_file, 'w', encoding='utf8') as f:
-                json.dump(all_users, f, sort_keys=True, indent=4, ensure_ascii=False)
-    def get_id(self):
-        return self.e_mail
-
+core = AngelinaSolver(data_root_path=data_root_path)
 
 @login_manager.user_loader
 def load_user(user_id):
-    user = all_users.get(user_id, None)
-    if user:
-        user = User(user_id, user["name"], is_new=False)
-    return user
+    return core.find_user(id=user_id)
 
 
 @app.route("/", methods=['GET', 'POST'])
@@ -91,14 +70,15 @@ def index(template, is_mobile=False):
         file = FileField()
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
-        lang = SelectField("Язык текста", choices=[('RU', 'RU'), ('EN', 'EN')])
+        lang = SelectField("Язык текста", choices=[('RU', 'Русский'), ('EN', 'English'), ('GR', 'Ελληνικά'), ('LV', 'Latviešu'),
+                                                   ('PL', 'Polski'), ('UZ', 'Ўзбек'), ('UZL', "O'zbekcha")])
         find_orientation = BooleanField("Авто-ориентация")
         process_2_sides = BooleanField("Обе стороны")
     form = MainForm(agree=request.values.get('has_public_confirm', '') == 'True',
                     disgree=request.values.get('has_public_confirm', '') == 'False',
                     lang=request.values.get('lang', 'RU'),
                     find_orientation=request.values.get('find_orientation', 'True') == 'True',
-                    process_2_sides=request.values.get('process_2_sides', 'False') == 'True',
+                    process_2_sides=request.values.get('process_2_sides', 'False') == 'True'
                     )
     if form.validate_on_submit():
         file_data = form.camera_file.data or form.file.data
@@ -108,18 +88,29 @@ def index(template, is_mobile=False):
         if form.agree.data and form.disgree.data or not form.agree.data and not form.disgree.data:
             flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template(template, form=form)
-        os.makedirs(IMG_ROOT, exist_ok=True)
-        filename = photos.save(file_data)
-        img_path = IMG_ROOT / filename
+        filename = file_data.filename
+        file_ext = Path(filename).suffix[1:].lower()
+        if file_ext not in VALID_EXTENTIONS:
+            flash('Не подхожящий тип файла {}: {}'.format(file_ext, filename))
+            return render_template(template, form=form)
+
+        user_id = current_user.get_id()
+        extra_info = {'user': user_id,
+                      'has_public_confirm': form.agree.data,
+                      'lang': form.lang.data,
+                      'find_orientation': form.find_orientation.data,
+                      'process_2_sides': form.process_2_sides.data,
+                      }
+        task_id = core.process(user_id=user_id, file_storage=file_data, param_dict=extra_info)
 
         if not form.agree.data:
             return redirect(url_for('confirm',
-                                    img_path=img_path,
+                                    task_id=task_id,
                                     lang=form.lang.data,
                                     find_orientation=form.find_orientation.data,
                                     process_2_sides=form.process_2_sides.data))
         return redirect(url_for('results',
-                                img_path=img_path,
+                                task_id=task_id,
                                 has_public_confirm=form.agree.data,
                                 lang=form.lang.data,
                                 find_orientation=form.find_orientation.data,
@@ -143,7 +134,7 @@ def confirm(template):
             return render_template(template, form=form)
         has_public_confirm = form.agree.data
         return redirect(url_for('results',
-                                img_path=request.values['img_path'],
+                                task_id=request.values['task_id'],
                                 has_public_confirm=has_public_confirm,
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
@@ -161,53 +152,46 @@ def results(template):
     form = ResultsForm()
     if form.validate_on_submit():
         return redirect(url_for('email',
-                                results_list=request.form['results_list'],
+                                task_id=request.values['task_id'],
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
-
-    extra_info = {'user': current_user.get_id(), 'has_public_confirm': request.values['has_public_confirm']=='True',
-                  'lang': request.values['lang']}
-    ext = Path(request.values['img_path']).suffix[1:]  # exclude leading dot
-    if ext in IMAGES or ext == 'pdf':
-        results_list = recognizer.run_and_save(request.values['img_path'], RESULTS_ROOT, target_stem=None,
-                                               lang=request.values['lang'], extra_info=extra_info,
-                                               draw_refined=recognizer.DRAW_NONE,
-                                               remove_labeled_from_filename=False,
-                                               find_orientation=request.values['find_orientation']=='True',
-                                               align_results=True,
-                                               process_2_sides=request.values['process_2_sides']=='True',
-                                               repeat_on_aligned=False)
-    elif ext == 'zip':
-        results_list = recognizer.process_archive_and_save(request.values['img_path'], RESULTS_ROOT,
-                                               lang=request.values['lang'], extra_info=extra_info,
-                                               draw_refined=recognizer.DRAW_NONE,
-                                               remove_labeled_from_filename=False,
-                                               find_orientation=request.values['find_orientation']=='True',
-                                               align_results=True,
-                                               process_2_sides=request.values['process_2_sides']=='True',
-                                               repeat_on_aligned=False)
-    else:
-        assert False, "incorrect file type: " + str(request.values['img_path'])
+    results_list = None
+    task_id = request.values['task_id']
+    if task_id:
+        assert core.is_completed(task_id, timeout=1)
+        results_list = core.get_results(task_id)
     if results_list is None:
-        flash('Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
+        flash(
+            'Ошибка обработки файла. Возможно, файл имеет неверный формат. Если вы считаете, что это ошибка, пришлите файл по адресу, указанному в низу страцины')
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
     # convert OS path to flask html path
-    root_dir = str(Path(app.root_path))
     image_paths_and_texts = list()
     file_names = list()
-    for marked_image_path, recognized_text_path, out_text in results_list:
-        flask_image_path = str(Path(marked_image_path))
-        assert(flask_image_path[:len(root_dir)]) == root_dir
-        flask_image_path = flask_image_path[len(root_dir):].replace("\\", "/")
-        out_text = '\n'.join(out_text)
-        image_paths_and_texts.append((flask_image_path, out_text,))
-        file_names.append((marked_image_path, recognized_text_path))
+    for marked_image_path, recognized_text_path, recognized_braille_path in results_list["item_data"]:
+        # полный путь к картинке -> "/static/..."
+        # даннные для отображения в форме
+
+        # GVNC для совместимости с V2: "/static/..." -> имя картинки
+        marked_image_path = marked_image_path[1:]
+        marked_image_path = str(Path(marked_image_path).relative_to(app.config['DATA_ROOT']))
+        recognized_text_path = str(Path(recognized_text_path).relative_to(data_root_path))
+        recognized_braille_path = str(Path(recognized_braille_path).relative_to(data_root_path))
+
+        with open(data_root_path / recognized_text_path, encoding="utf-8") as f:
+            out_text = ''.join(f.readlines())
+        with open(data_root_path / recognized_braille_path, encoding="utf-8") as f:
+            out_braille = ''.join(f.readlines())
+        image_paths_and_texts.append(("/" + app.config['DATA_ROOT'] + "/" + marked_image_path, out_text, out_braille,))
+
+        # список c полными путями для передачи в форму почты
+        file_names.append((str(data_root_path / marked_image_path), str(data_root_path / recognized_text_path)))  # список для
+
     form = ResultsForm(results_list=json.dumps(file_names))
     return render_template(template, form=form, image_paths_and_texts=image_paths_and_texts)
 
@@ -217,20 +201,30 @@ def results(template):
 def email(template):
     class Form(FlaskForm):
         e_mail = StringField('E-mail', validators=[DataRequired()])
+        to_developers = BooleanField('Отправить разработчикам')
         title = StringField('Заголовок письма')
+        comment = TextAreaField('Комментарий')
         as_attachment = BooleanField("отправить как вложение")
+        send_braille = BooleanField("Брайль", default=True)
+        send_text = BooleanField("текст", default=True)
+        send_image = BooleanField("изображение", default=True)
         submit = SubmitField('Отправить')
     form = Form()
     if form.validate_on_submit():
-        results_list = json.loads(request.values['results_list'])
-        title = form.title.data or "Распознанный Брайль: " + Path(results_list[0][0]).with_suffix('').with_suffix('').name
-        send_mail(form.e_mail.data, results_list, title)
+        core.send_results_to_mail(mail=form.e_mail.data, task_id=request.values['task_id'],
+                                  parameters={'subject': form.title.data,
+                                              'to_developers': form.to_developers.data,
+                                              'comment': form.comment.data,
+                                              'send_braille': form.send_braille.data,
+                                              'send_text': form.send_text.data,
+                                              'send_image': form.send_image.data,
+                                              })
         return redirect(url_for('index',
                                 has_public_confirm=request.values['has_public_confirm'],
                                 lang=request.values['lang'],
                                 find_orientation=request.values['find_orientation'],
                                 process_2_sides=request.values['process_2_sides']))
-    form = Form(e_mail=current_user.e_mail)
+    form = Form(e_mail=current_user.email)
     return render_template(template, form=form)
 
 
@@ -257,11 +251,10 @@ def login(template):
 
     form = LoginForm()
     if form.validate_on_submit():
-        user = all_users.get(form.e_mail.data, None)
+        user = core.find_user(email=form.e_mail.data)  # TODO by network
         if user is None:
             flash('Пользователь не найден. Если вы - новый пользователь, зарегистрируйтесь')
             return redirect(url_for('register'))
-        user = User(form.e_mail.data, user['name'], is_new=False)
         #if user is None or not user.check_password(form.password.data):
         #    return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
@@ -280,13 +273,11 @@ def register(template):
 
     form = RegisterForm()
     if form.validate_on_submit():
-        user = all_users.get(form.e_mail.data, None)
-        if user:
+        found_users = core.find_users_by_email(email=form.e_mail.data)
+        if len(found_users):
             flash('Пользователь с таким E-mail уже существует')
             return redirect(url_for('register'))
-        user = User(e_mail=form.e_mail.data, name=form.username.data, is_new=True)
-        #if user is None or not user.check_password(form.password.data):
-        #    return redirect(url_for('login'))
+        user = core.register_user(name=form.username.data, email=form.e_mail.data, password="", network_name=None, network_id=None)  # TODO only email registration now
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('index'))
     return render_template(template, title='Sign In', form=form)
@@ -298,38 +289,10 @@ def logout():
     return redirect(url_for('index'))
 
 
-def send_mail(to_address, results_list, subject):
-    """
-    Sends results to e-mail as text(s) + image(s)
-    :param to_address: destination email as str
-    :param results_list: list of tuples with file names(txt or jpg)
-    :param subject: message subject or None
-    """
-    # create message object instance
-    msg = MIMEMultipart()
-    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
-    msg['To'] = to_address
-    msg['Subject'] = subject if subject else "Распознанный Брайль"
-    # attach image to message body
-    for file_names in results_list:
-        for file_name in reversed(file_names):  # txt before jpg
-            if Path(file_name).suffix == ".txt":
-                txt = Path(file_name).read_text(encoding="utf-8")
-                attachment = MIMEText(txt, _charset="utf-8")
-                attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-            elif Path(file_name).suffix == ".jpg":
-                attachment = MIMEImage(Path(file_name).read_bytes())
-                attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
-            else:
-                assert False, str(file_name)
-            msg.attach(attachment)
-
-    # create server and send
-    server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
-    server.starttls()
-    server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-    server.sendmail(msg['From'], msg['To'], msg.as_string())
-    server.quit()
+@app.route("/donate", methods=['GET', 'POST'])
+@mobile_template('{m/}donate.html')
+def donate(template):
+    return render_template(template)
 
 
 def run():
@@ -338,6 +301,8 @@ def run():
                         help='enable debug mode (default: off)')
     args = parser.parse_args()
     debug = args.debug
+    if not debug:
+        startup_logger()
     if debug:
         print('running in DEBUG mode!')
     else:
@@ -348,7 +313,6 @@ def run():
         app.run(debug=True, host='0.0.0.0', port=5001)
     else:
         app.run(host='0.0.0.0', threaded=True)
-
 
 if __name__ == "__main__":
     run()

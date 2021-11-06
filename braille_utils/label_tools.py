@@ -53,6 +53,9 @@ def int_to_label123(int_lbl):
     r = ''.join([ str(i+1) for i in range(6) if int_lbl&v[i]])
     return r
 
+def int_to_unicode(int_lbl):
+    return chr(0x2800 + int_lbl)
+
 def label123_to_int(label123):
     v = [1,2,4,8,16,32]
     try:

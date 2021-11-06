@@ -5,7 +5,7 @@ evaluate levenshtein distance as recognition error for dataset using various mod
 """
 
 # Для отладки
-verbose = 1
+verbose = 0
 inference_width = 850
 cls_thresh = 0.5
 nms_thresh = 0.02
@@ -650,16 +650,16 @@ def main(table_like_format):
                 f.write(result + '\n')
 
 if __name__ == '__main__':
-    import time
+    import timeit
     infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
     infer_retinanet.cls_thresh = cls_thresh
     infer_retinanet.nms_thresh = nms_thresh
     postprocess.Line.LINE_THR = LINE_THR
-    t0 = time.clock()
+    t0 = timeit.default_timer()
     # for thr in (0.5, 0.6, 0.7, 0.8):
     #     postprocess.Line.LINE_THR = thr
     #     print(thr)
     main(table_like_format=True)
     if verbose>=2:
         print("decode: ", infer_retinanet.decode_t/infer_retinanet.decode_calls, "impl: ", infer_retinanet.impl_t/infer_retinanet.impl_calls)
-        print(time.clock() - t0)
+        print(timeit.default_timer() - t0)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title> Angelina Braille Reader </title>
+    <title> Angelina braille reader </title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     <!-- <link rel="stylessheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css"> -->
     <style>
@@ -127,10 +127,10 @@
 <body>
     <div class="header_footer" style="padding-top:1%">
         {% if config['DEBUG'] %}
-            <div style="color: blue; text-align: center; font-size: 80%;">Angelina Braille Reader
+            <div style="color: blue; text-align: center; font-size: 80%;">Angelina braille reader
             <span style="color: red; text-align: center; font-size: 180%;">(DEBUG)</span></div>
         {% else %}
-            <div style="color: blue; text-align: center; font-size: 180%;">Angelina Braille Reader</div>
+            <div style="color: blue; text-align: center; font-size: 180%;">Angelina braille reader</div>
         {% endif %}
     <div width="800" style="color: #fff; background-color: #08730d; text-align: center; font-size: 180%;">
         Запущена новая версия сайта!<p/>
@@ -169,13 +169,13 @@
         <table width="100%" valign="center">
         <tr>
             <td width="50%" valign="center" align="center">
-                Для предложений и замечаний: <a href="mailto:angelina-reader@ovdv.ru" style="white-space: nowrap">angelina-reader@ovdv.ru</a>
+                <a href="mailto:angelina-reader@ovdv.ru" style="white-space: nowrap">E-mail</a>
             </td>
             <td width="25%" valign="center" align="center">
                 <a href="{{ url_for('donate') }}" style="white-space: nowrap">Поддержать</a>
             </td>
             <td width="25%" valign="center" align="center">
-                Помочь в разработке: <a href=https://github.com/IlyaOvodov/AngelinaReader style="white-space: nowrap">GitHub</a>
+                <a href=https://github.com/IlyaOvodov/AngelinaReader style="white-space: nowrap">GitHub</a>
             </td>
         </tr>
         </table>

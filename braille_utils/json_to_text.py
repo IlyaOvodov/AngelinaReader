@@ -16,9 +16,9 @@ def annonation_to_text(json_filename, lang, min_align_score):
     return postprocess.lines_to_text(lines)
 
 
-def process_json_annotation(json_filename, min_align_score):
+def process_json_annotation(json_filename, min_align_score, lang='RU'):
     print('processing ' + json_filename)
-    txt = annonation_to_text(json_filename, 'RU', min_align_score=min_align_score)
+    txt = annonation_to_text(json_filename, min_align_score=min_align_score, lang=lang)
     if json_filename.endswith('.labeled.json'):
         out_fn = json_filename[:-len('.labeled.json')]+'.marked.txt'
     else:

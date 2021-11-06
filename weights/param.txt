@@ -1,0 +1,63 @@
+{
+    'model_name': 'NN_results/all_data_{model_params.encoder_params.aspect_ratios[0]}_{model_params.loss_params.class_loss_scale}_{augmentation.rotate_limit}_nocls',
+    'data': {
+        'get_points': False,
+        'class_as_6pt': False,
+        'batch_size': 12,
+        'net_hw': ( 416, 416, ),
+        'rect_margin': 0.3,
+        'max_std': 0.1,
+        'train_list_file_names': [ 'DSBI/data/my_train.txt', 'My/labeled/labeled2/train_books.txt', 'My/labeled/labeled2/train_withtext.txt', ( 'My/labeled/labeled2/train_pupils.txt', 2, ), 'My/labeled/not_braille/_not_braille.txt', 'My/labeled/ASI/student_book_p1.txt', ( 'My/labeled/ASI/turlom_c2.txt', 3, ), ( 'web_uploaded/re-processed200823.txt', 0.125,
+                {
+                    'calc_cls': False,
+                }, ), ( 'ASI_results/braile_photos_and_scans.txt', 1,
+                {
+                    'calc_cls': False,
+                }, ), ],
+        'val_list_file_names': {
+            'val_2': [ 'My/labeled/labeled2/val_books.txt', 'My/labeled/labeled2/val_withtext.txt', 'My/labeled/labeled2/val_pupils.txt', ],
+            'val_3_asi': [ 'My/labeled/ASI/turlom_c15_photo_1p.txt', 'My/labeled/ASI/turlom_c15_photo_1p.txt', 'My/labeled/ASI/turlom_c15_photo_1p.txt', ],
+            'val_3_asi_scan': [ 'My/labeled/ASI/turlom_c15_scan_1p.txt', 'My/labeled/ASI/turlom_c15_scan_1p.txt', 'My/labeled/ASI/turlom_c15_scan_1p.txt', ],
+        },
+    },
+    'augmentation': {
+        'img_width_range': ( 614, 1840, ),
+        'stretch_limit': 0.1,
+        'rotate_limit': 5,
+    },
+    'model': 'retina',
+    'model_params': {
+        'encoder_params': {
+            'anchor_areas': [ 128.0, 288.0, 512.0, ],
+            'aspect_ratios': [ 0.5, ],
+            'iuo_fit_thr': 0,
+            'iuo_nofit_thr': 0,
+        },
+        'loss_params': {
+            'class_loss_scale': 100,
+        },
+    },
+    'load_model_from': 'NN_results/retina_chars3_0.5_100_5_090399/models/clr.009.t7',
+    'optim': 'torch.optim.SGD',
+    'optim_params': {
+        'lr': 0.0001,
+        'momentum': 0.9,
+    },
+    'lr_finder': {
+        'iters_num': 200,
+        'log_lr_start': -4,
+        'log_lr_end': -0.3,
+    },
+    'lr_scheduler': {
+        'type': 'clr',
+    },
+    'clr': {
+        'warmup_epochs': 10,
+        'min_lr': 0.0001,
+        'max_lr': 0.01,
+        'period_epochs': 500,
+        'scale_max_lr': 0.95,
+        'scale_min_lr': 0.95,
+    },
+}
+hash: 91b802

@@ -9,13 +9,30 @@
 	    <div>{{ form.e_mail() }}</div>
 	</div>
     <div class="wrapper">
+	    {{ form.to_developers() }}
+    	<label for="to_developers">{{ form.to_developers.label }}</label>
+	</div>
+    <div class="wrapper">
 		<div>{{ form.title.label }}</div>
 		<div>{{ form.title() }}</div>
 	</div>
     <div class="wrapper">
+		<div>{{ form.comment.label }}</div>
+        <div>{{ form.comment(rows=5, cols=20, style="width:100%") }}</div>
+	</div>
+    <div>
+        <table class="centered" width="100%"><tr>
+            <td>{{ form.send_braille() }} <label for="send_braille">{{ form.send_braille.label }}</label></td>
+            <td>{{ form.send_text() }} <label for="send_text">{{ form.send_text.label }}</label></td>
+            <td>{{ form.send_image() }} <label for="send_image">{{ form.send_image.label }}</label></td>
+        </tr></table>
+    </div>
+    <!--
+    <div class="wrapper">
 	    {{ form.as_attachment() }}
     	<label for="as_attachment">{{ form.as_attachment.label }}</label>
 	</div>
+	-->
 	{{ flashed_messages() }}
     <div class="button_wrapper">{{ form.submit(style="width:80%") }}</div>
 </form>
