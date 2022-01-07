@@ -287,3 +287,12 @@ letter_dicts = {
     'MATH_RU': math_RU,
 }
 
+# languages that are used to interpret labels from human annotation
+labeling_langs = (
+    'SYM',
+    'RU',
+    'EN',
+    'NUM',
+    'NUM_DENOMINATOR',
+    'MATH_RU',
+)

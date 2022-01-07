@@ -30,7 +30,7 @@ def test_file(file_path):
     lang = protocol['lang']
     is_public = protocol['has_public_confirm']
     #print(test_text_by_spellchecker(text, lang))
-    return (file_path.with_suffix("").with_suffix("").name,  protocol['user'], lang, is_public) + test_text_by_spellchecker(text, lang)
+    return (file_path.with_suffix("").with_suffix("").name,  protocol.get('user', "None"), lang, is_public) + test_text_by_spellchecker(text, lang)
 
 def process_dir(dir, out_file):
     print(str(dir), datetime.datetime.now().time())
@@ -56,16 +56,16 @@ def process_dir(dir, out_file):
 
 
 if __name__=="__main__":
-    dict_path = '/home/ovod/SSH_remote_test/data_utils/'
+    dict_path = Path(__file__).parent
     h_objs = {
-        'RU': hunspell.HunSpell(dict_path+'ru_RU.dic', dict_path+'ru_RU.aff'),
-        'EN': hunspell.HunSpell(dict_path + 'en_US.dic', dict_path + 'en_US.aff'),
+        'RU': hunspell.HunSpell(dict_path / 'ru_RU.dic', dict_path / 'ru_RU.aff'),
+        'EN': hunspell.HunSpell(dict_path / 'en_US.dic', dict_path / 'en_US.aff'),
     }
 
 
-    dir = "/home/ovod/AngelinaReader/web_app/static/data/results"
+    dir = Path(r"T:\Braille\yandex 2021.06.01\results")
     fn = "5bb63b9f98424edc9af808defe47c1ff.marked.txt"
 
     #r = test_file(Path(dir) / fn)
     #print(r)
-    process_dir(dir, dict_path + 'res.csv')
+    process_dir(dir, dir.parent / 'res.csv')

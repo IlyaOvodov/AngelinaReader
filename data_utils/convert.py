@@ -15,5 +15,5 @@ for fn in Path(root_dir).glob('**/*.json'):
             is_changed = True
     if is_changed:
         count += 1
-    #     json.dump(lbl, open(fn, mode='w'), indent=2)
+    #     json.dump(lbl, open(fn, mode='w', encoding='utf8'), indent=2)
 print("corrected: ", count)

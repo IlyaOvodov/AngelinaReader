@@ -85,6 +85,8 @@ def human_label_to_int(label):
     '''
     Convert label from manual annotations to int_label
     '''
+    if label is None:
+        assert label is not None
     label = label.lower()
     if label[0] == '~':
         label123 = label[1:]
@@ -96,7 +98,7 @@ def human_label_to_int(label):
         if not ch_list:
             raise ValueError("unrecognized label: " + label)
         if len(ch_list) > 1:
-            raise ValueError("label: " + label + " has more then 1 meanings: " + str(ch_list))
+            raise ValueError("Human label '" + label + "' has more then 1 meanings: " + str(ch_list))
         label123 = list(ch_list)[0]
     return label123_to_int(label123)
 
@@ -119,7 +121,8 @@ def int_to_letter(int_lbl, langs):
 
 # global dict: letter (or spec. string) -> set of labels123 from different dicts from letters.letter_dicts
 reverce_dict = defaultdict(set)
-for d in letters.letter_dicts.values():
+for lang in letters.labeling_langs:
+    d = letters.letter_dicts[lang]
     for lbl123, char in d.items():
         reverce_dict[char].add(lbl123)
 
