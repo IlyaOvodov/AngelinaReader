@@ -464,7 +464,7 @@ def pseudolabeling_bigram_checker(lines, to_score, err_p = 0.05):
     checks lines by spellchecker and sets chars' score in incorrect words to to_score
     """
     from pathlib import Path
-    dict_path = '/home/orwell/Data/Braille/'
+    dict_path = Path(__file__).parent.parent / 'pseudo_labeling'
     def load_dict(fn, n):
         d = dict()
         for ln in (Path(dict_path)/fn).open(encoding='utf-8-sig'):

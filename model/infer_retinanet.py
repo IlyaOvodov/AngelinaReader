@@ -48,16 +48,6 @@ REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в �
                         # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
 # pseudolabeling parameters
 SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check
-if SAVE_FOR_PSEUDOLABELS_MODE:
-    folder = 'handwritten'  # books , handwritten
-    PSEUDOLABELS_STEP = 1
-    params_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/param.txt')
-    model_weights_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7')
-    pseudolabel_scores = (0.6, 0.8)
-    inference_width = 850
-    cls_thresh = 0.1
-    nms_thresh = 0.02
-    REFINE_COEFFS = [0., 0., 0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
 
 
 
@@ -213,18 +203,20 @@ class BrailleInference:
     DRAW_BOTH = DRAW_ORIGINAL | DRAW_REFINED  # 3
     DRAW_FULL_CHARS = 4
 
-    def __init__(self, params_fn=params_fn, model_weights_fn=model_weights_fn, create_script = None,
-                 verbose=1, inference_width=inference_width, device=device):
+    def __init__(self, params_fn, model_weights_fn, create_script = None,
+                 verbose=1, _inference_width=None, device=device):
+        if not _inference_width:
+            _inference_width = inference_width
         self.verbose = verbose
         if not torch.cuda.is_available() and device != 'cpu':
             print('CUDA not availabel. CPU is used')
             device = 'cpu'
 
         params = AttrDict.load(params_fn, verbose=verbose)
-        params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
+        params.data.net_hw = (_inference_width,_inference_width,) #(512,768) ###### (1024,1536) #
         params.data.batch_size = 1 #######
         params.augmentation = AttrDict(
-            img_width_range=(inference_width, inference_width),
+            img_width_range=(_inference_width, _inference_width),
             stretch_limit = 0.0,
             rotate_limit=0,
         )
@@ -696,11 +688,23 @@ if __name__ == '__main__':
     verbose = 0
     draw_redined = BrailleInference.DRAW_REFINED
 
+    # pseudolabeling parameters
+    SAVE_FOR_PSEUDOLABELS_MODE = 5  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check, 5 - bigram check
     if SAVE_FOR_PSEUDOLABELS_MODE:
+        inference_width = 1024
+        PSEUDOLABELS_STEP = 1
+        params_fn = join(local_config.data_path, 'NN_saved/all_data_0.5_100_5_nocls_91b802', 'param.txt')
+        model_weights = 'clr.006.t7'
+        model_weights_fn = join(local_config.data_path, 'NN_saved/all_data_0.5_100_5_nocls_91b802', model_weights)
+        folder='angelina_V0'
+        pseudolabel_scores = (0.5, 0.8)  # (score for ignored chars, min_align_score)
+        cls_thresh = 0.1
+        nms_thresh = 0.02
 
-        img_filename_mask = r'/home/orwell/Data/Braille/AngelinaDataset/{}/train.txt'.format(folder)
-        results_dir =       r'/home/orwell/Data/Braille/AngelinaDataset/pseudo/step_{}_opt_{}/{}'.format(PSEUDOLABELS_STEP, SAVE_FOR_PSEUDOLABELS_MODE, folder)
-
+        img_filename_mask = str(Path(local_config.data_path) / f'../braille/v1/{folder}/train.txt')
+        results_dir =       str(Path(local_config.data_path) / f'pseudo/inf_width_{inference_width}/step_{PSEUDOLABELS_STEP}_mode_{SAVE_FOR_PSEUDOLABELS_MODE}/{folder}')
+        REFINE_COEFFS = [0., 0., 0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
+        remove_labeled_from_filename = True
         find_orientation = False
         process_2_sides = False
         align_results = False
@@ -712,28 +716,32 @@ if __name__ == '__main__':
 
         os.makedirs(results_dir, exist_ok=False)
         shutil.copyfile(img_filename_mask, Path(results_dir) / Path(img_filename_mask).name)
-        with open(Path(results_dir) / 'info.txt', 'w+') as f:
-            print('SAVE_FOR_PSEUDOLABELS_MODE', SAVE_FOR_PSEUDOLABELS_MODE, file=f)
-            print('inference_width', inference_width, file=f)
-            print('params_fn', params_fn, file=f)
-            print('model_weights_fn', model_weights_fn, file=f)
-            print('cls_thresh', cls_thresh, file=f)
-            print('nms_thresh', nms_thresh, file=f)
-            print('REFINE_COEFFS', REFINE_COEFFS, file=f)
-            print('pseudolabel_scores', pseudolabel_scores, file=f)
+        info_dict = {
+            'SAVE_FOR_PSEUDOLABELS_MODE': SAVE_FOR_PSEUDOLABELS_MODE,
+            'inference_width': inference_width,
+            'PSEUDOLABELS_STEP': PSEUDOLABELS_STEP,
+            'params_fn': params_fn,
+            'model_weights': model_weights,
+            'model_weights_fn': model_weights_fn,
+            'pseudolabel_scores': pseudolabel_scores,
+            'cls_thresh': cls_thresh,
+            'nms_thresh': nms_thresh,
+            'REFINE_COEFFS': REFINE_COEFFS,
 
-            print('img_filename_mask', img_filename_mask, file=f)
-            print('results_dir', results_dir, file=f)
-            print('remove_labeled_from_filename', remove_labeled_from_filename, file=f)
-            print('find_orientation', find_orientation, file=f)
-            print('process_2_sides', process_2_sides, file=f)
-            print('align_results', align_results, file=f)
-            print('repeat_on_aligned', repeat_on_aligned, file=f)
-            print('verbose', verbose, file=f)
-            print('draw_redined', draw_redined, file=f)
-            print('', file=f)
+            'img_filename_mask': img_filename_mask,
+            'results_dir': results_dir,
+            'remove_labeled_from_filename': remove_labeled_from_filename,
+            'find_orientation': find_orientation,
+            'process_2_sides': process_2_sides,
+            'align_results': align_results,
+            'repeat_on_aligned': repeat_on_aligned,
+            'verbose': verbose,
+            'draw_redined': draw_redined,
+        }
+        with open(Path(results_dir) / 'pseudolabel_info.json', 'w') as f:
+            json.dump(info_dict, f, sort_keys=False, indent=2, ensure_ascii=False)
 
-    recognizer = BrailleInference(verbose=verbose)
+    recognizer = BrailleInference(model_weights_fn=model_weights_fn, params_fn=params_fn,  verbose=verbose)
     recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined=draw_redined,
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,

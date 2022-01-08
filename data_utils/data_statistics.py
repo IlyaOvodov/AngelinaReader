@@ -22,12 +22,26 @@ def test_text_by_spellchecker(text, lang):
             #print(word, len(word), is_good)
     return res[False], res[True]
 
+g_errors1 = 0
+g_errors2 = 0
 
 def test_file(file_path):
+    global g_errors1
+    global g_errors2
     json_path = file_path.with_suffix("").with_suffix(".protocol.txt")
     protocol = json.load(json_path.open())
-    text = file_path.read_text()
-    lang = protocol['lang']
+    try:
+        text = file_path.read_text(encoding="utf8")
+    except:
+        g_errors1 += 1
+        print(f'error reading {str(file_path)} as UTF-8. Try cp1251. Total {g_errors1}')
+        text = file_path.read_text(encoding="cp1251")
+    if 'lang' in protocol:
+        lang = protocol['lang']
+    else:
+        g_errors2 += 1
+        print(f'no lang in {str(json_path)}. Use RU. Total {g_errors2}')
+        lang = 'RU'
     is_public = protocol['has_public_confirm']
     #print(test_text_by_spellchecker(text, lang))
     return (file_path.with_suffix("").with_suffix("").name,  protocol.get('user', "None"), lang, is_public) + test_text_by_spellchecker(text, lang)
@@ -63,9 +77,11 @@ if __name__=="__main__":
     }
 
 
-    dir = Path(r"T:\Braille\yandex 2021.06.01\results")
-    fn = "5bb63b9f98424edc9af808defe47c1ff.marked.txt"
-
+    #fn = "5bb63b9f98424edc9af808defe47c1ff.marked.txt"
     #r = test_file(Path(dir) / fn)
     #print(r)
-    process_dir(dir, dir.parent / 'res.csv')
+
+    dir = Path("/home/ovod/file_server/braille/v1/angelina_V0/results/")
+    res_file = dir.parent / 'res.csv'
+    res_file = '/home/ovod/file_server/pub_data/res.csv'
+    process_dir(dir, res_file)

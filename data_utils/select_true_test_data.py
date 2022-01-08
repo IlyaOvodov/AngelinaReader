@@ -11,6 +11,7 @@ fn = r"T:\Braille\yandex 2021.06.01\res.csv"
 data = pd.read_csv(fn, delimiter=";")
 
 data = data[data[" lang"]==" RU"]
+data = data[data[" is_public"]==" True"]
 
 data = data[~data["name"].str.contains("(dup)")]
 
