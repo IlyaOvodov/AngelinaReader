@@ -334,6 +334,8 @@ class BrailleInference:
     def run_impl(self, img, lang, draw_refined, find_orientation, process_2_sides, align, draw, gt_rects=[]):
         t = timeit.default_timer()
         np_img = np.asarray(img)
+        if (np_img.shape[2] < 3):  # grayscale -> reduce dim
+            np_img = np_img[:,:,0]
         aug_img, aug_gt_rects = self.preprocessor.preprocess_and_augment(np_img, gt_rects)
         aug_img = data.unify_shape(aug_img)
         input_tensor = self.preprocessor.to_normalized_tensor(aug_img, device=self.impl.device)
