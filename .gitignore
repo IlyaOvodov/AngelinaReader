@@ -4,3 +4,4 @@
 web_app/static/data/
 venv/
 Logs/
+weights/*.t7

@@ -24,7 +24,7 @@ params.data.batch_size = 1 #######
 import torch
 import ignite
 
-device = 'cuda:0'
+device = 'cuda'
 
 
 # In[3]:

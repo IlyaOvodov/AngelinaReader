@@ -112,6 +112,9 @@ def save_model(model, rel_dir="models", filename="last.t7"):
     os.makedirs(dir_name, exist_ok=True)
     torch.save(model.state_dict(), file_name)
 
+
+clr_scheduler = None
+ctx.lr_scheduler = None
 if settings.findLR:
     import math
     @trainer.on(Events.ITERATION_STARTED)
@@ -124,15 +127,15 @@ if settings.findLR:
             print('done')
             engine.terminate()
 else:
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def eval_accuracy(engine):
-        if engine.state.epoch % 100 == 1:
-            data_set = validate_retinanet.prepare_data(ctx.params.data.val_list_file_names)
-            for key, data_list in data_set.items():
-                acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
-                                                               model, settings.device, data_list)
-                for rk, rv in acc_res.items():
-                    engine.state.metrics[key+ ':' + rk] = rv
+    # @trainer.on(Events.EPOCH_COMPLETED)
+    # def eval_accuracy(engine):
+    #     if engine.state.epoch % 100 == 1:
+    #         data_set = validate_retinanet.prepare_data(ctx.params.data.val_list_file_names)
+    #         for key, data_list in data_set.items():
+    #             acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
+    #                                                            model, settings.device, data_list)
+    #             for rk, rv in acc_res.items():
+    #                 engine.state.metrics[key+ ':' + rk] = rv
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model_on_event(engine):
@@ -146,7 +149,6 @@ else:
             save_model(model, filename="{:06}.t7".format(engine.state.epoch))
 
 
-    clr_scheduler = None
     if params.lr_scheduler.type == 'clr':
         clr_scheduler = ovotools.ignite_tools.ClrScheduler(train_loader, model, ctx.optimizer, target_metric, params,
                                                        engine=trainer)
@@ -179,10 +181,12 @@ checkpoint_objects = {"settings": settings,
                       'params': params,
                       'model': model,
                       'optimizer': ctx.optimizer,
-                      'lr_scheduler': clr_scheduler or ctx.lr_scheduler,
                       'trainer': trainer}
 if best_model_buffer:
     checkpoint_objects.update({"best_model_buffer": best_model_buffer})
+if clr_scheduler or ctx.lr_scheduler:
+    checkpoint_objects.update({"lr_scheduler": clr_scheduler or ctx.lr_scheduler})
+
 if checkpoint:
     load_objects(to_load=checkpoint_objects, checkpoint=checkpoint)
 

@@ -19,15 +19,16 @@ test_on_flipped = False
 log_file = 'validate_retinanet.log'
 
 models = [
-    (r'NN_results\210811_flip_test\210811_flip_test_1_10_100_1000\angelina_fpn1_lay4_1_10_100_1000_VTrue_f25db8', 'models/clr.015.t7'),
+    ('DSBImodel/210811_flip_test_1_10_100_1000dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497_clr.015','210811_flip_test_1_10_100_1000dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497_clr.015.t7'),
+    #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/model.t7'),
     #
-    # ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
-    # (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
+    #('NN_results/dsbi_lay3_c4ca62', 'models/clr.005.t7'),
+    #('NN_results/dsbi_lay3_c4ca62', 'models/clr.006.t7'),
 ]
 
 model_dirs = [
     #(r'E:\_ELVEES\Braille\NN_results\dsbi_fpn1_lay4_1000_b67b68', 'models/clr.02*.t7'),
-    ('NN_results/210811_flip_test', '**/clr.*.t7'),
+   # ('NN_results/210811_flip_test', '**/clr.*.t7'),
 ]
 
 datasets = {
@@ -37,11 +38,9 @@ datasets = {
     # 'DSBI_test': [
     #                 r'DSBI\data\test.txt',
     #               ],
-    #'val': [r'DSBI/data/val_li2.txt', ],
-    'dsbi': [r'DSBI/data/test_li2.txt', ],
-    'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
-    # 'An-books': [r'AngelinaDataset/books/val.txt'],
-    # 'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
+    #'test': [r'DSBI/data/test.txt', ],
+    'test': [r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
+    'test2': [r'AngelinaDataset/uploaded/test2.txt', ],
 }
 
 lang = 'RU'
