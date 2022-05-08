@@ -200,7 +200,7 @@ class AngelinaSolver:
         if recognizer is None:
             print("infer_retinanet.BrailleInference()")
             t = timeit.default_timer()
-            recognizer = infer_retinanet.BrailleInference(verbose=2,
+            recognizer = infer_retinanet.BrailleInference(verbose=1,
                 params_fn=os.path.join(MODEL_PATH, 'weights', 'param.txt'),
                 model_weights_fn=os.path.join(MODEL_PATH, 'weights', MODEL_WEIGHTS),
                 create_script=None)
