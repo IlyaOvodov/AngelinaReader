@@ -37,7 +37,7 @@ class TaskState(Enum):
     ERROR = 4
     START_TEXT_TIME = 5  # GVNC
 
-VALID_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff pdf zip'.split())
+VALID_EXTENTIONS = infer_retinanet.VALID_IMAGE_EXTENTIONS + tuple('pdf zip'.split())
 
 
 def fill_message_headers(msg, to_address, subject):
@@ -477,10 +477,10 @@ class AngelinaSolver:
                                                         align_results=True,
                                                         process_2_sides=param_dict['process_2_sides'],
                                                         repeat_on_aligned=False)
-        if results_list is None:
+        if results_list is None or len(results_list) == 0:
             task["state"] = TaskState.ERROR.value
             exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
-            return False
+            return True
 
         # full path -> relative to data path
         result_files = list()
