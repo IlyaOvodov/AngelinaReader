@@ -29,6 +29,12 @@ MODEL_WEIGHTS = 'model.t7'
 
 recognizer = None
 
+class AngelinaException(Exception):
+    def __init__(self, msg_ru, msg_en):
+        Exception.__init__(self, msg_en)
+        self.msg_ru = msg_ru
+        self.msg_en = msg_en
+
 class TaskState(Enum):
     CREATED = 0
     RAW_FILE_LOADED = 1
@@ -407,7 +413,9 @@ class AngelinaSolver:
                          " :thumbnail, :is_public, :thumbnail_desc, :is_deleted)", task)
 
         file_ext = Path(task_name).suffix.lower()
-        assert file_ext[1:] in VALID_EXTENTIONS, "incorrect file type: " + str(task_name)
+        if file_ext[1:] not in VALID_EXTENTIONS:
+            raise AngelinaException(f'Недопустимый тип файла "{file_ext}" у файла "{str(task_name)}"',
+                                    f'Not acceptable file type "{file_ext}" of file "{str(task_name)}"')
 
         os.makedirs(self.data_root / self.raw_images_dir, exist_ok=True)
         raw_image_fn = doc_id + file_ext
