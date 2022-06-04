@@ -89,7 +89,7 @@ def index(template, is_mobile=False):
             flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template(template, form=form)
         filename = file_data.filename
-        file_ext = Path(filename).suffix[1:].lower()
+        file_ext = Path(filename).suffix.lower()
         if file_ext not in VALID_EXTENTIONS:
             flash('Не подхожящий тип файла {}: {}'.format(file_ext, filename))
             return render_template(template, form=form)

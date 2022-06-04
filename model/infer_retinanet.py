@@ -31,7 +31,7 @@ import pytorch_retinanet
 import pytorch_retinanet.encoder
 import braille_utils.postprocess as postprocess
 
-VALID_IMAGE_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff'.split())
+VALID_IMAGE_EXTENTIONS = tuple('.jpg,.jpe,.jpeg,.png,.gif,.svg,.bmp,.tiff,.tif,.jfif'.split(','))
 inference_width = 1024
 model_weights = 'model.t7'
 params_fn = join(local_config.data_path, 'weights', 'param.txt')
@@ -581,7 +581,7 @@ class BrailleInference:
         with zipfile.ZipFile(arch_path, 'r') as archive:
             for entry in archive.infolist():
                 with archive.open(entry) as file:
-                    if not Path(file.name).suffix.lower()[1:] in VALID_IMAGE_EXTENTIONS:
+                    if not Path(file.name).suffix.lower() in VALID_IMAGE_EXTENTIONS:
                         continue
                     try:
                         img = PIL.Image.open(file)

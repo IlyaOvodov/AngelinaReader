@@ -43,7 +43,8 @@ class TaskState(Enum):
     ERROR = 4
     START_TEXT_TIME = 5  # GVNC
 
-VALID_EXTENTIONS = infer_retinanet.VALID_IMAGE_EXTENTIONS + tuple('pdf zip'.split())
+VALID_EXTENTIONS = infer_retinanet.VALID_IMAGE_EXTENTIONS + tuple('.pdf,.zip'.split(','))
+UNSUPPORTED_ARCHIVE_EXTENTIONS = tuple('.rar'.split(','))
 
 
 def fill_message_headers(msg, to_address, subject):
@@ -413,9 +414,13 @@ class AngelinaSolver:
                          " :thumbnail, :is_public, :thumbnail_desc, :is_deleted)", task)
 
         file_ext = Path(task_name).suffix.lower()
-        if file_ext[1:] not in VALID_EXTENTIONS:
-            raise AngelinaException(f'Недопустимый тип файла "{file_ext}" у файла "{str(task_name)}"',
-                                    f'Not acceptable file type "{file_ext}" of file "{str(task_name)}"')
+        if file_ext not in VALID_EXTENTIONS:
+            if file_ext in UNSUPPORTED_ARCHIVE_EXTENTIONS:
+                raise AngelinaException(f'Недопустимый тип файла "{file_ext}" у файла "{str(task_name)}". Обрабатываются только ZIP архивы',
+                                        f'Not acceptable file type "{file_ext}" of file "{str(task_name)}". Only ZIP archives are allowed')
+            else:
+                raise AngelinaException(f'Недопустимый тип файла "{file_ext}" у файла "{str(task_name)}"',
+                                        f'Not acceptable file type "{file_ext}" of file "{str(task_name)}"')
 
         os.makedirs(self.data_root / self.raw_images_dir, exist_ok=True)
         raw_image_fn = doc_id + file_ext
