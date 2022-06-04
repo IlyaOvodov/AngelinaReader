@@ -41,7 +41,6 @@ class TaskState(Enum):
     PROCESSING_STARTED = 2
     PROCESSING_DONE = 3
     ERROR = 4
-    START_TEXT_TIME = 5  # GVNC
 
 VALID_EXTENTIONS = infer_retinanet.VALID_IMAGE_EXTENTIONS + tuple('.pdf,.zip'.split(','))
 UNSUPPORTED_ARCHIVE_EXTENTIONS = tuple('.rar'.split(','))
@@ -450,19 +449,7 @@ class AngelinaSolver:
         if task["state"] in (TaskState.PROCESSING_DONE.value, TaskState.ERROR.value):
             return True
 
-        # GVNC
-        gvnc_mode = False
-        if task["state"] == TaskState.RAW_FILE_LOADED.value and not timeout:
-            task["state"] = TaskState.START_TEXT_TIME.value
-            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
-            return False
-        if task["state"] == TaskState.START_TEXT_TIME.value:
-            task["state"] = TaskState.RAW_FILE_LOADED.value
-            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
-            timeout = 2
-            gvnc_mode = True
-
-        if task["state"] != TaskState.RAW_FILE_LOADED.value or not timeout:
+        if timeout == 0:  # calculation should be done on /result_test/<string:item_id>/ where timeout > 0
             return False
 
         ### вычисления
@@ -509,8 +496,6 @@ class AngelinaSolver:
         with (self.data_root / self.results_dir / result_files[0][1]).open(encoding="utf-8") as f:
             task["thumbnail_desc"] = ''.join(f.readlines()[:3])
         exec_sqlite(con, "update tasks set state=:state, results=:results, thumbnail=:thumbnail, thumbnail_desc=:thumbnail_desc where doc_id=:doc_id", task)
-        if gvnc_mode:  # GVNC
-            return False
         return True
 
     def get_results(self, task_id):
