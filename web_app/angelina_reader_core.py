@@ -447,7 +447,7 @@ class AngelinaSolver:
             "raw_paths": result[0][1],
             "state": result[0][2]
         }
-        if task["state"] == TaskState.PROCESSING_DONE.value:
+        if task["state"] in (TaskState.PROCESSING_DONE.value, TaskState.ERROR.value):
             return True
 
         # GVNC
@@ -555,7 +555,9 @@ class AngelinaSolver:
                                       {"doc_id": doc_id})
             assert len(results) == 1, (user_id, doc_id)
             result = results[0]
-        assert result is not None
+        assert result is not None, (user_id, doc_id)
+        if result[4] == TaskState.ERROR.value:
+            raise AngelinaException("Ошибка распознавания документа", "Document recognition error")
         assert result[4] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[4])
         item_data = list([
             tuple(
@@ -582,12 +584,6 @@ class AngelinaSolver:
         count - кол-во запиисей
         Возвращает список task_id задач для данного юзера, отсортированный от старых к новым
         """
-        """
-        В тестовом варианте возвращает 10 раз взятый список из 2 демо-результатов.
-        При этом сначала все они показываются как не законченные. По мере моделирования расчетов показывается   
-        более реалистично: пример выдается как не готовый 2 сек после запуска распознавания
-        Публичный -приватный - через одного
-        """
         if not user_id:
             return []
         con = self._user_tasks_sql_conn(user_id)
@@ -604,7 +600,7 @@ class AngelinaSolver:
                     "img_url":"/static/images/pic.jpg",   # GVNC
                     "desc": rec[4],
                     "public": bool(rec[5]),
-                    "sost": rec[6] == TaskState.PROCESSING_DONE.value
+                    "sost": "" if (rec[6] == TaskState.PROCESSING_DONE.value) else "E" if (rec[6] == TaskState.ERROR.value) else "P"
                    }
             for rec in results
         ]
