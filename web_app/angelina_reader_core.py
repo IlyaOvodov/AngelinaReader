@@ -127,7 +127,7 @@ class User:
         """
         Обновляет пароль. Вызывать про логине по email.
         """
-        assert password
+        assert password, (22060501,)
         password_hash = self.hash_password(password)
         self.password_hash = password_hash
         with self.solver._users_sql_conn() as con:
@@ -137,7 +137,7 @@ class User:
     def set_new_tmp_password(self, new_tmp_password_hash):
         with self.solver._users_sql_conn() as con:
             res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
-            assert len(res) == 1, (self.id)
+            assert len(res) == 1, (22060502, self.id)
             params = res[0][0]
             if params:
                 self.params_dict = json.loads(params)
@@ -238,7 +238,8 @@ class AngelinaSolver:
             "params": None
         }
         existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
-        assert not existing_user, ("such user already exists", network_name, network_id, email)
+        if existing_user:
+            raise AngelinaException(f"Такой пользователь уже есть: {(network_name, network_id, email)}", f"Such user already exists: {(network_name, network_id, email)}")
         con = self._users_sql_conn()
         exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date, params) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date, :params)", new_user)
         return User(id, new_user, solver=self)
@@ -251,18 +252,18 @@ class AngelinaSolver:
         con = self._users_sql_conn()
         con.row_factory = sqlite3.Row
         if id:
-            assert not network_name and not network_id and not email, ("incorrect call to find_user 1", network_name, network_id, email)
+            assert not network_name and not network_id and not email, (22060503, network_name, network_id, email)
             query = ("select * from users where id = ?", (id,))
         elif network_name or network_id:
-            assert network_name and network_id, ("incorrect call to find_user 2", network_name, network_id, email)
+            assert network_name and network_id, (22060504, network_name, network_id, email)
             query = ("select * from users where network_name = ? and network_id = ?", (network_name,network_id,))
         else:
-            assert email and not network_name and not network_id, ("incorrect call to find_user 3", network_name, network_id, email)
+            assert email and not network_name and not network_id, (22060505, network_name, network_id, email)
             query = ("select * from users where email = ? and (network_name is NULL or network_name='') and (network_id is NULL or network_id='')", (email,))
         res = exec_sqlite(con, query[0], query[1])
         if len(res):
             user_dict = dict(res[0])  # sqlite row -> dict
-            assert len(res) <= 1, ("more then 1 user found", user_dict)
+            assert len(res) <= 1, (22060506, user_dict)
             user = User(id=user_dict["id"], user_dict=user_dict, solver=self)
             return user
         return None  # Nothing found
@@ -388,7 +389,7 @@ class AngelinaSolver:
         doc_id = uuid.uuid4().hex
         if type(file_storage) == werkzeug.datastructures.ImmutableMultiDict:
             file_storage = file_storage['file']
-        assert type(file_storage) == werkzeug.datastructures.FileStorage, type(file_storage)
+        assert type(file_storage) == werkzeug.datastructures.FileStorage, (22060507, type(file_storage))
         task_name = file_storage.filename
         if not user_id:
             user_id = ""
@@ -439,7 +440,8 @@ class AngelinaSolver:
         task = { "doc_id": doc_id }
         con = self._user_tasks_sql_conn(user_id)
         result = exec_sqlite(con, "select params, raw_paths, state from tasks where doc_id=:doc_id", task)
-        assert len(result) == 1, (user_id, doc_id, len(result))
+        if len(result) != 1:
+            raise AngelinaException(f"Ошибочный запрос {user_id}_{doc_id} {len(result)}", f"Invalid request {user_id}_{doc_id} {len(result)}")
         task = {
             **task,
             "params": result[0][0],
@@ -538,12 +540,12 @@ class AngelinaSolver:
                                       " from tasks"
                                       " where doc_id=:doc_id and is_deleted=0",
                                       {"doc_id": doc_id})
-            assert len(results) == 1, (user_id, doc_id)
+            assert len(results) == 1, (22060508, user_id, doc_id)
             result = results[0]
-        assert result is not None, (user_id, doc_id)
+        assert result is not None, (22060509, user_id, doc_id)
         if result[4] == TaskState.ERROR.value:
             raise AngelinaException("Ошибка распознавания документа", "Document recognition error")
-        assert result[4] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[4])
+        assert result[4] == TaskState.PROCESSING_DONE.value, (22060510, user_id, doc_id, result[4])
         item_data = list([
             tuple(
                 str(
@@ -622,7 +624,7 @@ class AngelinaSolver:
                     attachment = MIMEImage((self.data_root / self.results_dir / file_name).read_bytes())
                     attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
                 else:
-                    assert False, str(file_name)
+                    assert False, (22060511, str(file_name))
                 msg.attach(attachment)
         send_email(msg)
 
@@ -643,19 +645,19 @@ class AngelinaSolver:
         con = self._user_tasks_sql_conn(user_id)
         result = exec_sqlite(con, "select name, results, state from tasks where doc_id=:doc_id",
                     {"doc_id": doc_id})
-        assert len(result) == 1, (user_id, doc_id)
+        assert len(result) == 1, (22060512, user_id, doc_id)
         result = result[0]
 
         if user_id:
             with self._users_sql_conn() as con:  # TODO проще получить User из flask наружи
                 user_result = exec_sqlite(con, "select name, email from users where id=:user_id",
                         {"user_id": user_id})
-                assert len(user_result) == 1, (user_id)
+                assert len(user_result) == 1, (22060513, user_id)
                 user_name, user_email  = user_result[0][0], user_result[0][1]
         else:
             user_name, user_email = "", ""
 
-        assert result[2] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[2])
+        assert result[2] == TaskState.PROCESSING_DONE.value, (22060514, user_id, doc_id, result[2])
         if parameters.get('to_developers'):
             if mail:
                 mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
