@@ -32,7 +32,7 @@ def startup_logger():
         """
         # create message object instance
         txt = 'Angelina Reader is {} at {}'.format(what, hostname)
-        msg = fill_message_headers(MIMEText(txt, _charset="utf-8"), 'Angelina Reader<angelina-reader@ovdv.ru>', txt)
+        msg = fill_message_headers(MIMEText(txt, _charset="utf-8"), 'Angelina Reader<admin@angelina-reader.com>', txt)
         send_email(msg)
 
     send_startup_email('started')

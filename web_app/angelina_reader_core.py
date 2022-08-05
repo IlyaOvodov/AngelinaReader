@@ -660,9 +660,9 @@ class AngelinaSolver:
         assert result[2] == TaskState.PROCESSING_DONE.value, (22060514, user_id, doc_id, result[2])
         if parameters.get('to_developers'):
             if mail:
-                mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
+                mail += ',Angelina Reader<admin@angelina-reader.com>'
             else:
-                mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
+                mail = 'Angelina Reader<admin@angelina-reader.com>'
         subject = parameters.get('subject') or ("Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower())
         comment = parameters.get('comment', "") + "\nLetter from: {}<{}>".format(user_name, user_email)
         file_types_to_send = []
