@@ -282,6 +282,10 @@ def interpret_line_RU_and_liblouis(line, lang, mode = None):
 
 interpret_line_funcs = {
     'RU': interpret_line_RU,
+    'ru1': interpret_line_liblouis,
+    'ru-compbrl': interpret_line_liblouis,
+    'ru-litbrl': interpret_line_liblouis,
+    'ru-ru-g1': interpret_line_liblouis,
     'EN': interpret_line_RU, # TODO in can work with some errors for EN
     'EN2': interpret_line_liblouis,
     'DE': interpret_line_RU, # TODO in can work with some errors for DE

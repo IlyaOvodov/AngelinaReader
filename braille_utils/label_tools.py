@@ -88,6 +88,8 @@ def human_label_to_int(label):
     '''
     Convert label from manual annotations to int_label
     '''
+    if label is None:
+        label = "~1"  # GVNC
     label = label.lower()
     if label[0] == '~':
         label123 = label[1:]

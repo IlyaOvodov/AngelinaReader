@@ -332,6 +332,9 @@ math_RU = {
 letter_dicts = {
     'SYM': sym_map,
     'RU': alpha_map_RU,
+    'ru-compbrl': alpha_map_RU,
+    'ru-litbrl': alpha_map_RU,
+    'ru-ru-g1': alpha_map_RU,
     'EN': alpha_map_EN,
     'EN2':alpha_map_EN,
     'GR': alpha_map_GR,

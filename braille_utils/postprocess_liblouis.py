@@ -9,6 +9,10 @@ from braille_utils import label_tools as lt
 liblouis_tables_path_prefix = getattr(local_config, 'liblouis_tables_path_prefix', '')
 liblouis_tables = {
     "EN2": "en-ueb-g2.ctb",
+    "ru1": "ru.ctb",
+    "ru-compbrl": "ru-compbrl.ctb",
+    "ru-litbrl": "ru-litbrl.ctb",
+    "ru-ru-g1": "ru-ru-g1.ctb",
 }
 
 def update_word_at_line(line, start_idx, end_idx, liblouis_word, existing_word):
