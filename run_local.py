@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description='Angelina Braille Reader: optical B
 
 parser.add_argument('input', type=str, help='File(s) to be processed: image, pdf or zip file or directory name')
 parser.add_argument('results_dir', nargs='?', type=str, help='(Optional) output directory. If not specified, results are placed at input location')
-parser.add_argument('-l', '--lang', type=str, default='RU', help='(Optional) Document language (RU, EN, DE, GR, LV, PL, UZ or UZL). If not specified, is RU')
+parser.add_argument('-l', '--lang', type=str, default='RU', help='(Optional) Document language (RU, EN, EN2, DE, GR, LV, PL, UZ or UZL). If not specified, is RU')
 parser.add_argument('-o', '--orient', action='store_false', help="Don't find orientation, use original file orientation")
 parser.add_argument('-2', dest='two', action='store_true', help="Process 2 sides")
 

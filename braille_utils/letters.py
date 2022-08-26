@@ -333,6 +333,7 @@ letter_dicts = {
     'SYM': sym_map,
     'RU': alpha_map_RU,
     'EN': alpha_map_EN,
+    'EN2':alpha_map_EN,
     'GR': alpha_map_GR,
     'LV': alpha_map_LV,
     'PL': alpha_map_PL,

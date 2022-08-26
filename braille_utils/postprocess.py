@@ -6,6 +6,7 @@ import PIL
 
 from braille_utils import letters
 from braille_utils import label_tools as lt
+from braille_utils.postprocess_liblouis import interpret_line_liblouis
 
 
 class LineChar:
@@ -266,9 +267,23 @@ def interpret_line_RU(line, lang, mode = None):
     }
 
 
+def interpret_line_RU_and_liblouis(line, lang, mode = None):
+    """
+    precess line of chars and fills char and labeling_char attributes of chars according to language rules
+    Use interpret_line_RU to get interpretation char by char and Liblouis over it to apply contractions
+    :param line: list of LineChar. LineChar must have spaces_before, char and labeling_char attributes
+    :param lang: 'RU' etc.
+    :return: None
+    """
+    mode = interpret_line_RU(line, lang, mode)
+    interpret_line_liblouis(line, lang, mode)
+    return mode
+
+
 interpret_line_funcs = {
     'RU': interpret_line_RU,
     'EN': interpret_line_RU, # TODO in can work with some errors for EN
+    'EN2': interpret_line_liblouis,
     'DE': interpret_line_RU, # TODO in can work with some errors for DE
     'GR': interpret_line_RU,
     'LV': interpret_line_RU,
