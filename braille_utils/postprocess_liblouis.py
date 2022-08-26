@@ -3,9 +3,10 @@
 #     sys.path.append(".")
 from pathlib import Path
 import louis
+import local_config
 from braille_utils import label_tools as lt
 
-liblouis_tables_path = Path(r"liblouis/tables")
+liblouis_tables_path_prefix = getattr(local_config, 'liblouis_tables_path_prefix', '')
 liblouis_tables = {
     "EN2": "en-ueb-g2.ctb",
 }
@@ -88,7 +89,7 @@ def interpret_line_liblouis(line, lang, mode = None):
     """
     liblouis_table = liblouis_tables.get(lang)
     assert liblouis_table is not None, f"Translation table is not defined for language {lang}"
-    liblouis_tables_list = [str(liblouis_tables_path / liblouis_table)]
+    liblouis_tables_list = [liblouis_tables_path_prefix + liblouis_table]
     return interpret_line_liblouis_as_a_whole(line, liblouis_tables_list, mode)
 
 if __name__=="__main__":
@@ -101,7 +102,7 @@ if __name__=="__main__":
     # for performance test
     liblouis_table = liblouis_tables.get(lang)
     assert liblouis_table is not None, f"Translation table is not defined for language {lang}"
-    liblouis_tables_list = [str(liblouis_tables_path / liblouis_table)]
+    liblouis_tables_list = [str(liblouis_tables_path_prefix + liblouis_table)]
     rects = data.read_LabelMe_annotation(label_filename = json_filename, get_points = False)
     boxes = [r[:4] for r in rects]
     labels = [r[4] for r in rects]
