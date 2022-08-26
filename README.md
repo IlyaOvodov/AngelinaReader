@@ -2,6 +2,18 @@
 
 Angelina Braille Reader is an Optical Braille Recognition system. It is designed to convert Braille text on photos into plain text.
 
+This solution is available as
+- **Web service [Angelina Braille Reader](https://angelina-reader.ru)**
+
+![image](https://github.com/IlyaOvodov/AngelinaReader2/raw/master/static/images/logo_head.png)  
+
+- **Android app [Angelina Braille Reader](https://play.google.com/store/apps/details?id=com.angelina_reader.twa)**
+
+![image](https://github.com/IlyaOvodov/AngelinaReader2/raw/master/static/json/72x72.png)
+
+Note that these solutions use the most actual neural net model while the model for standalone installation available here is not always up to date. 
+
+
 ## General description of the solution
 
 The solution is a web-service.
@@ -64,14 +76,35 @@ A client requires a standard web-browser (Chrome, Firefox)
 
 ## Installation
 
+### 1. Install Angelina Braille Reader
 ```
 git clone --recursive https://github.com/IlyaOvodov/AngelinaReader.git
 cd AngelinaReader
 pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+### 2. Download neural net model
+```
 wget -O weights/model.t7 http://angelina-reader.ovdv.ru/retina_chars_eced60.clr.008    
+```
+Note that these solutions uses the most actual neural net model while the model for standalone installation available here is not always up to date.
+
+
+### 3. Install Liblouis library
+
+Download and install [Liblouis](http://liblouis.org/):
+- download and unpack [Liblouis (source)](http://liblouis.org/downloads/)
+- install Liblouis [as described](https://github.com/liblouis/liblouis#installation) for Linux or as described [here](https://raw.githubusercontent.com/liblouis/liblouis/master/README.windows) for Windows
+- install Python bindings for Liblouis as described [here](https://github.com/liblouis/liblouis/tree/master/python)
+
+For Windows: update `liblouis_tables_path_prefix` parameter in `AngelinaReader\local_config.py` file with path to Liblouis tables, including trailing "/" 
+
+### 4. Run web app
+```
 python run_web_app.py
 ```
+
 Windows: pip directory (i.e. `<python>\Scripts`) should be added to Path .   
 Be sure  `python` and `pip` start Python3 if both Python 3 and Python 2.7 are installed.   
 
