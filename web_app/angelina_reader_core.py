@@ -47,7 +47,7 @@ UNSUPPORTED_ARCHIVE_EXTENTIONS = tuple('.rar'.split(','))
 
 
 def fill_message_headers(msg, to_address, subject):
-    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
+    msg['From'] = "Angelina Braille Reader<{}>".format(Config.SMTP_FROM)
     msg['To'] = to_address
     msg['Subject'] = subject
     msg['Date'] = email_utils.formatdate()
