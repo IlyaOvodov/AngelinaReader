@@ -84,11 +84,7 @@ class User:
         self.network_name = user_dict.get("network_name")       # TODO понять как кодировать соцсети. Для регистрации через email = None
         self.network_id = user_dict.get("network_id")
         self.password_hash = user_dict.get("password_hash")
-        self.params = user_dict.get("params")
-        if self.params:
-            self.params_dict = json.loads(self.params)
-        else:
-            self.params_dict = dict()
+        self.set_params_dict_from_str(user_dict.get("params"))
 
         # поля для Flask:
         self.is_authenticated = id is not None
@@ -108,19 +104,29 @@ class User:
         password_hash = self.hash_password(password)
         if self.password_hash == password_hash:
             return True
-        if self.params:
-            params = json.loads(self.params)
-            if params.get('tmp_password') == password_hash:
-                return True
+        if self.params_dict.get('tmp_password') == password_hash:
+            return True
         return False
+
+    def set_params_dict_from_str(self, params):
+        if params:
+            self.params_dict = json.loads(params)
+        else:
+            self.params_dict = dict()
+
+    def params_as_str(self):
+        return json.dumps(self.params_dict)
+
+    def set_unsubscribed(self, value=True):
+        self.params_dict["unsubscribed"] = value
+        self.update()
 
     def update(self):
         """
         изменение имени и настроек ранее зарегистрированного юзера
         """
         with self.solver._users_sql_conn() as con:
-            self.params = json.dumps(self.params_dict)
-            exec_sqlite(con, "update users set name=?, params=? where id = ?", (self.name, self.params, self.id))
+            exec_sqlite(con, "update users set name=?, params=? where id = ?", (self.name, self.params_as_str(), self.id))
         pass
         
     def set_password(self, password):
@@ -138,18 +144,13 @@ class User:
         with self.solver._users_sql_conn() as con:
             res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
             assert len(res) == 1, (22060502, self.id)
-            params = res[0][0]
-            if params:
-                self.params_dict = json.loads(params)
-            else:
-                self.params_dict = dict()
+            self.set_params_dict_from_str(res[0][0])
             if new_tmp_password_hash:
                 self.params_dict["tmp_password"] = new_tmp_password_hash
             else:
                 if "tmp_password" in self.params_dict.keys():
                     del self.params_dict["tmp_password"]
-            self.params = json.dumps(self.params_dict)
-            exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
+            exec_sqlite(con, "update users set params=? where id = ?", (self.params_as_str(), self.id))
 
     def send_new_pass_to_mail(self):
         """
