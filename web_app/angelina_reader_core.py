@@ -69,15 +69,39 @@ class User:
     Пользователь системы и его атрибуты
     Экземпляры класса создавать через AngelinaSolver.find_user или AngelinaSolver.register_user
     """
-    def __init__(self, id, user_dict, solver):
+    @staticmethod
+    def _users_sql_conn(data_root):
+        users_db_file_name = data_root / "all_users.db"
+        timeout = 0.1
+        new_db = not os.path.isfile(users_db_file_name)
+        con = sqlite3.connect(str(users_db_file_name), timeout=timeout)
+        if new_db:
+            con.cursor().execute(
+                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text, params text)")
+            _convert_users_from_json(users_db_file_name, con)
+            con.commit()
+        return con
+
+    @staticmethod
+    def _convert_users_from_json(users_db_file_name, con):
+        import json
+        json_file = os.path.splitext(users_db_file_name)[0] + '.json'
+        if os.path.isfile(json_file):
+            with open(json_file, encoding='utf-8') as f:
+                all_users = json.load(f)
+            for id, user_dict in all_users.items():
+                con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
+                                     (id, user_dict["name"], user_dict["email"]))
+
+    def __init__(self, id, user_dict, data_root):
         """
         Ниже список атрибутов для demo
         Все атрибуты - read only, изменять через вызовы соответствующих методов
         """
         self.id = id  # уникальный для системы id пользователя. Присваивается при регистрации.
-        self.solver = solver
         self.name = user_dict.get("name", "")
         self.email = user_dict.get("email", "")
+        self.data_root = data_root
 
         # Данные, с которыми юзер был найден через find_user или создан через register_user.
         # У пользователя может быть несколько способов входа, поэтому 
@@ -125,7 +149,7 @@ class User:
         """
         изменение имени и настроек ранее зарегистрированного юзера
         """
-        with self.solver._users_sql_conn() as con:
+        with self._users_sql_conn(self.data_root) as con:
             exec_sqlite(con, "update users set name=?, params=? where id = ?", (self.name, self.params_as_str(), self.id))
         pass
         
@@ -136,12 +160,12 @@ class User:
         assert password, (22060501,)
         password_hash = self.hash_password(password)
         self.password_hash = password_hash
-        with self.solver._users_sql_conn() as con:
+        with self._users_sql_conn(self.data_root) as con:
             exec_sqlite(con, "update users set password_hash = ? where id = ?", (self.password_hash, self.id))
         self.set_new_tmp_password(None)
 
     def set_new_tmp_password(self, new_tmp_password_hash):
-        with self.solver._users_sql_conn() as con:
+        with self._users_sql_conn(self.data_root) as con:
             res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
             assert len(res) == 1, (22060502, self.id)
             self.set_params_dict_from_str(res[0][0])
@@ -152,7 +176,7 @@ class User:
                     del self.params_dict["tmp_password"]
             exec_sqlite(con, "update users set params=? where id = ?", (self.params_as_str(), self.id))
 
-    def send_new_pass_to_mail(self):
+    def send_new_pass_to_mail(self, subject, msg_text, request_info):
         """
         Генерируем новый пароль и отправляем его на почту
         Возвращаем True или False в зависимости от результата работы функции
@@ -160,9 +184,7 @@ class User:
         new_tmp_password = str(random.randint(10000000, 99999999))
         new_tmp_password_hash = self.hash_password(new_tmp_password)
         self.set_new_tmp_password(new_tmp_password_hash)
-        # TODO язык
-        msg_text = "Ваш одноразовый пароль на angelina-reader.ru: " + new_tmp_password + ". Измените пароль после входа в систему"
-        subject = "Восстановление пароля"
+        msg_text = msg_text.format(new_tmp_password)
         msg = fill_message_headers(MIMEText(msg_text, _charset="utf-8"), self.email, subject)
         send_email(msg)
 
@@ -200,7 +222,6 @@ class AngelinaSolver:
         self.raw_images_dir = Path('raw')
         self.results_dir = Path('results')
         os.makedirs(self.data_root, exist_ok=True)
-        self.users_db_file_name = self.data_root / "all_users.db"
 
     def get_recognizer(self):
         global recognizer
@@ -241,16 +262,17 @@ class AngelinaSolver:
         existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
         if existing_user:
             raise AngelinaException(f"Такой пользователь уже есть: {(network_name, network_id, email)}", f"Such user already exists: {(network_name, network_id, email)}")
-        con = self._users_sql_conn()
-        exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date, params) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date, :params)", new_user)
-        return User(id, new_user, solver=self)
+        with User._users_sql_conn(self.data_root) as con:
+            exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date, params) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date, :params)", new_user)
+        user = User(id, new_user, data_root=self.data_root)
+        return user
 
     def find_user(self, network_name=None, network_id=None, email=None, id=None):
         """
         Возвращает объект User по регистрационным данным: id или паре network_name+network_id или регистрации по email (для этого указать network_name = None или network_name = "")
         Если юзер не найден, возвращает None
         """
-        con = self._users_sql_conn()
+        con = User._users_sql_conn(self.data_root)
         con.row_factory = sqlite3.Row
         if id:
             assert not network_name and not network_id and not email, (22060503, network_name, network_id, email)
@@ -265,7 +287,7 @@ class AngelinaSolver:
         if len(res):
             user_dict = dict(res[0])  # sqlite row -> dict
             assert len(res) <= 1, (22060506, user_dict)
-            user = User(id=user_dict["id"], user_dict=user_dict, solver=self)
+            user = User(id=user_dict["id"], user_dict=user_dict, data_root=self.data_root)
             return user
         return None  # Nothing found
 
@@ -275,7 +297,7 @@ class AngelinaSolver:
         Возвращает Dict(Dict) пользователей с указанным е-мейлом: id: user_dict.
         Может вернуть пустой словарь, словарь из одного или список из нескольких юзеров.
         """
-        con = self._users_sql_conn()
+        con = User._users_sql_conn(self.data_root)
         con.row_factory = sqlite3.Row
         res = exec_sqlite(con, "select * from users where email = ?", (email,))
         found = dict()
@@ -283,27 +305,6 @@ class AngelinaSolver:
             user_dict = dict(row)  # sqlite row -> dict
             found[user_dict["id"]] = user_dict
         return found
-
-    def _users_sql_conn(self):
-        timeout = 0.1
-        new_db = not os.path.isfile(self.users_db_file_name)
-        con = sqlite3.connect(str(self.users_db_file_name), timeout=timeout)
-        if new_db:
-            con.cursor().execute(
-                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text, params text)")
-            self._convert_users_from_json(con)
-            con.commit()
-        return con
-
-    def _convert_users_from_json(self, con):
-        import json
-        json_file = os.path.splitext(self.users_db_file_name)[0] + '.json'
-        if os.path.isfile(json_file):
-            with open(json_file, encoding='utf-8') as f:
-                all_users = json.load(f)
-            for id, user_dict in all_users.items():
-                con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
-                                     (id, user_dict["name"], user_dict["email"]))
 
     def _user_tasks_sql_conn(self, user_id):
         timeout = 0.1
@@ -650,7 +651,7 @@ class AngelinaSolver:
         result = result[0]
 
         if user_id:
-            with self._users_sql_conn() as con:  # TODO проще получить User из flask наружи
+            with User._users_sql_conn(self.data_root) as con:  # TODO проще получить User из flask наружи
                 user_result = exec_sqlite(con, "select name, email from users where id=:user_id",
                         {"user_id": user_id})
                 assert len(user_result) == 1, (22060513, user_id)
