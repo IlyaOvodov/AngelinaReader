@@ -59,7 +59,7 @@ def send_email(msg):
     server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
     server.starttls()
     server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-    recepients = msg['To'].split(',')
+    recepients = msg['To'].split(';')
     server.sendmail(msg['From'], recepients, msg.as_string())
     server.quit()
 
@@ -662,7 +662,7 @@ class AngelinaSolver:
         assert result[2] == TaskState.PROCESSING_DONE.value, (22060514, user_id, doc_id, result[2])
         if parameters.get('to_developers'):
             if mail:
-                mail += ',Angelina Reader<admin@angelina-reader.com>'
+                mail += ';Angelina Reader<admin@angelina-reader.com>'
             else:
                 mail = 'Angelina Reader<admin@angelina-reader.com>'
         subject = parameters.get('subject') or ("Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower())
