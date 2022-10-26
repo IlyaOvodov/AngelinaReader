@@ -282,11 +282,10 @@ class AngelinaSolver:
             query = ("select * from users where network_name = ? and network_id = ?", (network_name,network_id,))
         else:
             assert email and not network_name and not network_id, (22060505, network_name, network_id, email)
-            query = ("select * from users where email = ? and (network_name is NULL or network_name='') and (network_id is NULL or network_id='')", (email,))
+            query = ("select * from users where trim(lower(email)) = trim(lower(?)) and (network_name is NULL or network_name='') and (network_id is NULL or network_id='') order by reg_date desc", (email,))
         res = exec_sqlite(con, query[0], query[1])
         if len(res):
             user_dict = dict(res[0])  # sqlite row -> dict
-            assert len(res) <= 1, (22060506, user_dict)
             user = User(id=user_dict["id"], user_dict=user_dict, data_root=self.data_root)
             return user
         return None  # Nothing found
@@ -299,7 +298,7 @@ class AngelinaSolver:
         """
         con = User._users_sql_conn(self.data_root)
         con.row_factory = sqlite3.Row
-        res = exec_sqlite(con, "select * from users where email = ?", (email,))
+        res = exec_sqlite(con, "select * from users where trim(lower(email)) = trim(lower(?)) order by reg_date desc", (email,))
         found = dict()
         for row in res:
             user_dict = dict(row)  # sqlite row -> dict
