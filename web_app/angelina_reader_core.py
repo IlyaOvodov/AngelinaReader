@@ -79,7 +79,7 @@ class User:
         if new_db:
             con.cursor().execute(
                 "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text, params text)")
-            _convert_users_from_json(users_db_file_name, con)
+            #_convert_users_from_json(users_db_file_name, con)
             con.commit()
         return con
 
