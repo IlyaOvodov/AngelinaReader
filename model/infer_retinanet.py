@@ -616,6 +616,7 @@ if __name__ == '__main__':
     results_dir =       r'D:\Programming.Data\Braille\ASI_results_NEW_EN\Braile Photos and Scans'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
+    lang = 'RU'
     remove_labeled_from_filename = False
     find_orientation = True
     process_2_sides = False
@@ -624,7 +625,7 @@ if __name__ == '__main__':
     draw_redined = BrailleInference.DRAW_REFINED
 
     recognizer = BrailleInference(verbose=verbose)
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined=draw_redined,
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang=lang, extra_info=None, draw_refined=draw_redined,
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,
                                     process_2_sides=process_2_sides,
