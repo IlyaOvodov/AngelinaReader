@@ -60,6 +60,22 @@ def int_to_label123(int_lbl):
 def int_to_unicode(int_lbl):
     return chr(0x2800 + int_lbl)
 
+def unicode_to_int(unicode_lbl):
+    int_lbl = ord(unicode_lbl) - 0x2800
+    assert int_lbl >= 0 and int_lbl < 64, f"incorrect unicode braille char: '{unicode_lbl}'"
+    return int_lbl
+
+ASCII_CONVERSION_TABLE = " A1B'K2L@CIF/MSP\"E3H9O6R^DJG>NTQ,*5<-U8V.%[$+X!&;:4\\0Z7(_?W]#Y)="
+
+def int_to_ascii(int_lbl):
+    assert int_lbl >= 0 and int_lbl < 64, f"incorrect int braille char: '{int_lbl}'"
+    return ASCII_CONVERSION_TABLE[int_lbl]
+
+def unicode_to_ascii(unicode_lbl):
+    int_lbl = ord(unicode_lbl) - 0x2800
+    assert int_lbl >= 0 and int_lbl < 64, f"incorrect unicode braille char: '{unicode_lbl}'"
+    return ASCII_CONVERSION_TABLE[int_lbl]
+
 def label123_to_int(label123):
     try:
         r = sum([v[int(ch)-1] for ch in label123])

@@ -23,6 +23,7 @@ import werkzeug.datastructures
 
 from .config import Config
 import model.infer_retinanet as infer_retinanet
+from braille_utils import label_tools as lt
 
 MODEL_PATH = Config.MODEL_PATH or Path(__file__).parent.parent
 MODEL_WEIGHTS = 'model.t7'
@@ -598,7 +599,7 @@ class AngelinaSolver:
 
     # отправка почты
     def send_mail(self, to_address, subject, comment, results_list,
-                  file_types_to_send = None):
+                  file_types_to_send=None, braille_as_unicode=True):
         """
         Sends results to e-mail as text(s) + image(s)
         :param to_address: destination email as str
@@ -619,8 +620,12 @@ class AngelinaSolver:
                     continue
                 if file_suffix in (".txt", ".brl"):
                     txt = (self.data_root / self.results_dir / file_name).read_text(encoding="utf-8")
+                    attachment_filename = Path(file_name).name
+                    if file_suffix == ".brl" and not braille_as_unicode:
+                        attachment_filename = Path(file_name).with_suffix(".brf").name
+                        txt = "".join([lt.unicode_to_ascii(ch) if ch not in ('\r', '\n') else ch for ch in txt])
                     attachment = MIMEText(txt, _charset="utf-8")
-                    attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+                    attachment.add_header('Content-Disposition', 'inline', filename=attachment_filename)
                 elif file_suffix == ".jpg":
                     attachment = MIMEImage((self.data_root / self.results_dir / file_name).read_bytes())
                     attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
@@ -673,7 +678,7 @@ class AngelinaSolver:
             file_types_to_send.append(".txt")
         if parameters.get("send_braille", True):
             file_types_to_send.append(".brl")
-        self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send)
+        self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send, braille_as_unicode=parameters.get("unicode_braille", True))
 
     def get_user_emails(self, user):
         """
