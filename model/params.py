@@ -8,7 +8,7 @@ settings = AttrDict(
     findLR=False,
     can_overwrite=False,
     eval_period=5,
-    regular_save_period = None  #(500, 1),
+    regular_save_period = (500, 1),
 )
 
 pseudo_step = '1'
@@ -16,7 +16,7 @@ pseudo_opt = '1'
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/angelina_21_fpn{model_params.encoder_params.fpn_skip_layers}_lay{model_params.num_fpn_layers}_{model_params.loss_params.class_loss_scale}_V{augmentation.VerticalFlip}',
+    model_name = 'NN_results/230322_auto_loss_weights/angelina_fpn{model_params.encoder_params.fpn_skip_layers}_lay{model_params.num_fpn_layers}_autolossweights_V{augmentation.VerticalFlip}',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
@@ -76,7 +76,8 @@ params = AttrDict(
             #ignored_scores = (0.35,0.81),
         ),
         loss_params=AttrDict(
-            class_loss_scale = 1,
+            class_loss_scale=1,
+            auto_loss_weights=True,
         ),
     ),
     #load_model_from = 'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/models/best.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e

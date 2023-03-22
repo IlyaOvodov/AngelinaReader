@@ -84,12 +84,16 @@ metrics = OrderedDict({
     'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
     'loc': ignite.metrics.Loss(loss.metric('loc'), batch_size=lambda y: params.data.batch_size),
     'cls': ignite.metrics.Loss(loss.metric('cls'), batch_size=lambda y: params.data.batch_size),
+    's_loc': ignite.metrics.Loss(loss.metric('s_loc'), batch_size=lambda y: params.data.batch_size),
+    's_cls': ignite.metrics.Loss(loss.metric('s_cls'), batch_size=lambda y: params.data.batch_size),
 })
 
 eval_metrics = OrderedDict({
     'loss': ignite.metrics.Loss(loss, batch_size=lambda y: params.data.batch_size), # loss calc must be called when eval
     'loc': ignite.metrics.Loss(loss.metric('loc'), batch_size=lambda y: params.data.batch_size),
     'cls': ignite.metrics.Loss(loss.metric('cls'), batch_size=lambda y: params.data.batch_size),
+    's_loc': ignite.metrics.Loss(loss.metric('s_loc'), batch_size=lambda y: params.data.batch_size),
+    's_cls': ignite.metrics.Loss(loss.metric('s_cls'), batch_size=lambda y: params.data.batch_size),
 })
 
 target_metric = 'train:loss'

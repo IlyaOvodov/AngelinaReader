@@ -533,7 +533,7 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
         params_fn=params_fn,
         model_weights_fn=model,
         create_script=None,
-        inference_width=inference_width,
+        _inference_width=inference_width,
         device=device,
         verbose=verbose)
     assert recognizer.impl.cls_thresh == 0.5, recognizer.impl.cls_thresh
@@ -621,7 +621,7 @@ def main(table_like_format):
             params_fn=params_fn,
             model_weights_fn=str(model_root / model_weights),
             create_script=None,
-            inference_width=inference_width,
+            _inference_width=inference_width,
             verbose=verbose)
         assert recognizer.impl.cls_thresh == cls_thresh, (recognizer.impl.cls_thresh, cls_thresh)
         for key, data_list in data_set.items():
