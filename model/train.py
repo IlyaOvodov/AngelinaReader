@@ -49,6 +49,7 @@ ctx = ovotools.pytorch.Context(settings=None, params=params, eval_func=lambda x:
 model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
 if checkpoint:
     load_objects(to_load={"model": model}, checkpoint=checkpoint)
+    load_objects(to_load={"loss": loss.loss_module}, checkpoint=checkpoint)
 else:
     if 'load_model_from' in params.keys():
         preloaded_weights = torch.load(Path(local_config.data_path) / params.load_model_from, map_location='cpu')
@@ -76,7 +77,10 @@ print('data loaded. train:{} batches'.format(len(train_loader)))
 for k,v in val_loaders.items():
     print('             {}:{} batches'.format(k, len(v)))
 
-ctx.optimizer = eval(params.optim)(model.parameters(), **params.optim_params)
+ctx.optimizer = eval(params.optim)([
+                                       {'params': model.parameters(), **params.optim_params},
+                                       {'params': loss.loss_module.parameters(),  **params.loss_optim_params}
+                                   ])
 if checkpoint:
     load_objects(to_load={"optimizer": ctx.optimizer}, checkpoint=checkpoint)
 
@@ -182,6 +186,7 @@ trainer.add_event_handler(eval_event, log_training_results, event = eval_event)
 checkpoint_objects = {"settings": settings,
                       'params': params,
                       'model': model,
+                      'loss': loss.loss_module,
                       'optimizer': ctx.optimizer,
                       'lr_scheduler': clr_scheduler or ctx.lr_scheduler,
                       'trainer': trainer}

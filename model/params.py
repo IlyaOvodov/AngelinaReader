@@ -78,6 +78,7 @@ params = AttrDict(
         loss_params=AttrDict(
             class_loss_scale=1,
             auto_loss_weights=True,
+            initial_auto_loss_s=4,
         ),
     ),
     #load_model_from = 'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/models/best.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
@@ -87,6 +88,9 @@ params = AttrDict(
         #momentum=0.9,
         #weight_decay = 0, #0.001,
         #nesterov = False,
+    ),
+    loss_optim_params = AttrDict(
+        lr=0.001,
     ),
     lr_finder=AttrDict(
         iters_num=200,
@@ -110,7 +114,7 @@ params = AttrDict(
         min_lr=1e-5,
         max_lr=0.0001,
         period_iters=4000,
-        scale_max_lr=0.90,
-        scale_min_lr=0.90,
+        scale_max_lr=0.97,
+        scale_min_lr=0.97,
     ),
 )

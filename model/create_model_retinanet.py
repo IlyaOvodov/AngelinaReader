@@ -26,8 +26,6 @@ def create_model_retinanet(params, device):
                       num_heads=2 if two_heads else 1
                       ).to(device)
     retina_loss = FocalLoss(num_classes=num_classes, **params.model_params.get('loss_params', dict()))
-    model.register_parameter(name='s_loc', param=retina_loss.s_loc)
-    model.register_parameter(name='s_cls', param=retina_loss.s_cls)
 
     def detection_collate(batch):
         '''
@@ -85,6 +83,7 @@ def create_model_retinanet(params, device):
     class Loss:
         def __init__(self):
             self.encoder = encoder
+            self.loss_module = retina_loss
             pass
         def __call__(self, pred, targets):
             if isinstance(pred[0], torch.Tensor):  # num_heads==1
