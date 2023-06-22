@@ -3,12 +3,15 @@
 
 
 import hunspell
-hobj = hunspell.HunSpell('/home/orwell/Data/Braille/ru_RU.dic', '/home/orwell/Data/Braille/ru_RU.aff')
+hobj = hunspell.HunSpell('/home/orwell/brail/AngelinaReader/data_utils/ru_RU.dic', '/home/orwell/brail/AngelinaReader/data_utils/ru_RU.aff')
+#('/home/orwell/Data/Braille/ru_RU.dic', '/home/orwell/Data/Braille/ru_RU.aff')
 ww = ['сапожки',
      'преповыповерт',
      'выверт',
      'приколa',
-     ]
+     'эщ',
+     'эй',
+     'ст ока',]
 
 for w in ww:
     print(w, hobj.spell(w))

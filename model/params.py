@@ -2,21 +2,18 @@ import local_config
 from ovotools import AttrDict
 
 settings = AttrDict(
-    max_epochs=20000,
+    max_epochs= 10000, #20000,
     tensorboard_port=6006,
-    device='cuda:0',
+    device='cuda',
     findLR=False,
     can_overwrite=False,
     eval_period=5,
     regular_save_period = None  #(500, 1),
 )
 
-pseudo_step = '1'
-pseudo_opt = '1'
-
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/angelina_21_fpn{model_params.encoder_params.fpn_skip_layers}_lay{model_params.num_fpn_layers}_{model_params.loss_params.class_loss_scale}_V{augmentation.VerticalFlip}',
+    model_name = 'NN_results/selected_reverse_iter2',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
@@ -27,32 +24,20 @@ params = AttrDict(
         rect_margin = 0.3, #  every of 4 margions to char width
         max_std = 0.1,
         train_list_file_names = [
-            r'DSBI/data/train_li2.txt',
             r'DSBI/data/val_li2.txt',
-            r'AngelinaDataset/books/train.txt',
-            r'AngelinaDataset/handwritten/train.txt',
-            r'AngelinaDataset/not_braille/train.txt',
+            r'DSBI/data/train_li2.txt',
+            #r'AngelinaDataset/train_random_iter1.txt',
+            #r'AngelinaDataset/train_random_iter2_without1.txt',
+            #r'AngelinaDataset/selected_files.txt',
+            #r'AngelinaDataset/selected_files2.txt',
+            r'AngelinaDataset/selected_files_rev.txt',
+            r'AngelinaDataset/selected_files_rev2.txt',
         ],
         val_list_file_names = {
-            'test' :  [r'DSBI/data/test_li2.txt',],
-            # 'books': [
-            #      r'AngelinaDataset/books/val.txt',
-            #      #r'AngelinaDataset/handwritten/val.txt',
-            # ],
-            # 'hand': [
-            #      #r'AngelinaDataset/books/val.txt',
-            #      r'AngelinaDataset/handwritten/val.txt',
-            # ],
-            'ang': [
-                 r'AngelinaDataset/books/val.txt',
-                 r'AngelinaDataset/handwritten/val.txt',
-            ],
-            # 'DSBI': [
-            #     r'DSBI/data/test_li2.txt',
-            # ]
+            'test' :  [r'DSBI/data/test_li2.txt',]
         },
-        #scores_filter=((5, 0.64), (25, 0.81)),  # quantile % : score_threshold
-        target_metric='test:f1',
+        # scores_filter=((5, 0.64), (25, 0.81)),  # quantile % : score_threshold
+        target_metric = 'test:f1',
     ),
     augmentation = AttrDict(
         img_width_range=( 550, 1150, ),  # 768*0.8, 1536*1.2  ,550, 1150,   810, 890
@@ -76,10 +61,12 @@ params = AttrDict(
             #ignored_scores = (0.35,0.81),
         ),
         loss_params=AttrDict(
-            class_loss_scale = 1,
+            class_loss_scale = 10,
         ),
     ),
-    #load_model_from = 'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/models/best.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
+    load_model_from = 'NN_results/selected_reverse_iter1_f4d5cc/models/clr.010.t7',
+
+
     optim = 'torch.optim.Adam',
     optim_params = AttrDict(
         lr=0.0001,

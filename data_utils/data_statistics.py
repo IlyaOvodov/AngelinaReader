@@ -27,10 +27,10 @@ def test_file(file_path):
     json_path = file_path.with_suffix("").with_suffix(".protocol.txt")
     protocol = json.load(json_path.open())
     text = file_path.read_text()
-    lang = protocol['lang']
+    #lang = protocol['lang']
     is_public = protocol['has_public_confirm']
     #print(test_text_by_spellchecker(text, lang))
-    return (file_path.with_suffix("").with_suffix("").name,  protocol['user'], lang, is_public) + test_text_by_spellchecker(text, lang)
+    return (file_path.with_suffix("").with_suffix("").name,  protocol['user'], is_public) + test_text_by_spellchecker(text)
 
 def process_dir(dir, out_file):
     print(str(dir), datetime.datetime.now().time())

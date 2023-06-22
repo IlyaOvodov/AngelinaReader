@@ -19,11 +19,20 @@ test_on_flipped = False
 log_file = 'validate_retinanet.log'
 
 models = [
-    ('DSBImodel/210811_flip_test_1_10_100_1000dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497_clr.015','210811_flip_test_1_10_100_1000dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497_clr.015.t7'),
-    #('NN_results/dsbi_tst_as_fcdca3_c63909', 'models/model.t7'),
-    #
-    #('NN_results/dsbi_lay3_c4ca62', 'models/clr.005.t7'),
-    #('NN_results/dsbi_lay3_c4ca62', 'models/clr.006.t7'),
+    #('NN_results/goodnetwork/dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497', 'clr.015.t7'),
+    #('NN_results/rand25_iter1_x3_330030', 'models/clr.010.t7'),
+    #('NN_results/rand25_iter1_e023da', 'models/clr.010.t7'),
+    #('NN_results/rand25_iter2_47d065', 'models/clr.010.t7'),
+    #('NN_results/rand25_iter3_6c6371', 'models/clr.010.t7'),
+    #('NN_results/rand25_iter4_aa4bf8', 'models/clr.010.t7'),
+    #('NN_results/selected_iter1_dd9d42', 'models/clr.010.t7'),
+    #('NN_results/selected_iter2_318c8f', 'models/clr.010.t7'),
+    #('NN_results/selected_iter3_d8f687', 'models/clr.010.t7'),
+    #('NN_results/selected_iter4_bd8a07', 'models/clr.010.t7'),
+    ('NN_results/rand25_iter2_test2_67d6a8','models/clr.010.t7'),
+    ('NN_results/selected_iter2_test2_b81ef3','models/clr.010.t7'),
+    ('NN_results/selected_reverse_iter2_d75814','models/clr.010.t7'),
+
 ]
 
 model_dirs = [

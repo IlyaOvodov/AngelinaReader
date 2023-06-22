@@ -4,30 +4,41 @@ import re
 import datetime
 
 import hunspell  # sudo apt-get install libhunspell-dev; sudo pip install hunspell
-#import difflib
+
 import pandas as pd
+
+
+lang = 'RU'
+rect_margin=0.3
+verbose = 0
+inference_width = 850
+cls_thresh = 0.5
+nms_thresh = 0.02
+LINE_THR = 0.5
+iou_thr = 0.0
+do_filter_lonely_rects = False
+
+
+
+import torch
+
+import local_config
 
 N1 = 10 # минимальное число слов для адекватных оценок
 N2 = 4 # минимальная длинна слова для норм работы
-'''
-def comparsion(good_file_p, netwok_file_p): #сравниватель файлов
-    folders = ['uploaded']  # ['chudo_derevo_redmi', 'mdd_cannon1', 'mdd-redmi1/qwe/', '/ola', '/skazki', '/telefon', '/uploaded']
-    texterrs = []
-    for folder in folders:
-        good_files = (Path(good_file_p) / folder).glob(
-            "*.marked.txt")  # mypath = dir / folder /"somefile.marked.txt" ;  mypath.relative_to(dir) -> "folder/somefile.marked.txt"
-        network_files = (Path(netwok_file_p) / folder).glob(
-            "*.marked.txt")
-        for i in range(len(good_files)):#тут кончно ока воросик
-            with open (good_files[i]) as f1:
-                good_file_text = f1.readlines()
-            with open (network_files[i]) as f2:
-                netwok_file_text = f2.readlines()
-            
-            for line in difflib.unified_diff(
-            good_file_text, netwok_file_text, fromfile = 'good.txt', tofile = 'neural.txt', lineterm= ''):
-                print(line) # ечатает несовадающие строки
-'''
+
+datasets = {
+    # 'DSBI_train': [
+    #                 r'DSBI\data\train.txt',
+    #              ],
+    # 'DSBI_test': [
+    #                 r'DSBI\data\test.txt',
+    #               ],
+    #'test': [r'DSBI/data/test.txt', ],
+    'test': [r'AngelinaDataset/handwritten/val.txt'], #r'AngelinaDataset/books/val.txt',
+    #'test2': [r'AngelinaDataset/uploaded/test2.txt', ],
+}
+
 def test_text_by_spellchecker(text):
     lang = 'RU'
     words = re.findall(r"[\w']+", text)
@@ -89,10 +100,7 @@ if __name__=="__main__":
     dir = "/home/orwell/brail/results"
     #fn = "5bb63b9f98424edc9af808defe47c1ff.marked.txt"
     result = process_dir(dir)
-
+    #prepare_data()
     columns = ['filename', 'errors count', 'good words count', 'metric']
     df = pd.DataFrame(result, columns = columns)
-    df.to_csv(r'/home/orwell/brail/results/testfile.csv')
-'''
-сравниватель текстов возм юзать как еще 1 колоку в табл text similarity
-'''
+   # df.to_csv(r'/home/orwell/brail/results/testfile.csv')

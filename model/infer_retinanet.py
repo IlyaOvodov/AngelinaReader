@@ -35,11 +35,14 @@ decode_t=0
 impl_calls=0
 impl_t=0
 
-model_weights = 'model.t7'
-params_fn = join(local_config.data_path, 'weights', 'param.txt')
-model_weights_fn = join(local_config.data_path, 'weights', model_weights)
+#model_weights = 'model.t7'
+#params_fn = join(local_config.data_path, 'weights', 'param.txt')
+#model_weights_fn = join(local_config.data_path, 'weights', model_weights)
+model_weights = 'clr.015.t7'
+params_fn = join(local_config.data_path,'NN_results','dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497', 'param.txt')
+model_weights_fn = join(local_config.data_path, 'NN_results','dsbi_fpn1_lay4_1_10_100_1000_VFalse_ae6497','models', model_weights)
 
-device = 'cuda:0'
+device = 'cuda'
 #device = 'cpu'
 inference_width = 850
 cls_thresh = 0.5
@@ -51,8 +54,10 @@ SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - raw detections, 2 - refined+filte
 if SAVE_FOR_PSEUDOLABELS_MODE:
     folder = 'handwritten'  # books , handwritten
     PSEUDOLABELS_STEP = 1
-    params_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/param.txt')
-    model_weights_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7')
+    #params_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/param.txt')
+    #model_weights_fn = join(local_config.data_path, r'NN_results/dsbi_fpn1_lay4_1000_b67b68/models/best.t7')
+    params_fn = join(local_config.data_path, r'NN_results/test_train_on_DSBI_c6dc29/param.txt')
+    model_weights_fn = join(local_config.data_path, r'NN_results/test_train_on_DSBI_c6dc29/models/clr.018.t7')#влез сюда
     pseudolabel_scores = (0.6, 0.8)
     inference_width = 850
     cls_thresh = 0.1
@@ -683,10 +688,11 @@ if __name__ == '__main__':
 
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
-    #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
+    img_filename_mask = r'/home/orwell/brail/data/AngelinaDataset/handwritten/**/*.jpg'
+
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
+    results_dir =      r'/home/orwell/brail/results'
 
     remove_labeled_from_filename = True
     find_orientation = False
@@ -698,8 +704,12 @@ if __name__ == '__main__':
 
     if SAVE_FOR_PSEUDOLABELS_MODE:
 
-        img_filename_mask = r'/home/orwell/Data/Braille/AngelinaDataset/{}/train.txt'.format(folder)
-        results_dir =       r'/home/orwell/Data/Braille/AngelinaDataset/pseudo/step_{}_opt_{}/{}'.format(PSEUDOLABELS_STEP, SAVE_FOR_PSEUDOLABELS_MODE, folder)
+        #img_filename_mask = r'/home/orwell/Data/Braille/AngelinaDataset/{}/train.txt'.format(folder)
+        #results_dir =       r'/home/orwell/Data/Braille/AngelinaDataset/pseudo/step_{}_opt_{}/{}'.format(PSEUDOLABELS_STEP, SAVE_FOR_PSEUDOLABELS_MODE, folder)
+        img_filename_mask = r'/home/orwell/brail/data/AngelinaDataset/handwritten/train.txt'.format(folder)
+        results_dir = r'/home/orwell/brail/data/AngelinaDataset/pseudo/step_{}_opt_{}/{}'.format(PSEUDOLABELS_STEP,
+                                                                                               SAVE_FOR_PSEUDOLABELS_MODE,
+                                                                                                   folder)
 
         find_orientation = False
         process_2_sides = False

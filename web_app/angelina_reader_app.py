@@ -301,8 +301,8 @@ def run():
                         help='enable debug mode (default: off)')
     args = parser.parse_args()
     debug = args.debug
-    if not debug:
-        startup_logger()
+    #if not debug:
+    #   startup_logger()
     if debug:
         print('running in DEBUG mode!')
     else:
@@ -312,7 +312,7 @@ def run():
         app.config['TEMPLATES_AUTO_RELOAD'] = True
         app.run(debug=True, host='0.0.0.0', port=5001)
     else:
-        app.run(host='0.0.0.0', threaded=True)
+        app.run(host='127.0.0.1', threaded=True)
 
 if __name__ == "__main__":
     run()
