@@ -277,6 +277,55 @@ alpha_map_DE = {
     '46': caps_sign
 }
 
+# FR symbols (French Braille)
+alpha_map_FR = {
+    '1': 'a',
+    '12': 'b',
+    '14': 'c',
+    '145': 'd',
+    '15': 'e',
+    '124': 'f',
+    '1245': 'g',
+    '125': 'h',
+    '24': 'i',
+    '245': 'j',
+    '13': 'k',
+    '123': 'l',
+    '134': 'm',
+    '1345': 'n',
+    '135': 'o',
+    '1234': 'p',
+    '12345': 'q',
+    '1235': 'r',
+    '234': 's',
+    '2345': 't',
+    '136': 'u',
+    '1236': 'v',
+    '2456': 'w',
+    '1346': 'x',
+    '13456': 'y',
+    '1356': 'z',
+
+    # Lettres accentuées
+    '12356': 'à',
+    '16': 'â',
+    '12346': 'ç',
+    '123456': 'é',
+    '2346': 'è',
+    '126': 'ê',
+    '1246': 'ë',
+    '146': 'î',
+    '12456': 'ï',
+    '1456': 'ô',
+	'246': 'œ',
+    '23456': 'ù',
+    '156': 'û',
+    '1256': 'ü',
+
+    # Majuscules
+    '46': caps_sign,
+}
+
 
 # Digit symbols (after num_sign)
 num_map = {
@@ -338,10 +387,10 @@ letter_dicts = {
     'LV': alpha_map_LV,
     'PL': alpha_map_PL,
     'DE': alpha_map_DE,
+    'FR': alpha_map_FR,
     'UZ': alpha_map_UZ,
     'UZL': alpha_map_UZL,
     'NUM': num_map,
     'NUM_DENOMINATOR': num_denominator_map,
     'MATH_RU': math_RU,
 }
-

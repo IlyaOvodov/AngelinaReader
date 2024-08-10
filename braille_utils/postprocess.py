@@ -285,6 +285,7 @@ interpret_line_funcs = {
     'EN': interpret_line_RU, # TODO in can work with some errors for EN
     'EN2': interpret_line_liblouis,
     'DE': interpret_line_RU, # TODO in can work with some errors for DE
+    'FR': interpret_line_RU,
     'GR': interpret_line_RU,
     'LV': interpret_line_RU,
     'PL': interpret_line_RU,
@@ -766,4 +767,3 @@ d e f''', '''аб  ц
 d e f''', '''аб  ц34
 
 д е ф''')
-

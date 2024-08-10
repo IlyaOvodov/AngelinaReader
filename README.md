@@ -39,7 +39,7 @@ This service is available at the address: http://angelina-reader.ru
   * pdf files
   * zip-archives with images
 * Results can be sent to the user's e-mail
-* Can recognize Russian, English, German, Uzbek, Latvian and Greek braille texts
+* Can recognize Russian, English, German, French, Uzbek, Latvian and Greek braille texts
 
 ### Limitations
 
@@ -145,6 +145,7 @@ Languages:
 `RU` - Russian
 `EN` - English (grade 1)
 `DE` - German
+`FR` - French
 `GR` - Greek
 `LV` - Latvian
 `PL` - Polish
