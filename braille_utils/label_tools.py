@@ -10,6 +10,8 @@ Utilities to handle braille labels in various formats:
 from collections import defaultdict
 from . import letters
 
+v = [1, 2, 4, 8, 16, 32]
+
 def validate_int(int_label):
     '''
     Validate int_label is in [0..63]
@@ -22,7 +24,6 @@ def label010_to_int(label010):
     '''
     Convert label in label010 format to int_label
     '''
-    v = [1,2,4,8,16,32]
     r = sum([v[i] for i in range(6) if label010[i]=='1'])
     validate_int(r)
     return r
@@ -43,21 +44,39 @@ def label_hflip(int_lbl):
 
 def int_to_label010(int_lbl):
     int_lbl = int(int_lbl)
-    v = [1,2,4,8,16,32]
-    r = ''.join([ '1' if int_lbl&v[i] else '0' for i in range(6)])
+    r = ""
+    for i in range(6):
+        r += '1' if int_lbl&v[i] else '0'
     return r
 
 def int_to_label123(int_lbl):
     int_lbl = int(int_lbl)
-    v = [1,2,4,8,16,32]
-    r = ''.join([ str(i+1) for i in range(6) if int_lbl&v[i]])
+    r = ""
+    for i in range(6):
+        if int_lbl & v[i]:
+            r += str(i+1)
     return r
 
 def int_to_unicode(int_lbl):
     return chr(0x2800 + int_lbl)
 
+def unicode_to_int(unicode_lbl):
+    int_lbl = ord(unicode_lbl) - 0x2800
+    assert int_lbl >= 0 and int_lbl < 64, f"incorrect unicode braille char: '{unicode_lbl}'"
+    return int_lbl
+
+ASCII_CONVERSION_TABLE = " A1B'K2L@CIF/MSP\"E3H9O6R^DJG>NTQ,*5<-U8V.%[$+X!&;:4\\0Z7(_?W]#Y)="
+
+def int_to_ascii(int_lbl):
+    assert int_lbl >= 0 and int_lbl < 64, f"incorrect int braille char: '{int_lbl}'"
+    return ASCII_CONVERSION_TABLE[int_lbl]
+
+def unicode_to_ascii(unicode_lbl):
+    int_lbl = ord(unicode_lbl) - 0x2800
+    assert int_lbl >= 0 and int_lbl < 64, f"incorrect unicode braille char: '{unicode_lbl}'"
+    return ASCII_CONVERSION_TABLE[int_lbl]
+
 def label123_to_int(label123):
-    v = [1,2,4,8,16,32]
     try:
         r = sum([v[int(ch)-1] for ch in label123])
     except:

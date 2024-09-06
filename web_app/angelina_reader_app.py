@@ -32,7 +32,7 @@ def startup_logger():
         """
         # create message object instance
         txt = 'Angelina Reader is {} at {}'.format(what, hostname)
-        msg = fill_message_headers(MIMEText(txt, _charset="utf-8"), 'Angelina Reader<angelina-reader@ovdv.ru>', txt)
+        msg = fill_message_headers(MIMEText(txt, _charset="utf-8"), 'Angelina Reader<admin@angelina-reader.com>', txt)
         send_email(msg)
 
     send_startup_email('started')
@@ -70,7 +70,7 @@ def index(template, is_mobile=False):
         file = FileField()
         agree = BooleanField("Я согласен")
         disgree = BooleanField("Возражаю")
-        lang = SelectField("Язык текста", choices=[('RU', 'Русский'), ('EN', 'English'), ('GR', 'Ελληνικά'), ('LV', 'Latviešu'),
+        lang = SelectField("Язык текста", choices=[('RU', 'Русский'), ('EN', 'English grade1'), ('EN2', 'English grade2'), ('DE', 'German'), ('GR', 'Ελληνικά'), ('LV', 'Latviešu'),
                                                    ('PL', 'Polski'), ('UZ', 'Ўзбек'), ('UZL', "O'zbekcha")])
         find_orientation = BooleanField("Авто-ориентация")
         process_2_sides = BooleanField("Обе стороны")
@@ -89,7 +89,7 @@ def index(template, is_mobile=False):
             flash('Выберите один из двух вариантов (согласен/возражаю)')
             return render_template(template, form=form)
         filename = file_data.filename
-        file_ext = Path(filename).suffix[1:].lower()
+        file_ext = Path(filename).suffix.lower()
         if file_ext not in VALID_EXTENTIONS:
             flash('Не подхожящий тип файла {}: {}'.format(file_ext, filename))
             return render_template(template, form=form)

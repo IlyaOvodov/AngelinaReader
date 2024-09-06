@@ -23,11 +23,18 @@ import werkzeug.datastructures
 
 from .config import Config
 import model.infer_retinanet as infer_retinanet
+from braille_utils import label_tools as lt
 
 MODEL_PATH = Config.MODEL_PATH or Path(__file__).parent.parent
 MODEL_WEIGHTS = 'model.t7'
 
 recognizer = None
+
+class AngelinaException(Exception):
+    def __init__(self, msg_ru, msg_en):
+        Exception.__init__(self, msg_en)
+        self.msg_ru = msg_ru
+        self.msg_en = msg_en
 
 class TaskState(Enum):
     CREATED = 0
@@ -35,13 +42,13 @@ class TaskState(Enum):
     PROCESSING_STARTED = 2
     PROCESSING_DONE = 3
     ERROR = 4
-    START_TEXT_TIME = 5  # GVNC
 
-VALID_EXTENTIONS = tuple('jpg jpe jpeg png gif svg bmp tiff pdf zip'.split())
+VALID_EXTENTIONS = infer_retinanet.VALID_IMAGE_EXTENTIONS + tuple('.pdf,.zip'.split(','))
+UNSUPPORTED_ARCHIVE_EXTENTIONS = tuple('.rar'.split(','))
 
 
 def fill_message_headers(msg, to_address, subject):
-    msg['From'] = "AngelinaReader <{}>".format(Config.SMTP_FROM)
+    msg['From'] = "Angelina Braille Reader<{}>".format(Config.SMTP_FROM)
     msg['To'] = to_address
     msg['Subject'] = subject
     msg['Date'] = email_utils.formatdate()
@@ -53,7 +60,7 @@ def send_email(msg):
     server = smtplib.SMTP("{}: {}".format(Config.SMTP_SERVER, Config.SMTP_PORT))
     server.starttls()
     server.login(Config.SMTP_FROM, Config.SMTP_PWD)
-    recepients = msg['To'].split(',')
+    recepients = msg['To'].split(';')
     server.sendmail(msg['From'], recepients, msg.as_string())
     server.quit()
 
@@ -63,26 +70,46 @@ class User:
     Пользователь системы и его атрибуты
     Экземпляры класса создавать через AngelinaSolver.find_user или AngelinaSolver.register_user
     """
-    def __init__(self, id, user_dict, solver):
+    @staticmethod
+    def _users_sql_conn(data_root):
+        users_db_file_name = data_root / "all_users.db"
+        timeout = 0.1
+        new_db = not os.path.isfile(users_db_file_name)
+        con = sqlite3.connect(str(users_db_file_name), timeout=timeout)
+        if new_db:
+            con.cursor().execute(
+                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text, params text)")
+            #_convert_users_from_json(users_db_file_name, con)
+            con.commit()
+        return con
+
+    @staticmethod
+    def _convert_users_from_json(users_db_file_name, con):
+        import json
+        json_file = os.path.splitext(users_db_file_name)[0] + '.json'
+        if os.path.isfile(json_file):
+            with open(json_file, encoding='utf-8') as f:
+                all_users = json.load(f)
+            for id, user_dict in all_users.items():
+                con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
+                                     (id, user_dict["name"], user_dict["email"]))
+
+    def __init__(self, id, user_dict, data_root):
         """
         Ниже список атрибутов для demo
         Все атрибуты - read only, изменять через вызовы соответствующих методов
         """
         self.id = id  # уникальный для системы id пользователя. Присваивается при регистрации.
-        self.solver = solver
         self.name = user_dict.get("name", "")
         self.email = user_dict.get("email", "")
+        self.data_root = data_root
 
         # Данные, с которыми юзер был найден через find_user или создан через register_user.
         # У пользователя может быть несколько способов входа, поэтому 
         self.network_name = user_dict.get("network_name")       # TODO понять как кодировать соцсети. Для регистрации через email = None
         self.network_id = user_dict.get("network_id")
         self.password_hash = user_dict.get("password_hash")
-        self.params = user_dict.get("params")
-        if self.params:
-            self.params_dict = json.loads(self.params)
-        else:
-            self.params_dict = dict()
+        self.set_params_dict_from_str(user_dict.get("params"))
 
         # поля для Flask:
         self.is_authenticated = id is not None
@@ -102,50 +129,55 @@ class User:
         password_hash = self.hash_password(password)
         if self.password_hash == password_hash:
             return True
-        if self.params:
-            params = json.loads(self.params)
-            if params.get('tmp_password') == password_hash:
-                return True
+        if self.params_dict.get('tmp_password') == password_hash:
+            return True
         return False
+
+    def set_params_dict_from_str(self, params):
+        if params:
+            self.params_dict = json.loads(params)
+        else:
+            self.params_dict = dict()
+
+    def params_as_str(self):
+        return json.dumps(self.params_dict)
+
+    def set_unsubscribed(self, value=True):
+        self.params_dict["unsubscribed"] = value
+        self.update()
 
     def update(self):
         """
         изменение имени и настроек ранее зарегистрированного юзера
         """
-        with self.solver._users_sql_conn() as con:
-            self.params = json.dumps(self.params_dict)
-            exec_sqlite(con, "update users set name=?, params=? where id = ?", (self.name, self.params, self.id))
+        with self._users_sql_conn(self.data_root) as con:
+            exec_sqlite(con, "update users set name=?, params=? where id = ?", (self.name, self.params_as_str(), self.id))
         pass
         
     def set_password(self, password):
         """
         Обновляет пароль. Вызывать про логине по email.
         """
-        assert password
+        assert password, (22060501,)
         password_hash = self.hash_password(password)
         self.password_hash = password_hash
-        with self.solver._users_sql_conn() as con:
+        with self._users_sql_conn(self.data_root) as con:
             exec_sqlite(con, "update users set password_hash = ? where id = ?", (self.password_hash, self.id))
         self.set_new_tmp_password(None)
 
     def set_new_tmp_password(self, new_tmp_password_hash):
-        with self.solver._users_sql_conn() as con:
+        with self._users_sql_conn(self.data_root) as con:
             res = exec_sqlite(con, "select params from users where id = ?", (self.id,))
-            assert len(res) == 1, (self.id)
-            params = res[0][0]
-            if params:
-                self.params_dict = json.loads(params)
-            else:
-                self.params_dict = dict()
+            assert len(res) == 1, (22060502, self.id)
+            self.set_params_dict_from_str(res[0][0])
             if new_tmp_password_hash:
                 self.params_dict["tmp_password"] = new_tmp_password_hash
             else:
                 if "tmp_password" in self.params_dict.keys():
                     del self.params_dict["tmp_password"]
-            self.params = json.dumps(self.params_dict)
-            exec_sqlite(con, "update users set params=? where id = ?", (self.params, self.id))
+            exec_sqlite(con, "update users set params=? where id = ?", (self.params_as_str(), self.id))
 
-    def send_new_pass_to_mail(self):
+    def send_new_pass_to_mail(self, subject, msg_text, request_info):
         """
         Генерируем новый пароль и отправляем его на почту
         Возвращаем True или False в зависимости от результата работы функции
@@ -153,9 +185,7 @@ class User:
         new_tmp_password = str(random.randint(10000000, 99999999))
         new_tmp_password_hash = self.hash_password(new_tmp_password)
         self.set_new_tmp_password(new_tmp_password_hash)
-        # TODO язык
-        msg_text = "Ваш одноразовый пароль на angelina-reader.ru: " + new_tmp_password + ". Измените пароль после входа в систему"
-        subject = "Восстановление пароля"
+        msg_text = msg_text.format(new_tmp_password)
         msg = fill_message_headers(MIMEText(msg_text, _charset="utf-8"), self.email, subject)
         send_email(msg)
 
@@ -193,14 +223,13 @@ class AngelinaSolver:
         self.raw_images_dir = Path('raw')
         self.results_dir = Path('results')
         os.makedirs(self.data_root, exist_ok=True)
-        self.users_db_file_name = self.data_root / "all_users.db"
 
     def get_recognizer(self):
         global recognizer
         if recognizer is None:
             print("infer_retinanet.BrailleInference()")
             t = timeit.default_timer()
-            recognizer = infer_retinanet.BrailleInference(verbose=2,
+            recognizer = infer_retinanet.BrailleInference(verbose=1,
                 params_fn=os.path.join(MODEL_PATH, 'weights', 'param.txt'),
                 model_weights_fn=os.path.join(MODEL_PATH, 'weights', MODEL_WEIGHTS),
                 create_script=None)
@@ -232,32 +261,33 @@ class AngelinaSolver:
             "params": None
         }
         existing_user = self.find_user(network_name=network_name, network_id=network_id, email=email)
-        assert not existing_user, ("such user already exists", network_name, network_id, email)
-        con = self._users_sql_conn()
-        exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date, params) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date, :params)", new_user)
-        return User(id, new_user, solver=self)
+        if existing_user:
+            raise AngelinaException(f"Такой пользователь уже есть: {(network_name, network_id, email)}", f"Such user already exists: {(network_name, network_id, email)}")
+        with User._users_sql_conn(self.data_root) as con:
+            exec_sqlite(con, "insert into users(id, name, email, network_name, network_id, password_hash, reg_date, params) values(:id, :name, :email, :network_name, :network_id, :password_hash, :reg_date, :params)", new_user)
+        user = User(id, new_user, data_root=self.data_root)
+        return user
 
     def find_user(self, network_name=None, network_id=None, email=None, id=None):
         """
         Возвращает объект User по регистрационным данным: id или паре network_name+network_id или регистрации по email (для этого указать network_name = None или network_name = "")
         Если юзер не найден, возвращает None
         """
-        con = self._users_sql_conn()
+        con = User._users_sql_conn(self.data_root)
         con.row_factory = sqlite3.Row
         if id:
-            assert not network_name and not network_id and not email, ("incorrect call to find_user 1", network_name, network_id, email)
+            assert not network_name and not network_id and not email, (22060503, network_name, network_id, email)
             query = ("select * from users where id = ?", (id,))
         elif network_name or network_id:
-            assert network_name and network_id, ("incorrect call to find_user 2", network_name, network_id, email)
+            assert network_name and network_id, (22060504, network_name, network_id, email)
             query = ("select * from users where network_name = ? and network_id = ?", (network_name,network_id,))
         else:
-            assert email and not network_name and not network_id, ("incorrect call to find_user 3", network_name, network_id, email)
-            query = ("select * from users where email = ? and (network_name is NULL or network_name='') and (network_id is NULL or network_id='')", (email,))
+            assert email and not network_name and not network_id, (22060505, network_name, network_id, email)
+            query = ("select * from users where trim(lower(email)) = trim(lower(?)) and (network_name is NULL or network_name='') and (network_id is NULL or network_id='') order by reg_date desc", (email,))
         res = exec_sqlite(con, query[0], query[1])
         if len(res):
             user_dict = dict(res[0])  # sqlite row -> dict
-            assert len(res) <= 1, ("more then 1 user found", user_dict)
-            user = User(id=user_dict["id"], user_dict=user_dict, solver=self)
+            user = User(id=user_dict["id"], user_dict=user_dict, data_root=self.data_root)
             return user
         return None  # Nothing found
 
@@ -267,35 +297,14 @@ class AngelinaSolver:
         Возвращает Dict(Dict) пользователей с указанным е-мейлом: id: user_dict.
         Может вернуть пустой словарь, словарь из одного или список из нескольких юзеров.
         """
-        con = self._users_sql_conn()
+        con = User._users_sql_conn(self.data_root)
         con.row_factory = sqlite3.Row
-        res = exec_sqlite(con, "select * from users where email = ?", (email,))
+        res = exec_sqlite(con, "select * from users where trim(lower(email)) = trim(lower(?)) order by reg_date desc", (email,))
         found = dict()
         for row in res:
             user_dict = dict(row)  # sqlite row -> dict
             found[user_dict["id"]] = user_dict
         return found
-
-    def _users_sql_conn(self):
-        timeout = 0.1
-        new_db = not os.path.isfile(self.users_db_file_name)
-        con = sqlite3.connect(str(self.users_db_file_name), timeout=timeout)
-        if new_db:
-            con.cursor().execute(
-                "CREATE TABLE users(id text PRIMARY KEY, name text, email text, network_name text, network_id text, password_hash text, reg_date text, params text)")
-            self._convert_users_from_json(con)
-            con.commit()
-        return con
-
-    def _convert_users_from_json(self, con):
-        import json
-        json_file = os.path.splitext(self.users_db_file_name)[0] + '.json'
-        if os.path.isfile(json_file):
-            with open(json_file, encoding='utf-8') as f:
-                all_users = json.load(f)
-            for id, user_dict in all_users.items():
-                con.cursor().execute("INSERT INTO users(id, name, email) VALUES(?, ?, ?)",
-                                     (id, user_dict["name"], user_dict["email"]))
 
     def _user_tasks_sql_conn(self, user_id):
         timeout = 0.1
@@ -382,7 +391,7 @@ class AngelinaSolver:
         doc_id = uuid.uuid4().hex
         if type(file_storage) == werkzeug.datastructures.ImmutableMultiDict:
             file_storage = file_storage['file']
-        assert type(file_storage) == werkzeug.datastructures.FileStorage, type(file_storage)
+        assert type(file_storage) == werkzeug.datastructures.FileStorage, (22060507, type(file_storage))
         task_name = file_storage.filename
         if not user_id:
             user_id = ""
@@ -407,7 +416,13 @@ class AngelinaSolver:
                          " :thumbnail, :is_public, :thumbnail_desc, :is_deleted)", task)
 
         file_ext = Path(task_name).suffix.lower()
-        assert file_ext[1:] in VALID_EXTENTIONS, "incorrect file type: " + str(task_name)
+        if file_ext not in VALID_EXTENTIONS:
+            if file_ext in UNSUPPORTED_ARCHIVE_EXTENTIONS:
+                raise AngelinaException(f'Недопустимый тип файла "{file_ext}" у файла "{str(task_name)}". Обрабатываются только ZIP архивы',
+                                        f'Not acceptable file type "{file_ext}" of file "{str(task_name)}". Only ZIP archives are allowed')
+            else:
+                raise AngelinaException(f'Недопустимый тип файла "{file_ext}" у файла "{str(task_name)}"',
+                                        f'Not acceptable file type "{file_ext}" of file "{str(task_name)}"')
 
         os.makedirs(self.data_root / self.raw_images_dir, exist_ok=True)
         raw_image_fn = doc_id + file_ext
@@ -427,29 +442,18 @@ class AngelinaSolver:
         task = { "doc_id": doc_id }
         con = self._user_tasks_sql_conn(user_id)
         result = exec_sqlite(con, "select params, raw_paths, state from tasks where doc_id=:doc_id", task)
-        assert len(result) == 1, (user_id, doc_id, len(result))
+        if len(result) != 1:
+            raise AngelinaException(f"Ошибочный запрос {user_id}_{doc_id} {len(result)}", f"Invalid request {user_id}_{doc_id} {len(result)}")
         task = {
             **task,
             "params": result[0][0],
             "raw_paths": result[0][1],
             "state": result[0][2]
         }
-        if task["state"] == TaskState.PROCESSING_DONE.value:
+        if task["state"] in (TaskState.PROCESSING_DONE.value, TaskState.ERROR.value):
             return True
 
-        # GVNC
-        gvnc_mode = False
-        if task["state"] == TaskState.RAW_FILE_LOADED.value and not timeout:
-            task["state"] = TaskState.START_TEXT_TIME.value
-            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
-            return False
-        if task["state"] == TaskState.START_TEXT_TIME.value:
-            task["state"] = TaskState.RAW_FILE_LOADED.value
-            exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
-            timeout = 2
-            gvnc_mode = True
-
-        if task["state"] != TaskState.RAW_FILE_LOADED.value or not timeout:
+        if timeout == 0:  # calculation should be done on /result_test/<string:item_id>/ where timeout > 0
             return False
 
         ### вычисления
@@ -477,10 +481,10 @@ class AngelinaSolver:
                                                         align_results=True,
                                                         process_2_sides=param_dict['process_2_sides'],
                                                         repeat_on_aligned=False)
-        if results_list is None:
+        if results_list is None or len(results_list) == 0:
             task["state"] = TaskState.ERROR.value
             exec_sqlite(con, "update tasks set state=:state where doc_id=:doc_id", task)
-            return False
+            return True
 
         # full path -> relative to data path
         result_files = list()
@@ -496,8 +500,6 @@ class AngelinaSolver:
         with (self.data_root / self.results_dir / result_files[0][1]).open(encoding="utf-8") as f:
             task["thumbnail_desc"] = ''.join(f.readlines()[:3])
         exec_sqlite(con, "update tasks set state=:state, results=:results, thumbnail=:thumbnail, thumbnail_desc=:thumbnail_desc where doc_id=:doc_id", task)
-        if gvnc_mode:  # GVNC
-            return False
         return True
 
     def get_results(self, task_id):
@@ -540,10 +542,12 @@ class AngelinaSolver:
                                       " from tasks"
                                       " where doc_id=:doc_id and is_deleted=0",
                                       {"doc_id": doc_id})
-            assert len(results) == 1, (user_id, doc_id)
+            assert len(results) == 1, (22060508, user_id, doc_id)
             result = results[0]
-        assert result is not None
-        assert result[4] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[4])
+        assert result is not None, (22060509, user_id, doc_id)
+        if result[4] == TaskState.ERROR.value:
+            raise AngelinaException("Ошибка распознавания документа", "Document recognition error")
+        assert result[4] == TaskState.PROCESSING_DONE.value, (22060510, user_id, doc_id, result[4])
         item_data = list([
             tuple(
                 str(
@@ -569,12 +573,6 @@ class AngelinaSolver:
         count - кол-во запиисей
         Возвращает список task_id задач для данного юзера, отсортированный от старых к новым
         """
-        """
-        В тестовом варианте возвращает 10 раз взятый список из 2 демо-результатов.
-        При этом сначала все они показываются как не законченные. По мере моделирования расчетов показывается   
-        более реалистично: пример выдается как не готовый 2 сек после запуска распознавания
-        Публичный -приватный - через одного
-        """
         if not user_id:
             return []
         con = self._user_tasks_sql_conn(user_id)
@@ -591,7 +589,7 @@ class AngelinaSolver:
                     "img_url":"/static/images/pic.jpg",   # GVNC
                     "desc": rec[4],
                     "public": bool(rec[5]),
-                    "sost": rec[6] == TaskState.PROCESSING_DONE.value
+                    "sost": "" if (rec[6] == TaskState.PROCESSING_DONE.value) else "E" if (rec[6] == TaskState.ERROR.value) else "P"
                    }
             for rec in results
         ]
@@ -601,7 +599,7 @@ class AngelinaSolver:
 
     # отправка почты
     def send_mail(self, to_address, subject, comment, results_list,
-                  file_types_to_send = None):
+                  file_types_to_send=None, braille_as_unicode=True):
         """
         Sends results to e-mail as text(s) + image(s)
         :param to_address: destination email as str
@@ -622,13 +620,17 @@ class AngelinaSolver:
                     continue
                 if file_suffix in (".txt", ".brl"):
                     txt = (self.data_root / self.results_dir / file_name).read_text(encoding="utf-8")
+                    attachment_filename = Path(file_name).name
+                    if file_suffix == ".brl" and not braille_as_unicode:
+                        attachment_filename = Path(file_name).with_suffix(".brf").name
+                        txt = "".join([lt.unicode_to_ascii(ch) if ch not in ('\r', '\n') else ch for ch in txt])
                     attachment = MIMEText(txt, _charset="utf-8")
-                    attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
+                    attachment.add_header('Content-Disposition', 'inline', filename=attachment_filename)
                 elif file_suffix == ".jpg":
                     attachment = MIMEImage((self.data_root / self.results_dir / file_name).read_bytes())
                     attachment.add_header('Content-Disposition', 'inline', filename=Path(file_name).name)
                 else:
-                    assert False, str(file_name)
+                    assert False, (22060511, str(file_name))
                 msg.attach(attachment)
         send_email(msg)
 
@@ -649,24 +651,24 @@ class AngelinaSolver:
         con = self._user_tasks_sql_conn(user_id)
         result = exec_sqlite(con, "select name, results, state from tasks where doc_id=:doc_id",
                     {"doc_id": doc_id})
-        assert len(result) == 1, (user_id, doc_id)
+        assert len(result) == 1, (22060512, user_id, doc_id)
         result = result[0]
 
         if user_id:
-            with self._users_sql_conn() as con:  # TODO проще получить User из flask наружи
+            with User._users_sql_conn(self.data_root) as con:  # TODO проще получить User из flask наружи
                 user_result = exec_sqlite(con, "select name, email from users where id=:user_id",
                         {"user_id": user_id})
-                assert len(user_result) == 1, (user_id)
+                assert len(user_result) == 1, (22060513, user_id)
                 user_name, user_email  = user_result[0][0], user_result[0][1]
         else:
             user_name, user_email = "", ""
 
-        assert result[2] == TaskState.PROCESSING_DONE.value, (user_id, doc_id, result[2])
+        assert result[2] == TaskState.PROCESSING_DONE.value, (22060514, user_id, doc_id, result[2])
         if parameters.get('to_developers'):
             if mail:
-                mail += ',Angelina Reader<angelina-reader@ovdv.ru>'
+                mail += ';Angelina Reader<admin@angelina-reader.com>'
             else:
-                mail = 'Angelina Reader<angelina-reader@ovdv.ru>'
+                mail = 'Angelina Reader<admin@angelina-reader.com>'
         subject = parameters.get('subject') or ("Распознанный Брайль " + Path(result[0]).with_suffix('').with_suffix('').name.lower())
         comment = parameters.get('comment', "") + "\nLetter from: {}<{}>".format(user_name, user_email)
         file_types_to_send = []
@@ -676,7 +678,7 @@ class AngelinaSolver:
             file_types_to_send.append(".txt")
         if parameters.get("send_braille", True):
             file_types_to_send.append(".brl")
-        self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send)
+        self.send_mail(mail, subject, comment, json.loads(result[1]), file_types_to_send=file_types_to_send, braille_as_unicode=parameters.get("unicode_braille", True))
 
     def get_user_emails(self, user):
         """

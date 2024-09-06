@@ -30,6 +30,8 @@ from model import create_model_retinanet
 import braille_utils.postprocess as postprocess
 from model.my_decoder import CreateDataEncoder
 
+VALID_IMAGE_EXTENTIONS = tuple('.jpg,.jpe,.jpeg,.png,.gif,.svg,.bmp,.tiff,.tif,.jfif'.split(','))
+
 decode_calls=0
 decode_t=0
 impl_calls=0
@@ -334,7 +336,7 @@ class BrailleInference:
     def run_impl(self, img, lang, draw_refined, find_orientation, process_2_sides, align, draw, gt_rects=[]):
         t = timeit.default_timer()
         np_img = np.asarray(img)
-        if (np_img.shape[2] < 3):  # grayscale -> reduce dim
+        if (len(np_img.shape) > 2 and np_img.shape[2] < 3):  # grayscale -> reduce dim
             np_img = np_img[:,:,0]
         aug_img, aug_gt_rects = self.preprocessor.preprocess_and_augment(np_img, gt_rects)
         aug_img = data.unify_shape(aug_img)
@@ -651,6 +653,8 @@ class BrailleInference:
         with zipfile.ZipFile(arch_path, 'r') as archive:
             for entry in archive.infolist():
                 with archive.open(entry) as file:
+                    if not Path(file.name).suffix.lower() in VALID_IMAGE_EXTENTIONS:
+                        continue
                     try:
                         img = PIL.Image.open(file)
                     except:
@@ -682,6 +686,7 @@ if __name__ == '__main__':
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
     #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
 
+    lang = 'RU'
     remove_labeled_from_filename = True
     find_orientation = False
     process_2_sides = False
