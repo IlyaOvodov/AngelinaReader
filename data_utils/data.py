@@ -405,13 +405,13 @@ def read_LabelMe_annotation(label_filename, get_points):
     return rects
 
 
-def create_dataloader(params, device, collate_fn, list_file_names, shuffle, mode = 'train', verbose = 0):
+def create_dataloader(params, device, dataset_class, collate_fn, list_file_names, shuffle, mode = 'train', verbose = 0):
     '''
     :param params: params AttrDict
     :param collate_fn: converts batch from BrailleDataset output to format required by model
     :return: pytorch DataLoader
     '''
-    dataset = BrailleDataset(params, device=device, list_file_names=list_file_names, mode=mode, verbose=verbose)
+    dataset = dataset_class(params, device=device, list_file_names=list_file_names, mode=mode, verbose=verbose)
     loader = torch.utils.data.DataLoader(dataset, params.data.batch_size, shuffle=shuffle, num_workers=0, collate_fn=collate_fn)
     return loader
 
