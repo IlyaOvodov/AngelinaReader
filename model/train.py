@@ -46,7 +46,7 @@ else:
 
 ctx = ovotools.pytorch.Context(settings=None, params=params, eval_func=lambda x: eval(x))
 
-model, dataset_class, collate_fn, loss = create_model.create_model(params=params, settings=settings)
+model, dataset_class, collate_fn, loss = create_model.create_model(params=params, device=settings.device)
 if checkpoint:
     load_objects(to_load={"model": model}, checkpoint=checkpoint)
     load_objects(to_load={"loss": loss.loss_module}, checkpoint=checkpoint)
@@ -137,12 +137,11 @@ else:
     def eval_accuracy(engine):
         if engine.state.epoch % 100 == 1:
             data_set = validate_retinanet.prepare_data(ctx.params.data.val_list_file_names)
-            # GVNC TODO сделать инференс на CenterNet
-            # for key, data_list in data_set.items():
-            #     acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
-            #                                                    model, settings.device, data_list)
-            #     for rk, rv in acc_res.items():
-            #         engine.state.metrics[key+ ':' + rk] = rv
+            for key, data_list in data_set.items():
+                acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
+                                                               model, settings.device, data_list)
+                for rk, rv in acc_res.items():
+                    engine.state.metrics[key+ ':' + rk] = rv
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model_on_event(engine):

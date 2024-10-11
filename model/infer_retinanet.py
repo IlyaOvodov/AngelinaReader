@@ -26,9 +26,8 @@ import zipfile
 import data_utils.data as data
 import braille_utils.letters as letters
 import braille_utils.label_tools as lt
-from model import create_model_retinanet
+from model import create_model
 import braille_utils.postprocess as postprocess
-from model.my_decoder import CreateDataEncoder
 
 decode_calls=0
 decode_t=0
@@ -41,11 +40,14 @@ model_weights_fn = join(local_config.data_path, 'weights', model_weights)
 
 device = 'cuda:0'
 #device = 'cpu'
-inference_width = 850
-cls_thresh = 0.5
-nms_thresh = 0.02
-REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
-                        # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
+
+default_inference_params = AttrDict(
+    inference_width = 850,
+    cls_thresh = 0.5,
+    nms_thresh = 0.02,
+    REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013],  # Коэффициенты (в единицах h символа) для эмпирической коррекции
+                            # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
+)
 # pseudolabeling parameters
 SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check
 
@@ -65,6 +67,7 @@ class OrientationAttempts(enum.IntEnum):
 class BraileInferenceImpl(torch.nn.Module):
     def __init__(self, params, model, device, label_is_valid, verbose=1):
         super(BraileInferenceImpl, self).__init__()
+        self.params = params
         self.verbose = verbose
         self.device = device
         if isinstance(model, torch.nn.Module):
@@ -72,7 +75,7 @@ class BraileInferenceImpl(torch.nn.Module):
             self.model = model
         else:
             self.model_weights_fn = model
-            self.model, _, _ = create_model_retinanet.create_model_retinanet(params, device=device)
+            self.model, _, _, _ = create_model.create_model(params=params, device=device)
             self.model = self.model.to(device)
 
             preloaded_weights = torch.load(self.model_weights_fn, map_location='cpu')
@@ -90,10 +93,8 @@ class BraileInferenceImpl(torch.nn.Module):
         self.model.eval()
         #self.model = torch.jit.script(self.model)
 
-        self.encoder = CreateDataEncoder(**params.model_params.encoder_params)
+        self.decoder = create_model.create_decoder(params)
         self.valid_mask = torch.tensor(label_is_valid).long()
-        self.cls_thresh = cls_thresh
-        self.nms_thresh = nms_thresh
         self.num_classes = [] if not params.data.get('class_as_6pt', False) else [1]*6
 
     def calc_letter_statistics(self, cls_preds, cls_thresh, orientation_attempts):
@@ -139,29 +140,22 @@ class BraileInferenceImpl(torch.nn.Module):
                 input_data[OrientationAttempts.INV_ROT180] = torch.flip(-input_data[OrientationAttempts.ROT180], [3])
                 input_data[OrientationAttempts.INV_ROT90] = torch.flip(-input_data[OrientationAttempts.ROT90], [3])
                 input_data[OrientationAttempts.INV_ROT270] = torch.flip(-input_data[OrientationAttempts.ROT270], [3])
-        loc_preds: List[Tensor] = [torch.tensor(0)]*8
-        cls_preds: List[Tensor] = [torch.tensor(0)]*8
+        preds: List[Tensor] = [torch.tensor(0)]*8
         if self.verbose >= 2:
             print("        forward.prepare", timeit.default_timer() - t)
             t = timeit.default_timer()
         for i, input_data_i in enumerate(input_data):
             if i in orientation_attempts:
                 pred = self.model(input_data_i)
-                if isinstance(pred[0], torch.Tensor):  # num_heads==1
-                    loc_pred, cls_pred = pred
-                else:
-                    assert len(pred) == 2
-                    loc_pred, cls_pred = pred[0]  # TODO reverse side
-
-                loc_preds[i] = loc_pred
-                cls_preds[i] = cls_pred
+                preds[i] = pred
         if self.verbose >= 2:
             if device != 'cpu':
                 torch.cuda.synchronize(self.device)
             print("        forward.model", timeit.default_timer() - t)
             t = timeit.default_timer()
         if find_orientation:
-            best_idx, err_score = self.calc_letter_statistics(cls_preds, self.cls_thresh, orientation_attempts)
+            cls_preds = [self.decoder.get_cls_pred(p) for p in preds]
+            best_idx, err_score = self.calc_letter_statistics(cls_preds, self.params.inference_params.cls_thresh, orientation_attempts)
             if self.verbose >= 2:
                 print("        forward.calc_letter_statistics", timeit.default_timer() - t)
                 t = timeit.default_timer()
@@ -171,16 +165,16 @@ class BraileInferenceImpl(torch.nn.Module):
             best_idx -= 2
 
         h,w = input_data[best_idx].shape[2:]
-        boxes, labels, scores = self.encoder.decode(loc_preds[best_idx][0].cpu().data,
-                                                    cls_preds[best_idx][0].cpu().data, (w,h),
-                                                    cls_thresh = self.cls_thresh, nms_thresh = self.nms_thresh,
+        boxes, labels, scores = self.decoder.decode(preds[best_idx],
+                                                    (w,h),
+                                                    params=self.params,
                                                     num_classes=self.num_classes)
         if len(self.num_classes) > 1:
             labels = torch.tensor([lt.label010_to_int([str(s.item()+1) for s in lbl101]) for lbl101 in labels])
         if process_2_sides:
-            boxes2, labels2, scores2 = self.encoder.decode(loc_preds[best_idx+2][0].cpu().data,
-                                                           cls_preds[best_idx+2][0].cpu().data, (w, h),
-                                                           cls_thresh=self.cls_thresh, nms_thresh=self.nms_thresh,
+            boxes2, labels2, scores2 = self.decoder.decode(preds[best_idx+2],
+                                                           (w, h),
+                                                           params=self.params,
                                                            num_classes=self.num_classes)
         else:
             boxes2, labels2, scores2 = None, None, None
@@ -203,20 +197,30 @@ class BrailleInference:
     DRAW_BOTH = DRAW_ORIGINAL | DRAW_REFINED  # 3
     DRAW_FULL_CHARS = 4
 
-    def __init__(self, params_fn, model_weights_fn, create_script = None,
-                 verbose=1, _inference_width=None, device=device):
-        if not _inference_width:
-            _inference_width = inference_width
+    def __init__(self, params_fn, model_weights_fn, inference_params=None, create_script = None,
+                 verbose=1, device=device):
         self.verbose = verbose
         if not torch.cuda.is_available() and device != 'cpu':
             print('CUDA not availabel. CPU is used')
             device = 'cpu'
 
         params = AttrDict.load(params_fn, verbose=verbose)
-        params.data.net_hw = (_inference_width,_inference_width,) #(512,768) ###### (1024,1536) #
+        if 'inference_params' in params:
+            tmp_inference_params = default_inference_params.copy()
+            tmp_inference_params.update(params.inference_params)
+            params.inference_params.update(tmp_inference_params)
+        else:
+            params.inference_params = default_inference_params
+        if inference_params:
+            params.inference_params.update(inference_params)
+            
+        self.refine_coeffs = params.inference_params.REFINE_COEFFS
+        inference_width = params.inference_params.inference_width
+        # params.data.net_hw = (inference_width,inference_width,) #(512,768) ###### (1024,1536) #
+        params.data.pop('net_hw')  # not used and invalid here
         params.data.batch_size = 1 #######
         params.augmentation = AttrDict(
-            img_width_range=(_inference_width, _inference_width),
+            img_width_range=(inference_width, inference_width),
             stretch_limit = 0.0,
             rotate_limit=0,
         )
@@ -306,18 +310,6 @@ class BrailleInference:
             print("run.run_impl", timeit.default_timer() - t)
         return results_dict
 
-
-    # def refine_boxes(self, boxes):
-    #     """
-    #     GVNC. Эмпирическая коррекция получившихся размеров чтобы исправить неточность результатов для последующей разметки
-    #     :param boxes:
-    #     :return:
-    #     """
-    #     h = boxes[:, 3:4] - boxes[:, 1:2]
-    #     coefs = torch.tensor([REFINE_COEFFS])
-    #     deltas = h * coefs
-    #     return boxes + deltas
-		
     def refine_lines(self, lines):
         """
         GVNC. Эмпирическая коррекция получившихся размеров чтобы исправить неточность результатов для последующей разметки
@@ -327,7 +319,7 @@ class BrailleInference:
         for ln in lines:
             for ch in ln.chars:
                 h = ch.refined_box[3] - ch.refined_box[1]
-                coefs = np.array(REFINE_COEFFS)
+                coefs = np.array(self.refine_coeffs)
                 deltas = h * coefs
                 ch.refined_box = (np.array(ch.refined_box) + deltas).tolist()
 
@@ -691,21 +683,20 @@ if __name__ == '__main__':
     draw_redined = BrailleInference.DRAW_REFINED
 
     # pseudolabeling parameters
-    SAVE_FOR_PSEUDOLABELS_MODE = 5  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check, 5 - bigram check
+    SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check, 5 - bigram check
     if SAVE_FOR_PSEUDOLABELS_MODE:
-        inference_width = 1024
         PSEUDOLABELS_STEP = 1
         params_fn = join(local_config.data_path, 'NN_saved/all_data_0.5_100_5_nocls_91b802', 'param.txt')
         model_weights = 'clr.006.t7'
         model_weights_fn = join(local_config.data_path, 'NN_saved/all_data_0.5_100_5_nocls_91b802', model_weights)
         folder='angelina_V0'
         pseudolabel_scores = (0.5, 0.8)  # (score for ignored chars, min_align_score)
-        cls_thresh = 0.1
-        nms_thresh = 0.02
+        default_inference_params.cls_thresh = 0.1
+        default_inference_params.nms_thresh = 0.02
 
         img_filename_mask = str(Path(local_config.data_path) / f'../braille/v1/{folder}/train.txt')
-        results_dir =       str(Path(local_config.data_path) / f'pseudo/inf_width_{inference_width}/step_{PSEUDOLABELS_STEP}_mode_{SAVE_FOR_PSEUDOLABELS_MODE}/{folder}')
-        REFINE_COEFFS = [0., 0., 0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
+        results_dir =       str(Path(local_config.data_path) / f'pseudo/inf_width_{default_inference_params.inference_width}/step_{PSEUDOLABELS_STEP}_mode_{SAVE_FOR_PSEUDOLABELS_MODE}/{folder}')
+        default_inference_params.REFINE_COEFFS = [0., 0., 0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
         remove_labeled_from_filename = True
         find_orientation = False
         process_2_sides = False
@@ -720,15 +711,15 @@ if __name__ == '__main__':
         shutil.copyfile(img_filename_mask, Path(results_dir) / Path(img_filename_mask).name)
         info_dict = {
             'SAVE_FOR_PSEUDOLABELS_MODE': SAVE_FOR_PSEUDOLABELS_MODE,
-            'inference_width': inference_width,
+            'inference_width': default_inference_params.inference_width,
             'PSEUDOLABELS_STEP': PSEUDOLABELS_STEP,
             'params_fn': params_fn,
             'model_weights': model_weights,
             'model_weights_fn': model_weights_fn,
             'pseudolabel_scores': pseudolabel_scores,
-            'cls_thresh': cls_thresh,
-            'nms_thresh': nms_thresh,
-            'REFINE_COEFFS': REFINE_COEFFS,
+            'cls_thresh': default_inference_params.cls_thresh,
+            'nms_thresh': default_inference_params.nms_thresh,
+            'REFINE_COEFFS': default_inference_params.REFINE_COEFFS,
 
             'img_filename_mask': img_filename_mask,
             'results_dir': results_dir,

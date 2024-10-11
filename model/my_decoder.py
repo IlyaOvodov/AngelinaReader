@@ -150,11 +150,35 @@ class DataEncoder(torch.nn.Module):
 def DataEncoderScripted():
     return torch.jit.script(DataEncoder)
 
-def CreateDataEncoder(**kwargs):
-    if (USE_FAST_DECODER and
-            len(kwargs.get('anchor_areas', []))==1 and
-            len(kwargs.get('aspect_ratios', []))==1 and
-            len(kwargs.get('scale_ratios', []))==1):
-        return DataEncoder(**kwargs)
-    else:
-        return pytorch_retinanet.encoder.DataEncoder(**kwargs)
+class RetinaNetDecoder:
+    def __init__(self, params):
+        kwargs = params.model_params.encoder_params
+        if (USE_FAST_DECODER and
+                len(kwargs.get('anchor_areas', []))==1 and
+                len(kwargs.get('aspect_ratios', []))==1 and
+                len(kwargs.get('scale_ratios', []))==1):
+            self.encoder = DataEncoder(**kwargs)
+        else:
+            self.encoder = pytorch_retinanet.encoder.DataEncoder(**kwargs)
+            
+    def _pred_to_loc_and_cls(self, pred):
+        if isinstance(pred[0], torch.Tensor):  # num_heads==1
+            loc_pred, cls_pred = pred
+        else:
+            assert len(pred) == 2
+            loc_pred, cls_pred = pred[0]  # TODO reverse side
+        return loc_pred, cls_pred
+
+    def get_cls_pred(self, pred):
+        loc_pred, cls_pred = self._pred_to_loc_and_cls(pred)
+        return cls_pred
+
+    def decode(self, pred, size_wh, params, num_classes):
+        loc_pred, cls_pred = self._pred_to_loc_and_cls(pred)
+        return self.encoder.decode(loc_pred[0].cpu().data,
+                                   cls_pred[0].cpu().data,
+                                   size_wh,
+                                   cls_thresh=params.inference_params.cls_thresh,
+                                   nms_thresh=params.inference_params.nms_thresh,
+                                   num_classes=num_classes,
+        )
