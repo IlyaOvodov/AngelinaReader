@@ -7,9 +7,11 @@ from data_utils.data import BrailleDataset
 
 # CenterNet project
 from models.model import create_model
+from models.decode import ctdet_decode
 from trains.ctdet import CtdetLoss
 from utils.image import draw_umich_gaussian, draw_msra_gaussian, draw_dense_reg
 
+NUM_CLASSES = 64  # 64 1
         
 def create_model_centernet(params, device):
     opt = params.model_params
@@ -17,7 +19,7 @@ def create_model_centernet(params, device):
     arch = opt.get('arch', 'dla_34')
     head_conv = opt.get('head_conv', 256 if 'dla' in arch else 64)
     heads = opt.get('heads', AttrDict(
-        hm = 64, wh = 2, reg = 2,
+        hm = NUM_CLASSES, wh = 2, reg = 2,
     ))
     model = create_model(arch, heads, head_conv)
     model = model.to(device)
@@ -64,7 +66,7 @@ class CenterNetDataset(BrailleDataset):
         down_ratio = self.params.model_params.get('down_ratio', 4)
         output_h = input_h // down_ratio
         output_w = input_w // down_ratio
-        num_classes = 64
+        num_classes = NUM_CLASSES
 
         hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)
         wh = np.zeros((self.max_objs, 2), dtype=np.float32)
@@ -80,7 +82,7 @@ class CenterNetDataset(BrailleDataset):
 
         for k in range(num_objs):
             ann = bboxes[k]
-            cls_id = int(ann[4])  # GVNC pseudolabel weight is ignored
+            cls_id = min(int(ann[4]), num_classes -1)  # GVNC pseudolabel weight is ignored
             bbox = ann[:4]
             bbox[[0, 2]] *= output_w
             bbox[[1, 3]] *= output_h
@@ -127,3 +129,27 @@ class CenterNetLoss(nn.Module):
         def call(*kargs, **kwargs):
             return self.loss_dict.get(key, torch.zeros(1)[0])
         return call
+
+class CenterNetDecoder:
+    def __init__(self, params):
+        pass
+                
+    def get_cls_pred(self, pred):
+        raise NotImplemented
+        return cls_pred
+
+    def decode(self, pred, size_wh, params, num_classes):
+        """
+        return boxes, labels, scores
+        """
+        hm = pred[-1]['hm'].sigmoid_()  # BCHW
+        wh = pred[-1]['wh']
+        reg = pred[-1]['reg'] if params.model_params.loss_params.reg_offset else None
+        dets = ctdet_decode(hm, wh, reg=reg, cat_spec_wh=params.model_params.loss_params.cat_spec_wh, K=1000)  # Nx6: (bboxes, scores, classes)
+        dets = dets[0] # remove batch
+        cls_thr = params.inference_params.cls_thresh
+        dets = dets[dets[:,4] >= cls_thr]
+        boxes, labels, scores = dets[:,:4], dets[:,5].int(), dets[:,4]
+        boxes[:, [0,2]] *= size_wh[0]/hm.shape[-1]
+        boxes[:, [1,3]] *= size_wh[1]/hm.shape[-2]
+        return boxes, labels, scores

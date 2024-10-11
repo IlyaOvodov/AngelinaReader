@@ -164,7 +164,7 @@ else:
 
         @trainer.on(Events.EPOCH_COMPLETED)
         def lr_scheduler_step(engine):
-            call_params = {'epoch': engine.state.epoch}
+            call_params = {} # obsolete: {'epoch': engine.state.epoch}
             if ctx.params.lr_scheduler.type.split('.')[-1] == 'ReduceLROnPlateau':
                 call_params['metrics'] = engine.state.metrics[ctx.params.data.target_metric]
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']

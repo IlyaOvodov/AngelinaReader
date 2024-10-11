@@ -25,7 +25,7 @@ def create_decoder(params):
         # CenterNet project
         sys.path.insert(0, str(Path(params.model_params.center_net_path) / 'src' /'lib'))
         import create_model_centernet
-
+        decoder = create_model_centernet.CenterNetDecoder(params)
         sys.path.pop(0)
     else:
         raise Exception(f'incorrect params.model: {params.model}')
