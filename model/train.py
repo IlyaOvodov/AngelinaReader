@@ -87,7 +87,7 @@ if checkpoint:
 if params.model == 'retina':
     metric_names = ['loc', 'cls', 's_loc', 's_cls']
 elif params.model == 'centernet':
-    metric_names = ['hm_loss', 'wh_loss', 'off_loss']
+    metric_names = ['hm_loss', 'hm1_loss', 'wh_loss', 'off_loss']
 
 metrics = OrderedDict({
     'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
@@ -176,7 +176,7 @@ else:
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, ctx.params.data.target_metric, minimize=False, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, ctx.params.data.target_metric, minimize=True, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,

@@ -2,6 +2,7 @@ import math
 import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 from ovotools import AttrDict
 from data_utils.data import BrailleDataset
 
@@ -158,7 +159,15 @@ class CenterNetDecoder:
         hm = pred[-1]['hm'].sigmoid_()  # BCHW
         wh = pred[-1]['wh']
         reg = pred[-1]['reg'] if opt.reg_offset else None
-        dets = ctdet_decode(hm, wh, reg=reg, cat_spec_wh=opt.cat_spec_wh, K=1000)  # BxNx6: (bboxes, scores, classes)
+        if opt.use_hm1:
+            hm1 = pred[-1]['hm1'].sigmoid_()  # BCHW
+            dets, inds = ctdet_decode(hm1, wh, reg=reg, cat_spec_wh=opt.cat_spec_wh, K=1000)  # BxNx6: (bboxes, scores, classes)
+            class_scores = _transpose_and_gather_feat(hm, inds)
+            cls_score, cls_id = class_scores.max(dim=2)
+            dets[:,:,4] *= cls_score
+            dets[:,:,5] = cls_id
+        else:
+            dets, _ = ctdet_decode(hm, wh, reg=reg, cat_spec_wh=opt.cat_spec_wh, K=1000)  # BxNx6: (bboxes, scores, classes)
         dets = dets[0] # remove batch
         cls_thr = params.inference_params.cls_thresh
         dets = dets[dets[:,4] >= cls_thr]
@@ -166,6 +175,24 @@ class CenterNetDecoder:
         boxes[:, [0,2]] *= size_wh[0]/hm.shape[-1]
         boxes[:, [1,3]] *= size_wh[1]/hm.shape[-2]
         return boxes, labels, scores
+
+
+class CELoss(nn.Module):
+  def __init__(self):
+    super(CELoss, self).__init__()
+  
+  def forward(self, output, mask, ind, target):
+    pred = _transpose_and_gather_feat(output, ind)
+    pred = pred.view(-1, pred.shape[2])
+    target = _transpose_and_gather_feat(target, ind)
+    target = target.max(dim=2).indices
+    target = target.view(-1)
+    mask = mask.view(-1)
+    loss = F.cross_entropy(pred * mask.unsqueeze(1), target * mask, #weight, ignore_index,
+                           reduction='sum',
+                          ) #label_smoothing=0)
+    loss = loss / (mask.sum() + 1e-4)
+    return loss
 
 
 ###############
@@ -178,6 +205,7 @@ class CtdetLoss(torch.nn.Module):
         opt = update_params_with_defailts(opt)
         self.opt = opt
         self.crit = torch.nn.MSELoss() if opt.mse_loss else FocalLoss() # FocalLoss() <-- False
+        self.crit_ce = CELoss()
         self.crit_reg = (
             RegL1Loss()  # <--
             if opt.reg_loss == "l1"
@@ -194,7 +222,6 @@ class CtdetLoss(torch.nn.Module):
             if opt.cat_spec_wh
             else self.crit_reg  # RegL1Loss() <--
         )
-
 
     def forward(self, outputs, batch):
         """
@@ -213,10 +240,12 @@ class CtdetLoss(torch.nn.Module):
             loss, loss_stats
         """
         opt = self.opt
-        hm_loss, wh_loss, off_loss = 0, 0, 0
+        hm_loss, hm1_loss, wh_loss, off_loss = 0, 0, 0, 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
+                if opt.use_hm1:
+                    output["hm1"] = _sigmoid(output["hm1"])  # sigmoid + clamp
                 output["hm"] = _sigmoid(output["hm"])  # sigmoid + clamp
 
             if opt.eval_oracle_hm:  # False
@@ -240,7 +269,13 @@ class CtdetLoss(torch.nn.Module):
                     )
                 ).to(opt.device)
 
-            hm_loss += self.crit(output["hm"], batch["hm"]) / opt.num_stacks
+            if opt.use_hm1:
+                batch_hm1 = batch["hm"].max(dim=1, keepdim=True).values
+                hm1_loss += self.crit(output["hm1"], batch_hm1) / opt.num_stacks
+                # hm_loss += self.crit_ce(output["hm"], batch["reg_mask"], batch["ind"], batch["hm"]) / opt.num_stacks
+                hm_loss += self.crit(output["hm"], batch["hm"]) / opt.num_stacks
+            else:
+                hm_loss += self.crit(output["hm"], batch["hm"]) / opt.num_stacks
             if opt.wh_weight > 0:
                 if opt.dense_wh:
                     mask_weight = batch["dense_wh_mask"].sum() + 1e-4
@@ -288,6 +323,9 @@ class CtdetLoss(torch.nn.Module):
             "wh_loss": wh_loss,
             "off_loss": off_loss,
         }
+        if opt.use_hm1:
+            loss += opt.hm1_weight * hm1_loss
+            loss_stats['hm1_loss'] = hm1_loss
         return loss, loss_stats
 
 
@@ -368,4 +406,4 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
                         ys + wh[..., 1:2] / 2], dim=2)
     detections = torch.cat([bboxes, scores, clses], dim=2)
       
-    return detections
+    return detections, inds
