@@ -90,18 +90,18 @@ elif params.model == 'centernet':
     metric_names = ['hm_loss', 'hm1_loss', 'wh_loss', 'off_loss']
 
 metrics = OrderedDict({
-    'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
+    'loss.loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
 })
 for k in metric_names: 
-    metrics[k] = ignite.metrics.Loss(loss.metric(k), batch_size=lambda y: params.data.batch_size)
+    metrics['loss.' + k] = ignite.metrics.Loss(loss.metric(k), batch_size=lambda y: params.data.batch_size)
     
 eval_metrics = OrderedDict({
-    'loss': ignite.metrics.Loss(loss, batch_size=lambda y: params.data.batch_size), # loss calc must be called when eval
+    'loss.loss': ignite.metrics.Loss(loss, batch_size=lambda y: params.data.batch_size), # loss calc must be called when eval
 })
 for k in metric_names:
-    metrics[k] = ignite.metrics.Loss(loss.metric(k), batch_size=lambda y: params.data.batch_size)
+    metrics['loss.' + k] = ignite.metrics.Loss(loss.metric(k), batch_size=lambda y: params.data.batch_size)
 
-target_metric = 'train:loss'
+target_metric = ctx.params.data.target_metric
 
 trainer_metrics = {} if settings.findLR else metrics
 eval_loaders = {}
@@ -141,7 +141,7 @@ else:
                 acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
                                                                model, settings.device, data_list)
                 for rk, rv in acc_res.items():
-                    engine.state.metrics[key+ ':' + rk] = rv
+                    engine.state.metrics[key+ ':' + 'metrics.' + rk] = rv
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model_on_event(engine):
