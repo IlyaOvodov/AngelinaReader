@@ -3,12 +3,15 @@
 """
 evaluate levenshtein distance as recognition error for dataset using various model(s)
 """
+from ovotools.params import AttrDict
 
 # Для отладки
 verbose = 0
-inference_width = 850
-cls_thresh = 0.5
-nms_thresh = 0.02
+inference_params = AttrDict(
+    inference_width = 850,
+    cls_thresh = 0.5,
+    nms_thresh = 0.02,
+)
 LINE_THR = 0.5
 iou_thr = 0.0
 do_filter_lonely_rects = False
@@ -19,15 +22,18 @@ test_on_flipped = False
 log_file = 'validate_retinanet.log'
 
 models = [
-    (r'NN_results\210811_flip_test\210811_flip_test_1_10_100_1000\angelina_fpn1_lay4_1_10_100_1000_VTrue_f25db8', 'models/clr.015.t7'),
+    # (r'NN_results\210811_flip_test\210811_flip_test_1_10_100_1000\angelina_fpn1_lay4_1_10_100_1000_VTrue_f25db8', 'models/clr.015.t7'),
     #
+    (r'NN_saved/retina_chars_eced60','models/clr.008'),
+    # (r'NN_saved/all_data_0.5_100_5_nocls_91b802','clr.006.t7'),
     # ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
     # (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
 ]
 
 model_dirs = [
     #(r'E:\_ELVEES\Braille\NN_results\dsbi_fpn1_lay4_1000_b67b68', 'models/clr.02*.t7'),
-    ('NN_results/210811_flip_test', '**/clr.*.t7'),
+    # ('NN_saved/angelina_fpn1_lay4_1_10_100_1000_VFalse_1882d7', '**/clr.*.t7'),
+    # ('NN_saved/angelina_fpn1_lay4_1_10_100_1000_VTrue_f25db8', '**/clr.*.t7'),
 ]
 
 datasets = {
@@ -38,8 +44,9 @@ datasets = {
     #                 r'DSBI\data\test.txt',
     #               ],
     #'val': [r'DSBI/data/val_li2.txt', ],
-    'dsbi': [r'DSBI/data/test_li2.txt', ],
-    'Angelina':[r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt'],
+    #'dsbi': [r'DSBI/data/test_li2.txt', ],
+    # 'ang':  [r'AngelinaDataset/books/val.txt', r'AngelinaDataset/handwritten/val.txt',],
+    'ang2': [r'AngelinaDataset/uploaded/test.txt',],
     # 'An-books': [r'AngelinaDataset/books/val.txt'],
     # 'An-hands': [r'AngelinaDataset/handwritten/val.txt'],
 }
@@ -53,8 +60,7 @@ from pathlib import Path
 import PIL
 import torch
 import timeit
-sys.path.append(r'../..')
-sys.path.append('../NN/RetinaNet')
+
 import local_config
 import data_utils.data as data
 import data_utils.dsbi as dsbi
@@ -512,7 +518,7 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
         'precision_c': precision_c,
         'recall_c': recall_c,
         'f1_c': 2*precision_c*recall_c/(precision_c+recall_c) if precision_c+recall_c != 0 else 0.,
-        'cer': 100 * (subst_c + deleted_c + inserted_c) / (tp_c + subst_c + deleted_c),
+        'cer': 100 * (subst_c + deleted_c + inserted_c) / (tp_c + subst_c + deleted_c + 0.000001),
         'd_by_doc': sum_d/len(data_list),
         'd_by_char': sum_d/sum_len,
         'd_by_char_avg': sum_d1/len(data_list)
@@ -526,17 +532,18 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
     """
     # по символам
     infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
-    infer_retinanet.cls_thresh = 0.5
+    tmp_inference_params = inference_params.copy()
+    tmp_inference_params.cls_thresh = 0.5
     verbose = 0
 
     recognizer = infer_retinanet.BrailleInference(
         params_fn=params_fn,
         model_weights_fn=model,
+        inference_params=tmp_inference_params,
         create_script=None,
-        _inference_width=inference_width,
         device=device,
         verbose=verbose)
-    assert recognizer.impl.cls_thresh == 0.5, recognizer.impl.cls_thresh
+    assert recognizer.impl.params.inference_params.cls_thresh == 0.5, recognizer.impl.params.inference_params.cls_thresh
 
     tp_c = 0
     fp_c = 0
@@ -617,13 +624,20 @@ def main(table_like_format):
         if not params_fn.is_file():
             params_fn = Path(str(model_root) + '.param.txt')  # старый вариант
             assert params_fn.is_file(), str(params_fn)
-        recognizer = infer_retinanet.BrailleInference(
+        try:
+          recognizer = infer_retinanet.BrailleInference(
             params_fn=params_fn,
             model_weights_fn=str(model_root / model_weights),
+            inference_params=inference_params,
             create_script=None,
-            _inference_width=inference_width,
             verbose=verbose)
-        assert recognizer.impl.cls_thresh == cls_thresh, (recognizer.impl.cls_thresh, cls_thresh)
+        except Exception as e:
+            print(f'{model_root_str}\t{model_weights}\tError:' + str(e))
+            with open(log_file_path, "a") as f:
+                f.write(f'{model_root_str}\t{model_weights}\tError:' + str(e) + '\n')
+            continue
+
+        assert recognizer.impl.params.inference_params.cls_thresh == inference_params.cls_thresh, (recognizer.impl.params.inference_params.cls_thresh, inference_params.cls_thresh)
         for key, data_list in data_set.items():
             t0 = timeit.default_timer()
             res = validate_model(recognizer, data_list, do_filter_lonely_rects=do_filter_lonely_rects, metrics_for_lines=metrics_for_lines)
@@ -652,8 +666,7 @@ def main(table_like_format):
 if __name__ == '__main__':
     import timeit
     infer_retinanet.SAVE_FOR_PSEUDOLABELS_MODE = 0
-    infer_retinanet.cls_thresh = cls_thresh
-    infer_retinanet.nms_thresh = nms_thresh
+
     postprocess.Line.LINE_THR = LINE_THR
     t0 = timeit.default_timer()
     # for thr in (0.5, 0.6, 0.7, 0.8):

@@ -19,7 +19,7 @@ import ovotools.pytorch_tools
 import ovotools.pytorch
 
 from data_utils import data
-from model import create_model_retinanet
+from model import create_model
 from model.params import params, settings
 import model.validate_retinanet as validate_retinanet
 
@@ -46,7 +46,7 @@ else:
 
 ctx = ovotools.pytorch.Context(settings=None, params=params, eval_func=lambda x: eval(x))
 
-model, collate_fn, loss = create_model_retinanet.create_model_retinanet(params, device=settings.device)
+model, dataset_class, collate_fn, loss = create_model.create_model(params=params, device=settings.device)
 if checkpoint:
     load_objects(to_load={"model": model}, checkpoint=checkpoint)
     load_objects(to_load={"loss": loss.loss_module}, checkpoint=checkpoint)
@@ -69,9 +69,9 @@ else:
 ctx.net  = model
 ctx.loss = loss
 
-train_loader = data.create_dataloader(params, device=settings.device, collate_fn=collate_fn,
+train_loader = data.create_dataloader(params, device=settings.device, dataset_class=dataset_class, collate_fn=collate_fn,
                                             list_file_names=params.data.train_list_file_names, shuffle=True)
-val_loaders = { k: data.create_dataloader(params, device=settings.device, collate_fn=collate_fn, list_file_names=v, shuffle=False)
+val_loaders = { k: data.create_dataloader(params, device=settings.device, dataset_class=dataset_class, collate_fn=collate_fn, list_file_names=v, shuffle=False)
                 for k,v in params.data.val_list_file_names.items() }
 print('data loaded. train:{} batches'.format(len(train_loader)))
 for k,v in val_loaders.items():
@@ -84,23 +84,24 @@ ctx.optimizer = eval(params.optim)([
 if checkpoint:
     load_objects(to_load={"optimizer": ctx.optimizer}, checkpoint=checkpoint)
 
+if params.model == 'retina':
+    metric_names = ['loc', 'cls', 's_loc', 's_cls']
+elif params.model == 'centernet':
+    metric_names = ['hm_loss', 'hm1_loss', 'wh_loss', 'off_loss']
+
 metrics = OrderedDict({
-    'loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
-    'loc': ignite.metrics.Loss(loss.metric('loc'), batch_size=lambda y: params.data.batch_size),
-    'cls': ignite.metrics.Loss(loss.metric('cls'), batch_size=lambda y: params.data.batch_size),
-    's_loc': ignite.metrics.Loss(loss.metric('s_loc'), batch_size=lambda y: params.data.batch_size),
-    's_cls': ignite.metrics.Loss(loss.metric('s_cls'), batch_size=lambda y: params.data.batch_size),
+    'loss.loss': ignite.metrics.Loss(loss.metric('loss'), batch_size=lambda y: params.data.batch_size), # loss calc already called when train
 })
-
+for k in metric_names: 
+    metrics['loss.' + k] = ignite.metrics.Loss(loss.metric(k), batch_size=lambda y: params.data.batch_size)
+    
 eval_metrics = OrderedDict({
-    'loss': ignite.metrics.Loss(loss, batch_size=lambda y: params.data.batch_size), # loss calc must be called when eval
-    'loc': ignite.metrics.Loss(loss.metric('loc'), batch_size=lambda y: params.data.batch_size),
-    'cls': ignite.metrics.Loss(loss.metric('cls'), batch_size=lambda y: params.data.batch_size),
-    's_loc': ignite.metrics.Loss(loss.metric('s_loc'), batch_size=lambda y: params.data.batch_size),
-    's_cls': ignite.metrics.Loss(loss.metric('s_cls'), batch_size=lambda y: params.data.batch_size),
+    'loss.loss': ignite.metrics.Loss(loss, batch_size=lambda y: params.data.batch_size), # loss calc must be called when eval
 })
+for k in metric_names:
+    metrics['loss.' + k] = ignite.metrics.Loss(loss.metric(k), batch_size=lambda y: params.data.batch_size)
 
-target_metric = 'train:loss'
+target_metric = ctx.params.data.target_metric
 
 trainer_metrics = {} if settings.findLR else metrics
 eval_loaders = {}
@@ -140,7 +141,7 @@ else:
                 acc_res = validate_retinanet.evaluate_accuracy(os.path.join(ctx.params.get_base_filename(), 'param.txt'),
                                                                model, settings.device, data_list)
                 for rk, rv in acc_res.items():
-                    engine.state.metrics[key+ ':' + rk] = rv
+                    engine.state.metrics[key+ ':' + 'metrics.' + rk] = rv
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def save_model_on_event(engine):
@@ -163,7 +164,7 @@ else:
 
         @trainer.on(Events.EPOCH_COMPLETED)
         def lr_scheduler_step(engine):
-            call_params = {'epoch': engine.state.epoch}
+            call_params = {} # obsolete: {'epoch': engine.state.epoch}
             if ctx.params.lr_scheduler.type.split('.')[-1] == 'ReduceLROnPlateau':
                 call_params['metrics'] = engine.state.metrics[ctx.params.data.target_metric]
             engine.state.metrics['lr'] = ctx.optimizer.param_groups[0]['lr']
@@ -175,7 +176,7 @@ else:
 if settings.findLR:
     best_model_buffer = None
 else:
-    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, ctx.params.data.target_metric, minimize=False, params=ctx.params)
+    best_model_buffer = ovotools.ignite_tools.BestModelBuffer(ctx.net, ctx.params.data.target_metric, minimize=True, params=ctx.params)
 log_training_results = ovotools.ignite_tools.LogTrainingResults(evaluator = evaluator,
                                                                 loaders_dict = eval_loaders,
                                                                 best_model_buffer=best_model_buffer,
