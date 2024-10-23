@@ -8,8 +8,8 @@ from ovotools.params import AttrDict
 # Для отладки
 verbose = 0
 inference_params = AttrDict(
-    inference_width = 850,
-    cls_thresh = 0.5,
+    inference_width = 1024,
+    cls_thresh = 0.4,
     nms_thresh = 0.02,
 )
 LINE_THR = 0.5
@@ -24,7 +24,13 @@ log_file = 'validate_retinanet.log'
 models = [
     # (r'NN_results\210811_flip_test\210811_flip_test_1_10_100_1000\angelina_fpn1_lay4_1_10_100_1000_VTrue_f25db8', 'models/clr.015.t7'),
     #
-    (r'NN_saved/retina_chars_eced60','models/clr.008'),
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_b9d8b3', 'models/003001.t7'),
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_c9e342', 'models/best.t7'),
+    (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_0c4173', 'models/best.t7'),   
+    (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_dla169_8692d1', 'models/best.t7'),   
+    (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_733a99', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_hg_1deab7', 'models/best.t7'),   
+    # (r'NN_saved/retina_chars_eced60','models/clr.008'),
     # (r'NN_saved/all_data_0.5_100_5_nocls_91b802','clr.006.t7'),
     # ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
     # (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
@@ -545,9 +551,8 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
         verbose=verbose)
     assert recognizer.impl.params.inference_params.cls_thresh == 0.5, recognizer.impl.params.inference_params.cls_thresh
 
-    tp_c = 0
-    fp_c = 0
-    fn_c = 0
+    tp_c, fp_c, fn_c = 0, 0, 0
+    tp_pos, fp_pos, fn_pos = 0, 0, 0  # by position, ignore label
     for gt_dict in data_list:
         img_fn, gt_rects = gt_dict['image_fn'], gt_dict['gt_rects']
         res_dict = recognizer.run(img_fn,
@@ -579,12 +584,21 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
         tp_c += correct
         fp_c += inserted + subst
         fn_c += deleted + subst
+        tp_pos += correct + subst
+        fp_pos += inserted
+        fn_pos += deleted
     precision_c = tp_c/(tp_c+fp_c) if tp_c+fp_c != 0 else 0.
     recall_c = tp_c/(tp_c+fn_c) if tp_c+fn_c != 0 else 0.
+    precision_pos = tp_pos/(tp_pos+fp_pos) if tp_pos+fp_pos != 0 else 0.
+    recall_pos = tp_pos/(tp_pos+fn_pos) if tp_pos+fn_pos != 0 else 0.
+    subst_errs = (tp_pos - tp_c) / tp_pos if tp_pos != 0 else 0.
     return {
         'precision': precision_c,
         'recall': recall_c,
         'f1': 2*precision_c*recall_c/(precision_c+recall_c) if precision_c+recall_c != 0 else 0.,
+        'precision_pos': precision_pos,
+        'recall_pos': recall_pos,
+        'subst_errs': subst_errs,
     }
 
 def main(table_like_format):
