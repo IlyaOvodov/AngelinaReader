@@ -23,6 +23,7 @@ def update_params_with_defailts(opt):
     opt['heads'] = opt.get('heads', AttrDict(
         hm = NUM_CLASSES, wh = 2, reg = 2,
     ))
+    opt['use_hm1'] = opt.get('use_hm1', False)
     if opt.use_hm1:
         opt['heads']['hm1'] = 1
     
@@ -69,8 +70,10 @@ class CenterNetDataset(BrailleDataset):
         
     def __getitem__(self, index):
         img_ten, bboxes, *other = super().__getitem__(index)
+        sample_params = other[0]
+        calc_cls = sample_params.get('calc_cls', True)
         
-        assert len(bboxes) < self.max_objs, f'Too manny bboxes: {bbox.shape}'
+        assert len(bboxes) < self.max_objs, f'Too many bboxes: {bbox.shape}'
         num_objs = len(bboxes)
 
         input_h, input_w = img_ten.shape[-2], img_ten.shape[-1]
@@ -78,6 +81,22 @@ class CenterNetDataset(BrailleDataset):
         output_h = input_h // down_ratio
         output_w = input_w // down_ratio
         num_classes = NUM_CLASSES
+        bboxes[:, [0, 2]] *= output_w
+        bboxes[:, [1, 3]] *= output_h
+        
+        if self.opt.arch == 'hourglass':
+            pad = []
+            def pad_to_2n(x):
+                s = 1
+                while s<x:
+                    s *= 2
+                return s-x
+            for i in [-1, -2]:
+                pad += [0, pad_to_2n(img_ten.shape[i])]
+            if max(pad) > 0:
+                img_ten = F.pad(img_ten, pad, "constant", 0)
+                input_h, input_w = img_ten.shape[-2], img_ten.shape[-1]
+                output_h, output_w = input_h // down_ratio, input_w // down_ratio
 
         hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)
         wh = np.zeros((self.max_objs, 2), dtype=np.float32)
@@ -95,8 +114,6 @@ class CenterNetDataset(BrailleDataset):
             ann = bboxes[k]
             cls_id = min(int(ann[4]), num_classes -1)  # GVNC pseudolabel weight is ignored
             bbox = ann[:4]
-            bbox[[0, 2]] *= output_w
-            bbox[[1, 3]] *= output_h
             h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
             if h > 0 and w > 0:
                 radius = int((w-1)/2)  # use that h>w for Braille
@@ -124,6 +141,7 @@ class CenterNetDataset(BrailleDataset):
             del ret['wh']
         if self.opt.reg_offset:
             ret.update({'reg': reg})
+        ret['calc_cls'] = calc_cls
         return img_ten, ret
 
 
@@ -164,7 +182,7 @@ class CenterNetDecoder:
             dets, inds = ctdet_decode(hm1, wh, reg=reg, cat_spec_wh=opt.cat_spec_wh, K=1000)  # BxNx6: (bboxes, scores, classes)
             class_scores = _transpose_and_gather_feat(hm, inds)
             cls_score, cls_id = class_scores.max(dim=2)
-            dets[:,:,4] *= cls_score
+            # dets[:,:,4] *= cls_score
             dets[:,:,5] = cls_id
         else:
             dets, _ = ctdet_decode(hm, wh, reg=reg, cat_spec_wh=opt.cat_spec_wh, K=1000)  # BxNx6: (bboxes, scores, classes)
@@ -236,6 +254,7 @@ class CtdetLoss(torch.nn.Module):
                 batch["reg"] - gt delta(x,y) centers by objects: BM2 (M = max_obj)
                 batch['reg_mask'] - object presence among max_obj: BM (1,1, ..., 1,0, ..., 0)
                 batch['ind'] - linear index of obj. centers ion map: BM
+                batch['calc_cls'] - use data for class training
         Returns:
             loss, loss_stats
         """
@@ -273,9 +292,10 @@ class CtdetLoss(torch.nn.Module):
                 batch_hm1 = batch["hm"].max(dim=1, keepdim=True).values
                 hm1_loss += self.crit(output["hm1"], batch_hm1) / opt.num_stacks
                 # hm_loss += self.crit_ce(output["hm"], batch["reg_mask"], batch["ind"], batch["hm"]) / opt.num_stacks
-                hm_loss += self.crit(output["hm"], batch["hm"]) / opt.num_stacks
-            else:
-                hm_loss += self.crit(output["hm"], batch["hm"]) / opt.num_stacks
+            outpu_hm, batch_hm = output["hm"], batch["hm"]
+            if batch['calc_cls'].min() == False:
+                outpu_hm, batch_hm = outpu_hm[batch['calc_cls']], batch_hm[batch['calc_cls']]
+            hm_loss += self.crit(outpu_hm, batch_hm) / opt.num_stacks if batch['calc_cls'].any() else 0
             if opt.wh_weight > 0:
                 if opt.dense_wh:
                     mask_weight = batch["dense_wh_mask"].sum() + 1e-4
