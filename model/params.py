@@ -7,7 +7,7 @@ settings = AttrDict(
     device='cuda:0',
     findLR=False,
     can_overwrite=False,
-    eval_period=5,
+    eval_period=1,
     regular_save_period = (500, 1),
 )
 
@@ -16,13 +16,13 @@ pseudo_opt = '1'
 
 params = AttrDict(
     data_root = local_config.data_path,
-    model_name = 'NN_results/230322_auto_loss_weights/angelina_fpn{model_params.encoder_params.fpn_skip_layers}_lay{model_params.num_fpn_layers}_anormloss_V{augmentation.VerticalFlip}',
+    model_name = 'NN_results/241009_CenterNet/dla169_S_5cb2fa_2_asi1',
     data = AttrDict(
         get_points = False,
         class_as_6pt=False,    # классификация присутствия каждой точки в рамке отдельно
         #load_front_side=True,    # load recto side
         #load_reverse_side=True,  # load revers side
-        batch_size = 12,
+        batch_size = 28,
         net_hw = (416, 416),
         rect_margin = 0.3, #  every of 4 margions to char width
         max_std = 0.1,
@@ -32,9 +32,13 @@ params = AttrDict(
             r'AngelinaDataset/books/train.txt',
             r'AngelinaDataset/handwritten/train.txt',
             r'AngelinaDataset/not_braille/train.txt',
+            'ASI/student_book_p1.txt',
+            ( 'ASI/turlom_c2.txt', 3, ),
+            # ( 'web_uploaded/re-processed200823.txt', 0.125, {'calc_cls': False,}, ),
+            # ( 'ASI_results/braile_photos_and_scans.txt', 1, {'calc_cls': False,}, ),
         ],
         val_list_file_names = {
-            'test' :  [r'DSBI/data/test_li2.txt',],
+            'ang2' :  [r'AngelinaDataset/uploaded/test.txt',],
             # 'books': [
             #      r'AngelinaDataset/books/val.txt',
             #      #r'AngelinaDataset/handwritten/val.txt',
@@ -43,19 +47,19 @@ params = AttrDict(
             #      #r'AngelinaDataset/books/val.txt',
             #      r'AngelinaDataset/handwritten/val.txt',
             # ],
-            'ang': [
-                 r'AngelinaDataset/books/val.txt',
-                 r'AngelinaDataset/handwritten/val.txt',
-            ],
+            # 'ang': [
+            #      r'AngelinaDataset/books/val.txt',
+            #      r'AngelinaDataset/handwritten/val.txt',
+            # ],
             # 'DSBI': [
             #     r'DSBI/data/test_li2.txt',
             # ]
         },
         #scores_filter=((5, 0.64), (25, 0.81)),  # quantile % : score_threshold
-        target_metric='test:f1',
+        target_metric='ang2:metrics.f1',
     ),
     augmentation = AttrDict(
-        img_width_range=( 550, 1150, ),  # 768*0.8, 1536*1.2  ,550, 1150,   810, 890
+        img_width_range=( 614, 1840, ),  # 768*0.8, 1536*1.2  ,550, 1150,   810, 890
         stretch_limit = 0.1,
         rotate_limit = 5,
         #blur_limit = 0,
@@ -63,36 +67,23 @@ params = AttrDict(
         #JpegCompression = False,
         VerticalFlip=False,
     ),
-    model = 'retina',
+    model = 'centernet',
     model_params = AttrDict(
-        num_fpn_layers=4,
-        encoder_params = AttrDict(
-            fpn_skip_layers=1,
-            anchor_areas=[ 34*55/4, ], # [22*22*0.62, 33*33*0.62, 45*45*0.62,], #[8*16., 12*24., 16*32.,], # 34*55/4
-            aspect_ratios=[0.62,],  # [0.62,], #[1 / 2.,],
-            scale_ratios=[1.],
-            iuo_fit_thr = 0, # if iou > iuo_fit_thr => rect fits anchor
-            iuo_nofit_thr = 0,
-            #ignored_scores = (0.35,0.81),
-        ),
-        loss_params=AttrDict(
-            #class_loss_scale=1,
-            #auto_loss_weights=True,
-            #norm_loss=True,
-            norm_avg_period=1000,
-            #initial_auto_loss_s=4,
-        ),
+        center_net_path = '/home/ovod/file_server/pub_data/Research/3rd_party/CenterNet',
+        arch = 'dlav0_169',
+        use_hm1 = True,
+        # hm_weight = 0,
     ),
-    #load_model_from = 'NN_results/pseudo3.3_scores-0.67-0.77_ignore-0.25-0.77_05091c/models/best.t7',  # retina_chars_d58e5f # retina_chars_7e1d4e
-    optim = 'torch.optim.Adam',
+    load_model_from = '/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_S_5cb2fa/models/best.t7',
+    optim = 'torch.optim.SGD',
     optim_params = AttrDict(
-        lr=0.0001,
-        #momentum=0.9,
-        #weight_decay = 0, #0.001,
+        lr=0.001,
+        momentum=0.9,
+        weight_decay = 0.001, # 0, #0.001,
         #nesterov = False,
     ),
     loss_optim_params = AttrDict(
-    #     lr=0.001,
+        lr=0.001,
     ),
     lr_finder=AttrDict(
         iters_num=200,
@@ -100,23 +91,24 @@ params = AttrDict(
         log_lr_end=-1,
     ),
     lr_scheduler=AttrDict(
-        type='clr', #'ReduceLROnPlateau', 'MultiStepLR'
-        # params=AttrDict(
-        #     # MultiStepLR:
-        #     milestones=[550, 1050, 1550],
-        #     gamma=0.1,
-        # #     # ReduceLROnPlateau:
-        # #     mode='max',
-        # #     factor=0.1,
-        # #     patience=1000,
-        # ),
+        # type='clr', #'ReduceLROnPlateau', 'MultiStepLR'
+        type='MultiStepLR',
+        params=AttrDict(
+            # MultiStepLR:
+            milestones=[500, 1000, 1500],
+            gamma=0.1,
+        #     # ReduceLROnPlateau:
+        #     mode='max',
+        #     factor=0.1,
+        #     patience=1000,
+        ),
     ),
     clr=AttrDict(
         warmup_iters=100,
-        min_lr=1e-5,
-        max_lr=0.0001,
-        period_iters=4000,
-        scale_max_lr=0.97,
-        scale_min_lr=0.97,
+        min_lr=1e-4,
+        max_lr=0.01,
+        period_iters=10000,
+        scale_max_lr=0.2,
+        scale_min_lr=0.2,
     ),
 )

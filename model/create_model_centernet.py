@@ -39,10 +39,10 @@ def update_params_with_defailts(opt):
     opt['eval_oracle_wh'] = False
     opt['eval_oracle_offset'] = False
     opt['reg_offset'] = True
-    opt['hm_weight'] = 1
-    opt['wh_weight'] = 0.1
-    opt['off_weight'] = 1
-    opt['hm1_weight'] = 1
+    opt['hm_weight'] = opt.get('hm_weight', 1)
+    opt['wh_weight'] = opt.get('wh_weight', 0.1)
+    opt['off_weight'] = opt.get('off_weight', 1)
+    opt['hm1_weight'] = opt.get('hm1_weight', 1)
     return opt
 
 

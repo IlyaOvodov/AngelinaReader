@@ -4,12 +4,13 @@
 evaluate levenshtein distance as recognition error for dataset using various model(s)
 """
 from ovotools.params import AttrDict
+import model.infer_retinanet as infer_retinanet
 
 # Для отладки
 verbose = 0
 inference_params = AttrDict(
     inference_width = 1024,
-    cls_thresh = 0.4,
+    cls_thresh = 0.5,
     nms_thresh = 0.02,
 )
 LINE_THR = 0.5
@@ -19,6 +20,10 @@ metrics_for_lines = False
 show_filtered = False
 test_on_flipped = False
 
+align_results = False
+repeat_on_aligned = False
+draw_refined = infer_retinanet.BrailleInference.DRAW_NONE # DRAW_NONE infer_retinanet.BrailleInference.DRAW_ORIGINAL  # infer_retinanet.BrailleInference.DRAW_REFINED
+
 log_file = 'validate_retinanet.log'
 
 models = [
@@ -26,12 +31,26 @@ models = [
     #
     # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_b9d8b3', 'models/003001.t7'),
     # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_c9e342', 'models/best.t7'),
-    (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_0c4173', 'models/best.t7'),   
-    (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_dla169_8692d1', 'models/best.t7'),   
-    (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_733a99', 'models/best.t7'),   
-    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_hg_1deab7', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_0c4173', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi_dla169_8692d1', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_733a99', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_clrA_5f7be2', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_clrA9_3e84b0', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_S_5cb2fa', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_clrL_12afcb', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_b30628', 'models/best.t7'),   
+
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/dla169_S_5cb2fa_2_asi1_81a53b', 'models/best.t7'),   
+    # (r'/home/ovod/file_server/pub_data/BrailleData/NN_results/241009_CenterNet/dla169_S_5cb2fa_2_asi_ac3a86', 'models/best.t7'),   
+
     # (r'NN_saved/retina_chars_eced60','models/clr.008'),
     # (r'NN_saved/all_data_0.5_100_5_nocls_91b802','clr.006.t7'),
+    (r'NN_results/2201_pseudo/pseudo_1024_1.5_scores-0.7-0.9_ignore-0.3-0.8_classloss-1_clr-15000_9b8be8','models/best.t7'),
+    (r'NN_results/2201_pseudo/pseudo_1024_1.5_scores-0.7-0.9_ignore-0.3-0.8_classloss-1_clr-15000_9b8be8','models/clr.015.t7'),
+    (r'NN_results/2201_pseudo/pseudo_1024_1.5_scores-0.7-0.9_ignore-0.3-0.8_classloss-100_clr-15000_6829f6','models/best.t7'),
+    (r'NN_results/2201_pseudo/pseudo_1024_1.5_scores-0.7-0.9_ignore-0.3-0.8_classloss-100_clr-15000_6829f6','models/clr.012.t7'),    
+    (r'NN_results/2201_pseudo/pseudo_1024_1.5_scores-0.7-0.9_ignore-0.3-0.8_classloss-1_clr-15000_fromscratch_adam_7caa4c','models/best.t7'),
+    (r'NN_results/2201_pseudo/pseudo_1024_1.5_scores-0.7-0.9_ignore-0.3-0.8_classloss-1_clr-15000_fromscratch_adam_7caa4c','models/clr.009.t7'),   
     # ('NN_results/dsbi_fpn1_lay4_1000_b67b68', 'models/best.t7'),
     # (r'E:\_ELVEES\Braille\NN_results\angelina_fpn1_lay3_100_noaug_4ca123', 'models/best.t7'),
 ]
@@ -435,11 +454,11 @@ def validate_model(recognizer, data_list, do_filter_lonely_rects, metrics_for_li
             gt_rects = [(b[0], 1-b[3], b[2], 1-b[1]) + b[4:] for b in gt_rects]
         res_dict = recognizer.run(img,
                                   lang=lang,
-                                  draw_refined=infer_retinanet.BrailleInference.DRAW_NONE,
+                                  draw_refined=draw_refined,
                                   find_orientation=False,
                                   process_2_sides=False,
-                                  align_results=False,
-                                  repeat_on_aligned=False,
+                                  align_results=align_results,
+                                  repeat_on_aligned=repeat_on_aligned,
                                   gt_rects=gt_rects)
         gt_rects = res_dict['gt_rects']
         gt_text = rects_to_pseudo_text(gt_rects)
@@ -560,8 +579,8 @@ def evaluate_accuracy(params_fn, model, device, data_list, do_filter_lonely_rect
                                   draw_refined=infer_retinanet.BrailleInference.DRAW_NONE,
                                   find_orientation=False,
                                   process_2_sides=False,
-                                  align_results=False,
-                                  repeat_on_aligned=False,
+                                  align_results=align_results,
+                                  repeat_on_aligned=repeat_on_aligned,
                                   gt_rects=gt_rects)
         lines = res_dict['lines']
         if do_filter_lonely_rects:

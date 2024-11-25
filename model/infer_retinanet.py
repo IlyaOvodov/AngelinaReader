@@ -44,10 +44,10 @@ device = 'cuda:0'
 #device = 'cpu'
 
 default_inference_params = AttrDict(
-    inference_width = 850,
+    inference_width = 1024,
     cls_thresh = 0.5,
     nms_thresh = 0.02,
-    REFINE_COEFFS = [0.083, 0.092, -0.083, -0.013],  # Коэффициенты (в единицах h символа) для эмпирической коррекции
+    REFINE_COEFFS = [0.0, 0.0, -0.0, -0.0],  # Коэффициенты (в единицах h символа) для эмпирической коррекции
                             # получившихся размеров, чтобы исправить неточность результатов для последующей разметки
 )
 # pseudolabeling parameters
@@ -156,7 +156,7 @@ class BraileInferenceImpl(torch.nn.Module):
             print("        forward.model", timeit.default_timer() - t)
             t = timeit.default_timer()
         if find_orientation:
-            cls_preds = [self.decoder.get_cls_pred(p) for p in preds]
+            cls_preds = [self.decoder.get_cls_pred(p) if i in orientation_attempts else None for i, p in enumerate(preds)]
             best_idx, err_score = self.calc_letter_statistics(cls_preds, self.params.inference_params.cls_thresh, orientation_attempts)
             if self.verbose >= 2:
                 print("        forward.calc_letter_statistics", timeit.default_timer() - t)
@@ -587,6 +587,7 @@ class BrailleInference:
                     err_scores = result_dict['err_scores'],
                     homography = result_dict['homography'],
                     model_weights = self.impl.model_weights_fn,
+                    lang = lang,
                 )
                 if extra_info:
                     info.update(extra_info)
@@ -620,10 +621,22 @@ class BrailleInference:
             img_folders = [os.path.split(fn)[0].replace(str(Path(root_dir)), '')[1:] for fn in img_files]
         result_list = list()
         for img_file, img_folder in zip(img_files, img_folders):
-            print('processing '+str(img_file))
+            print(f'processing {len(result_list)+1}/{len(img_files)}: {str(img_file)}')
+            if lang is None:
+                assert str(img_file).endswith('.labeled.jpg')
+                img_params_fn = str(img_file)[:-len('.labeled.jpg')] + '.protocol.txt'
+                with open(img_params_fn) as f:
+                    d = json.load(f)
+                    lang_i = d.get('lang', 'RU')
+                    
+                    if lang_i != 'RU':
+                        print(f'{lang_i}: {str(img_file)}')
+            else:
+                lang_i = lang
+            
             ith_result = self.run_and_save(
                 img_file, os.path.join(results_dir, img_folder), target_stem=None,
-                lang=lang, extra_info=extra_info,
+                lang=lang_i, extra_info=extra_info,
                 draw_refined=draw_refined,
 			    remove_labeled_from_filename=remove_labeled_from_filename,
                 find_orientation=find_orientation,
@@ -671,49 +684,55 @@ class BrailleInference:
 
 if __name__ == '__main__':
 
+    img_filename_mask = r'/home/ovod/file_server/braille/v1/angelina_V0/results/*.labeled.jpg'
     #img_filename_mask = r'D:\Programming.Data\Braille\web_uploaded\data\raw\*.*'
     #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Braile Photos and Scans\Turlom_Copybook_3-18\Turlom_Copybook10\Photo_Turlom_C10\Photo_Turlom_C10_8.jpg'
-    #img_filename_mask = r'D:\Programming.Data\Braille\ASI\Student_Book\56-61\IMG_20191109_195953.jpg'
+    #img_filename_mask = r'/home/ovod/file_server/pub_data/BrailleData/ASI/Student_Book/56-61/IMG_20191109_200020.labeled.jpg'
 
     #results_dir =       r'D:\Programming.Data\Braille\web_uploaded\re-processed200823'
-    #results_dir =       r'D:\Programming.Data\Braille\Temp\New'
+    #results_dir =       r'/home/ovod/file_server/pub_data/Research/AngelinaReader/out'
+            
+    # params_fn = join(local_config.data_path, 'NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_733a99', 'param.txt')
+    # model_weights = 'best.t7'
+    # model_weights_fn = join(local_config.data_path, 'NN_results/241009_CenterNet/v1_base_data_hm1_asi1_dla169_733a99/models', model_weights)
 
     lang = 'RU'
     remove_labeled_from_filename = True
-    find_orientation = False
+    find_orientation = True
     process_2_sides = False
     align_results = True
-    repeat_on_aligned = False
+    repeat_on_aligned = True
     verbose = 0
     draw_redined = BrailleInference.DRAW_REFINED
 
     # pseudolabeling parameters
-    SAVE_FOR_PSEUDOLABELS_MODE = 0  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check, 5 - bigram check
+    SAVE_FOR_PSEUDOLABELS_MODE = 2  # 0 - off, 1 - raw detections, 2 - refined+filter_lonely, 3 - + refined using rects with hight score, 4 - spell check, 5 - bigram check
     if SAVE_FOR_PSEUDOLABELS_MODE:
         PSEUDOLABELS_STEP = 1
+        lang = None
         params_fn = join(local_config.data_path, 'NN_saved/all_data_0.5_100_5_nocls_91b802', 'param.txt')
         model_weights = 'clr.006.t7'
         model_weights_fn = join(local_config.data_path, 'NN_saved/all_data_0.5_100_5_nocls_91b802', model_weights)
-        folder='angelina_V0'
+        folder='arch211010'
         pseudolabel_scores = (0.5, 0.8)  # (score for ignored chars, min_align_score)
         default_inference_params.cls_thresh = 0.1
         default_inference_params.nms_thresh = 0.02
 
-        img_filename_mask = str(Path(local_config.data_path) / f'../braille/v1/{folder}/train.txt')
+        img_filename_mask = f'/home/ovod/file_server/braille/v1/{folder}/results/*.labeled.jpg'
         results_dir =       str(Path(local_config.data_path) / f'pseudo/inf_width_{default_inference_params.inference_width}/step_{PSEUDOLABELS_STEP}_mode_{SAVE_FOR_PSEUDOLABELS_MODE}/{folder}')
         default_inference_params.REFINE_COEFFS = [0., 0., 0., 0.]  # Коэффициенты (в единицах h символа) для эмпирической коррекции
         remove_labeled_from_filename = True
-        find_orientation = False
+        find_orientation = True
         process_2_sides = False
-        align_results = False
-        repeat_on_aligned = False
+        align_results = True
+        repeat_on_aligned = True
         if SAVE_FOR_PSEUDOLABELS_MODE == 1:
             draw_redined = BrailleInference.DRAW_ORIGINAL
         else:  # 2
             draw_redined = BrailleInference.DRAW_REFINED
 
         os.makedirs(results_dir, exist_ok=False)
-        shutil.copyfile(img_filename_mask, Path(results_dir) / Path(img_filename_mask).name)
+        # shutil.copyfile(img_filename_mask, Path(results_dir) / Path(img_filename_mask).name)
         info_dict = {
             'SAVE_FOR_PSEUDOLABELS_MODE': SAVE_FOR_PSEUDOLABELS_MODE,
             'inference_width': default_inference_params.inference_width,
@@ -740,7 +759,7 @@ if __name__ == '__main__':
             json.dump(info_dict, f, sort_keys=False, indent=2, ensure_ascii=False)
 
     recognizer = BrailleInference(model_weights_fn=model_weights_fn, params_fn=params_fn,  verbose=verbose)
-    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang='RU', extra_info=None, draw_refined=draw_redined,
+    recognizer.process_dir_and_save(img_filename_mask, results_dir, lang=lang, extra_info=None, draw_refined=draw_redined,
                                     remove_labeled_from_filename=remove_labeled_from_filename,
                                     find_orientation=find_orientation,
                                     process_2_sides=process_2_sides,
